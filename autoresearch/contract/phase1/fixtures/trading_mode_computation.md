@@ -109,6 +109,41 @@ AT-1261
 - Then: TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE.
 - Pass criteria: OPEN blocked; correct reason code emitted. Fail criteria: Active returned or reason missing.
 
+AT-1277
+- Given: `cortex_override == ForceKill`; all other Kill triggers inactive (mm_util nominal, risk_state Healthy, no watchdog/disk/session kill).
+- When: TradingMode is computed.
+- Then: `TradingMode == Kill` and `mode_reasons` includes `KILL_CORTEX_FORCE_KILL`.
+- Pass criteria: Kill computed; `KILL_CORTEX_FORCE_KILL` present; no other Kill reason codes present.
+- Fail criteria: Active or ReduceOnly returned, or `KILL_CORTEX_FORCE_KILL` absent from `mode_reasons`.
+
+AT-1278
+- Given: `cortex_override == ForceReduceOnly`; all Kill triggers inactive; all other ReduceOnly predicates pass (nominal).
+- When: TradingMode is computed.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY`.
+- Pass criteria: ReduceOnly computed; correct reason code present; no other ReduceOnly reasons.
+- Fail criteria: Active returned, or `REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY` absent from `mode_reasons`.
+
+AT-1279
+- Given: `mm_util >= mm_util_kill`; all other Kill triggers inactive (risk_state Healthy, cortex_override absent, no watchdog/disk/session kill).
+- When: TradingMode is computed.
+- Then: `TradingMode == Kill` and `mode_reasons` includes `KILL_MARGIN_MM_UTIL_CRITICAL`.
+- Pass criteria: Kill computed; `KILL_MARGIN_MM_UTIL_CRITICAL` present.
+- Fail criteria: Active or ReduceOnly returned, or `KILL_MARGIN_MM_UTIL_CRITICAL` absent.
+
+AT-1280
+- Given: `risk_state == Maintenance`; all Kill triggers inactive; all other ReduceOnly predicates pass (nominal).
+- When: TradingMode is computed.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_RISKSTATE_MAINTENANCE` and does NOT include `REDUCEONLY_RISKSTATE_DEGRADED`.
+- Pass criteria: correct reason code present; wrong reason code absent.
+- Fail criteria: wrong code emitted, or both codes emitted, or Active returned.
+
+AT-1281
+- Given: `risk_state == Degraded`; all Kill triggers inactive; all other ReduceOnly predicates pass (nominal).
+- When: TradingMode is computed.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_RISKSTATE_DEGRADED` and does NOT include `REDUCEONLY_RISKSTATE_MAINTENANCE`.
+- Pass criteria: correct reason code present; wrong reason code absent.
+- Fail criteria: wrong code emitted, or both codes emitted, or Active returned.
+
 ---
 
 ##### **2.2.3.3 TradingMode Resolution (Deterministic, Pure Function of Axes)**
@@ -265,7 +300,7 @@ AT-1244
 
 ##### **2.2.3.6 Kill Semantics (Capital Supremacy Safe, CSP)**
 
-**Kill SHALL mean:**
+**Kill MUST mean:**
 - No creation of new exposure.
 - Only risk-reducing actions are permitted until exposure is neutral.
 
@@ -327,9 +362,9 @@ AT-337
 AT-918
 - Given: `risk_state == Kill`.
 - When: TradingMode is computed by the Axis Resolver.
-- Then: `TradingMode == Kill`.
-- Pass criteria: Kill is computed regardless of other non-kill gates.
-- Fail criteria: ReduceOnly/Active is computed while `risk_state == Kill`.
+- Then: `TradingMode == Kill` and `mode_reasons` includes `KILL_RISKSTATE_KILL`.
+- Pass criteria: Kill is computed regardless of other non-kill gates; `KILL_RISKSTATE_KILL` present in `mode_reasons`.
+- Fail criteria: ReduceOnly/Active is computed while `risk_state == Kill`, or `KILL_RISKSTATE_KILL` absent from `mode_reasons`.
 
 **EvidenceGuard Forces ReduceOnly**
 AT-416

@@ -33,6 +33,8 @@ AT-222
 - Pass criteria: rejection + log; pricer/NetEdge gate does not run.
 - Fail criteria: order proceeds or log missing.
 - And: emergency close proceeds even if Liquidity Gate would reject under the same slippage conditions.
+  - Pass criteria: emergency close dispatch count >= 1; no `LiquidityGateNoL2` or `ExpectedSlippageTooHigh` rejection reason is emitted for the emergency close path.
+  - Fail criteria: emergency close is blocked by the slippage gate or a liquidity rejection reason is emitted for the emergency close path.
 
 AT-344
 - Given: `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`.
@@ -62,9 +64,30 @@ AT-1241
 - Pass criteria: dispatch count remains 0; rejection reason is `EmergencyCloseNoPrice`; `RiskState == Degraded`.
 - Fail criteria: dispatch occurs without a valid price source, rejection reason is missing/mismatched, or `RiskState` does not transition to `Degraded`.
 
+AT-1265
+- Given: `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`; a valid §3.1 fallback price source exists.
+- When: Liquidity Gate evaluates a replace order placement intent.
+- Then: the replace intent is NOT rejected solely for stale/missing L2; it uses the §3.1 fallback price ladder and dispatches a strictly positive, monotonic risk-reducing quantity.
+- Pass criteria: dispatch count >= 1; dispatched quantity > 0 and risk-reducing; no `LiquidityGateNoL2` rejection reason is emitted.
+- Fail criteria: replace is blocked despite a valid §3.1 fallback source, or dispatched quantity is 0 or risk-increasing.
+
+AT-1266
+- Given: `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`; no valid §3.1 fallback price source exists.
+- When: Liquidity Gate evaluates a replace order placement intent.
+- Then: the intent MUST be rejected with `Rejected(EmergencyCloseNoPrice)` and `RiskState` MUST transition to `Degraded`.
+- Pass criteria: dispatch count remains 0; rejection reason is `EmergencyCloseNoPrice`; `RiskState == Degraded`.
+- Fail criteria: dispatch occurs without a valid price source, rejection reason is missing/mismatched, or `RiskState` does not transition to `Degraded`.
+
 AT-1216
 - Given: `L2BookSnapshot` is present, parseable, and fresh; expected slippage is <= `max_slippage_bps`; all non-liquidity gates are forced pass.
 - When: Liquidity Gate evaluates an OPEN intent.
 - Then: the intent is allowed through Liquidity Gate and proceeds to dispatch.
 - Pass criteria: dispatch count increases by 1 and no liquidity reject reason is emitted.
 - Fail criteria: intent is rejected by Liquidity Gate despite valid/fresh L2 and in-budget slippage.
+
+AT-1267
+- Given: an L2 book where `OrderQty` consumes multiple levels resulting in `slippage_bps` exactly equal to `max_slippage_bps`; all non-liquidity gates are forced pass.
+- When: Liquidity Gate evaluates an OPEN intent.
+- Then: the intent is allowed (not rejected), because `slippage_bps == max_slippage_bps` does not exceed the rejection threshold (strict `>`).
+- Pass criteria: dispatch count >= 1; no `ExpectedSlippageTooHigh` rejection reason is emitted.
+- Fail criteria: intent is rejected with `Rejected(ExpectedSlippageTooHigh)` despite `slippage_bps` being exactly at the boundary.

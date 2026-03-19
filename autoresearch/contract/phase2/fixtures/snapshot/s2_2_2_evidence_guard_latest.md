@@ -43,7 +43,7 @@ EvidenceChainState = GREEN iff ALL are true (rolling window; default `evidencegu
   - Metrics MUST exist: `parquet_queue_depth` (gauge, count), `parquet_queue_capacity` (gauge, count).
   - Derived: `parquet_queue_depth_pct = parquet_queue_depth / max(parquet_queue_capacity, 1)`
   - Trip (breach window): if `parquet_queue_depth_pct > parquet_queue_trip_pct` for >= `parquet_queue_trip_window_s` seconds → EvidenceChainState != GREEN
-  - Clear (hysteresis): require `parquet_queue_depth_pct < parquet_queue_clear_pct` for >= `queue_clear_window_s` seconds before GREEN (cleared only after max(queue_clear_window_s, evidenceguard_global_cooldown) with all criteria satisfied)
+  - Clear (hysteresis): require `parquet_queue_depth_pct < parquet_queue_clear_pct` for >= `queue_clear_window_s` seconds before GREEN (cleared only after max(queue_clear_window_s, evidenceguard_global_cooldown) with all criteria satisfied; default `evidenceguard_global_cooldown = 120`; see Appendix A)
 
 **Where enforced (must be explicit):**
 - When `enforced_profile != CSP`, PolicyGuard `get_effective_mode()` MUST include EvidenceGuard in the axis resolver.
@@ -78,6 +78,20 @@ AT-414
 - Then: EvidenceChainState MUST be not GREEN (fail-closed); OPEN intents blocked.
 - Pass criteria: EvidenceChainState not GREEN; OPEN does not dispatch.
 - Fail criteria: EvidenceChainState remains GREEN or OPEN dispatch occurs.
+
+AT-1274
+- Given: `attribution_write_errors` counter is missing or unparseable; all other EvidenceGuard counters are present and nominal.
+- When: EvidenceGuard evaluates EvidenceChainState.
+- Then: EvidenceChainState MUST be not GREEN (fail-closed); OPEN intents blocked.
+- Pass criteria: EvidenceChainState not GREEN; OPEN does not dispatch.
+- Fail criteria: EvidenceChainState remains GREEN despite missing/unparseable `attribution_write_errors`.
+
+AT-1275
+- Given: `parquet_queue_overflow_count` increments within the last `evidenceguard_window_s`; all other EvidenceGuard criteria nominal.
+- When: EvidenceGuard evaluates EvidenceChainState.
+- Then: EvidenceChainState MUST be not GREEN (fail-closed); OPEN intents blocked.
+- Pass criteria: EvidenceChainState not GREEN; OPEN does not dispatch.
+- Fail criteria: EvidenceChainState remains GREEN despite `parquet_queue_overflow_count` increment within window.
 
 AT-334
 - Given: `decision_snapshot_write_errors` increments within the `evidenceguard_window_s`.
@@ -135,5 +149,11 @@ AT-923
 - Pass criteria: OPEN does not dispatch because required counters are stale.
 - Fail criteria: EvidenceChainState becomes GREEN or any OPEN dispatch occurs while counters are stale.
 
+AT-1276
+- Given: `enforced_profile == CSP` and `EvidenceChainState != GREEN` (e.g., `wal_write_errors` incremented); an OPEN intent arrives.
+- When: dispatch authorization evaluates the OPEN intent.
+- Then: EvidenceGuard MUST NOT block the OPEN dispatch, MUST NOT change `TradingMode`, and MUST NOT change `OpenPermissionLatch`. The OPEN proceeds subject to other gates only.
+- Pass criteria: OPEN dispatches (assuming other gates pass); TradingMode and OpenPermissionLatch unchanged by EvidenceGuard.
+- Fail criteria: OPEN blocked by EvidenceGuard while `enforced_profile == CSP`, or TradingMode/OpenPermissionLatch mutated by EvidenceGuard.
 
 **Canonical TradingMode computation (axis resolver + staleness + watchdog semantics + reason codes) is defined in §2.2.3 (PolicyGuard-owned).**

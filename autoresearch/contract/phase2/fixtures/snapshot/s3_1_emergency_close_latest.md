@@ -18,7 +18,7 @@
 **Algorithm (Deterministic, 3 tries):**
 1. Attempt **IOC limit close** at best ± `close_buffer_ticks` (default 5 ticks; see Appendix A for `close_buffer_ticks`). This is attempt 1.
 2. If partial fill: repeat for remaining qty (max 3 total attempts including the initial; buffer doubles each retry: attempt 2 = 10 ticks, attempt 3 = 20 ticks).
-3. If still exposed after retries: submit **reduce-only perp hedge** to neutralize delta (bounded size). If hedge dispatch fails (rejected, timeout, or venue error), log the failure and proceed to step 4 with exposure unchanged; the system MUST NOT retry the hedge indefinitely.
+3. If still exposed after retries: submit **reduce-only perp hedge** to neutralize delta (bounded size). If hedge dispatch fails (rejected, timeout, or venue error), log the failure and proceed to step 4 with exposure unchanged; the system MUST NOT retry the hedge indefinitely. If the hedge is partially filled, treat the partial fill as partial success: account for the filled quantity in exposure reduction and proceed to step 4 with the remaining exposure; MUST NOT retry for the unfilled remainder.
 4. Log `AtomicNakedEvent` with group_id + exposure + time-to-delta-neutral.
 
 **AtomicNakedEvent schema (minimum):**
@@ -30,7 +30,7 @@
 - `time_to_delta_neutral_ms` (integer)
 - `close_attempts` (integer; 1-3)
 - `hedge_used` (bool)
-- `cause` (string; non-empty; recommended values: `atomic_legging_failure|emergency_close_exhausted|hedge_fallback`)
+- `cause` (string; non-empty; MUST be one of: `atomic_legging_failure|emergency_close_exhausted|hedge_fallback`)
 - `trading_mode_at_event` (`Active|ReduceOnly|Kill`)
 - `evidence_chain_state_at_event` (EvidenceChainState per §2.2.2; e.g., `GREEN|RED`; required only when `enforced_profile != CSP`)
 
@@ -64,6 +64,20 @@ AT-235
 - Then: close attempts run and fallback hedge executes if still exposed; exposure goes to ~0.
 - Pass criteria: bounded close attempts then hedge fallback if needed; exposure neutralized.
 - Fail criteria: no close attempts or exposure remains.
+
+AT-1272
+- Given: one leg filled, close attempts exhausted with remaining exposure, and hedge dispatch fails (rejected, timeout, or venue error).
+- When: emergency close completes step 3 and proceeds to step 4.
+- Then: exactly one `AtomicNakedEvent` is emitted with `exposure_usd_after > 0`, `hedge_used == true`, and the system does not retry the hedge indefinitely.
+- Pass criteria: AtomicNakedEvent emitted with accurate remaining exposure; no retry loop; system proceeds to step 4 within bounded time.
+- Fail criteria: system hangs retrying hedge, or AtomicNakedEvent omitted, or `exposure_usd_after` does not reflect remaining exposure.
+
+AT-1273
+- Given: one leg filled, close attempts exhausted, and hedge order is partially filled (partial qty filled, remainder unfilled).
+- When: emergency close evaluates the hedge result.
+- Then: the partial fill is treated as partial success; `exposure_usd_after` in AtomicNakedEvent reflects the reduced (but non-zero) exposure after partial hedge fill; the system MUST NOT retry for the unfilled remainder and MUST proceed to step 4.
+- Pass criteria: AtomicNakedEvent emitted; `exposure_usd_after` accounts for partial hedge fill; no retry for remainder.
+- Fail criteria: partial fill treated as full failure (ignoring filled portion), or system retries indefinitely for remainder.
 
 AT-236
 - Given: Liquidity Gate reject conditions are present.
