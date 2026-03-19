@@ -24,14 +24,9 @@ set -euo pipefail
 #   0 — synthesis complete
 #   1 — chairman model failed
 #   2 — usage error or missing artifacts
-#
-# Examples:
-#   plans/chairman_synthesis.sh artifacts/story/external_review_generic_20260319T164000Z_pr_216_xxx
-#   plans/chairman_synthesis.sh artifacts/story/S1-004 --tool opus --style enriched
-#   plans/chairman_synthesis.sh artifacts/story/... --dry-run
 
 usage() {
-  sed -n '3,/^$/{ s/^# //; s/^#$//; p; }' "$0" >&2
+  sed -n '4,/^$/{ s/^# //; s/^#$//; p; }' "$0" >&2
 }
 
 die() { echo "ERROR: $*" >&2; exit 2; }
@@ -105,8 +100,19 @@ echo
 
 # ── Temp file management (single trap) ──────────────────────────────
 CLEANUP_FILES=()
+DRY_RUN_KEEP_PROMPT=false
 add_cleanup() { CLEANUP_FILES+=("$@"); }
-cleanup() { rm -f "${CLEANUP_FILES[@]}"; }
+cleanup() {
+  if [[ "$DRY_RUN_KEEP_PROMPT" == "true" ]]; then
+    local filtered=()
+    for f in "${CLEANUP_FILES[@]}"; do
+      [[ "$f" != "$PROMPT_TMP" ]] && filtered+=("$f")
+    done
+    rm -f "${filtered[@]}" 2>/dev/null || true
+  else
+    rm -f "${CLEANUP_FILES[@]}" 2>/dev/null || true
+  fi
+}
 trap cleanup EXIT
 
 # ── Build prompt ─────────────────────────────────────────────────────
@@ -150,10 +156,14 @@ PREAMBLE
     echo "### Reviewer: $tool"
     echo ""
     # Strip YAML frontmatter and provenance header — just the transcript
-    awk '/<<<REVIEW_TRANSCRIPT_BEGIN>>>/{p=1; next} /<<<REVIEW_TRANSCRIPT_END>>>/{p=0} p' "$artifact"
-    # Fallback: if no transcript markers, include full file after frontmatter
-    if ! grep -q "REVIEW_TRANSCRIPT_BEGIN" "$artifact"; then
+    if grep -q "REVIEW_TRANSCRIPT_BEGIN" "$artifact"; then
+      awk '/<<<REVIEW_TRANSCRIPT_BEGIN>>>/{p=1; next} /<<<REVIEW_TRANSCRIPT_END>>>/{p=0} p' "$artifact"
+    elif grep -qm1 '^---$' "$artifact"; then
+      # Has YAML frontmatter — skip it (content starts after second ---)
       awk '/^---$/{n++; if(n==2){p=1; next}} p' "$artifact"
+    else
+      # No frontmatter, no transcript markers — include full file
+      cat "$artifact"
     fi
     echo ""
     echo "---"
@@ -163,8 +173,9 @@ PREAMBLE
 
 # ── Dry run ──────────────────────────────────────────────────────────
 if [[ "$DRY_RUN" == "true" ]]; then
-  echo "[dry-run] Prompt written to: $PROMPT_TMP"
-  echo "[dry-run] Chairman command would be: claude --model $model_id --print --verbose"
+  DRY_RUN_KEEP_PROMPT=true
+  echo "[dry-run] Prompt written to: $PROMPT_TMP (file preserved for inspection)"
+  echo "[dry-run] Chairman command would be: claude --model \"$model_id\" --print --verbose"
   cat "$PROMPT_TMP"
   exit 0
 fi
@@ -188,9 +199,14 @@ echo "Running chairman ($model_id)..."
 start_epoch="$(date +%s)"
 
 set +e
-claude --model "$model_id" --print --verbose < "$PROMPT_TMP" 2>&1 | tee "$TRANSCRIPT_TMP"
-chairman_rc="${PIPESTATUS[0]}"
-tee_rc="${PIPESTATUS[1]}"
+# Stderr goes to /dev/null to avoid contaminating the artifact
+# with --verbose CLI metadata, token counts, and warnings.
+claude --model "$model_id" --print --verbose < "$PROMPT_TMP" 2>/dev/null | tee "$TRANSCRIPT_TMP"
+# Capture full PIPESTATUS array on one line — reading PIPESTATUS[0] resets the
+# array in bash 3.2 (macOS), causing PIPESTATUS[1] to be unbound under set -u.
+_ps=("${PIPESTATUS[@]}")
+chairman_rc="${_ps[0]}"
+tee_rc="${_ps[1]:-0}"
 set -e
 
 end_epoch="$(date +%s)"
@@ -225,7 +241,6 @@ HEADER
 } > "$CANONICAL"
 
 # ── Parse findings for sidecar ───────────────────────────────────────
-# Extract lines matching ### [P0-P3] ... (N/M reviewers)
 python3 - "$CANONICAL" "$SIDECAR" "$ts_iso" "$model_id" "${TOOLS_FOUND[@]}" <<'PY'
 import json, re, sys
 from pathlib import Path
@@ -236,10 +251,14 @@ ts        = sys.argv[3]
 model     = sys.argv[4]
 reviewers = sys.argv[5:]
 
-text = canonical.read_text(encoding="utf-8")
+try:
+    text = canonical.read_text(encoding="utf-8")
+except (OSError, IOError) as e:
+    print(f"ERROR: failed to read canonical artifact: {e}", file=sys.stderr)
+    sys.exit(1)
 
 findings = []
-pattern = re.compile(
+heading_pat = re.compile(
     r"###\s+\[(P[0-3])\]\s+(.+?)\s+\((\d+)/(\d+)\s+reviewers?\)",
     re.IGNORECASE
 )
@@ -249,22 +268,25 @@ citation_pat = re.compile(r"`([A-Za-z0-9_./:-]+(?:\.[A-Za-z0-9_]+)?:\d+(?:-\d+)?
 
 lines = text.splitlines()
 for idx, line in enumerate(lines):
-    m = pattern.search(line)
+    m = heading_pat.search(line)
     if not m:
         continue
     severity, title, count, total = m.group(1), m.group(2).strip(), int(m.group(3)), int(m.group(4))
-    # Look ahead up to 10 lines for citation, description, fix
+    # Look ahead for citation, description, fix — stop at next heading
     citation = ""
     description = ""
     suggested_fix = ""
-    for la in lines[idx:idx+10]:
+    for la in lines[idx + 1 : idx + 10]:
+        # Stop at the next finding heading to prevent cross-pollination
+        if heading_pat.search(la):
+            break
         if not citation:
             cm = citation_pat.search(la)
             if cm:
                 citation = cm.group(1)
-        if la.strip().startswith("**Issue:**"):
+        if not description and la.strip().startswith("**Issue:**"):
             description = la.strip().removeprefix("**Issue:**").strip()
-        if la.strip().startswith("**Fix:**"):
+        if not suggested_fix and la.strip().startswith("**Fix:**"):
             suggested_fix = la.strip().removeprefix("**Fix:**").strip()
     findings.append({
         "severity": severity,
@@ -275,6 +297,9 @@ for idx, line in enumerate(lines):
         "description": description,
         "suggested_fix": suggested_fix,
     })
+
+if not findings and len(text.strip()) > 100:
+    print("WARN: 0 findings parsed from non-empty transcript — chairman output may not match expected format", file=sys.stderr)
 
 payload = {
     "schema_version": 1,

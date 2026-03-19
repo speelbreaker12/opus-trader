@@ -187,6 +187,7 @@ done
 if [[ "$DRY_RUN" == "true" ]]; then
   echo
   echo "[dry-run] Would wait for all tools, then aggregate."
+  [[ -n "$CHAIRMAN" ]] && echo "[dry-run] Would run chairman synthesis ($CHAIRMAN)"
   exit 0
 fi
 
@@ -358,6 +359,12 @@ if [[ $any_failed -ne 0 ]]; then
   echo
   echo "One or more reviews failed. Logs saved to: $(display_artifact_path "$fail_log_dir")/"
   exit 1
+fi
+
+if [[ $chairman_rc -ne 0 ]]; then
+  echo
+  echo "Chairman synthesis failed (exit $chairman_rc). Reviews completed successfully."
+  exit 4
 fi
 
 if [[ $agg_rc -ne 0 ]]; then
