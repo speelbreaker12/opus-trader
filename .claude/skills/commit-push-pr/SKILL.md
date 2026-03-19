@@ -1,8 +1,13 @@
 ---
 name: commit-push-pr
-description: Stage, commit, push, and open PR with repo conventions.
+description: "DEPRECATED — use /commit then /push-pr instead."
 context: fork
-allowed-tools: ["Read", "Glob", "Grep", "Bash", "Agent"]
+allowed-tools: []
 ---
 
-!`cat SKILLS/commit-push-pr.md || echo "ERROR: SKILLS/commit-push-pr.md not found"`
+This skill has been split into two composable skills:
+
+1. `/commit` — `SKILLS/commit.md` (stage + local commit)
+2. `/push-pr` — `SKILLS/push-pr.md` (refresh + push + PR)
+
+Use those instead.

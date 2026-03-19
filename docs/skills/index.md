@@ -29,7 +29,9 @@ Validation command:
 | `/6` | `SKILLS/6.md` | Alias for `/review-stack`. |
 | `/acceptance-test` | `SKILLS/acceptance-test.md` | Generate acceptance tests from contract requirements. |
 | `/codebase-health` | `SKILLS/codebase-health.md` | Architecture friction audit — explore for shallow modules, coupling, facade drift, then propose deepening refactors as GH issue RFCs. |
-| `/commit-push-pr` | `SKILLS/commit-push-pr.md` | Stage, commit, push, and open PR with repo conventions. |
+| `/commit` | `SKILLS/commit.md` | Create a clean local commit in the correct worktree. No push, no PR. |
+| `/push-pr` | `SKILLS/push-pr.md` | Refresh branch, push, and create or update PR. No code edits. |
+| `workspace-policy` | `SKILLS/workspace-policy.md` | Shared workspace safety rules — single source of truth for all mutating skills. |
 | `/contract-audit-full` | `SKILLS/contract-audit-full.md` | Exhaustive contract coverage and conflict audit. |
 | `contract-gap-detector` | `SKILLS/contract-gap-detector.md` | Automated contract gap finder — JSON output for autoresearch pipeline phase 1. |
 | `contract-patch` | `SKILLS/contract-patch.md` | Automated contract patch proposer — JSON output for autoresearch pipeline phase 2. |
@@ -45,8 +47,10 @@ Validation command:
 | `/glossary` | `SKILLS/glossary.md` | Extract and maintain domain terminology glossary from codebase. |
 | `/grill` | `SKILLS/grill.md` | Adversarial plan interview — stress-test decisions until every branch is resolved. |
 | `interview` | `SKILLS/interview.md` | Spec-building interview workflow. |
+| `/hotfix` | `SKILLS/hotfix.md` | Triage and fix shared baseline bugs — dedicated branch from main, merge first, refresh affected branches. |
+| `/main-recovery` | `SKILLS/main-recovery.md` | Diagnose and recover abnormal states on main — diverged, dirty, accidental commits, stuck rebase/merge. |
 | `/loss-risk-gate` | `SKILLS/loss-risk-gate.md` | Trading loss / profit-block economic safety review. |
-| `/obsidian-workflow` | `SKILLS/obsidian-workflow.md` | Session-start and pre-commit Obsidian project/debrief tracking companion. |
+| `/obsidian-workflow` | `SKILLS/obsidian-workflow.md` | Control-plane skill — session classification, Obsidian routing, worktree assignment, handoff enforcement. |
 | `patch-only-edits` | `SKILLS/patch-only-edits.md` | Patch-only editing style and constraints. |
 | `/plan` | `SKILLS/plan.md` | Elevation to implementation plan workflow. |
 | `/plan-review` | `SKILLS/plan-review.md` | Implementation plan review checklist. |
