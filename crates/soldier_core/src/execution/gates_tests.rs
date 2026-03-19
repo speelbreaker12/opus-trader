@@ -311,7 +311,6 @@ fn test_net_edge_graybox_emits_reject_event_without_global_side_effects() {
         events,
         vec![NetEdgeEvent::Reject {
             reason: NetEdgeRejectReason::NetEdgeInputMissing,
-            net_edge_usd: None,
         }]
     );
     assert_eq!(

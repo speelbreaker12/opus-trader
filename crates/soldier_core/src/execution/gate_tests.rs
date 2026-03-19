@@ -610,11 +610,11 @@ fn test_liquidity_gate_graybox_emits_reject_and_sample_events_without_global_sid
             reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget
         }
     ));
+    assert!(result.metadata.slippage_bps.must() > 10.0);
     assert!(
-        events.iter().any(|event| matches!(
-            event,
-            LiquidityGateEvent::ExpectedSlippageSample { value_bps } if *value_bps > 10.0
-        )),
+        events
+            .iter()
+            .any(|event| matches!(event, LiquidityGateEvent::ExpectedSlippageSample)),
         "expected slippage sample event, got {events:?}"
     );
     assert!(
@@ -622,7 +622,6 @@ fn test_liquidity_gate_graybox_emits_reject_and_sample_events_without_global_sid
             event,
             LiquidityGateEvent::Reject {
                 reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
-                ..
             }
         )),
         "expected reject event, got {events:?}"
@@ -670,7 +669,7 @@ fn test_liquidity_gate_graybox_emits_allowed_and_sample_events_without_global_si
     assert_eq!(
         events,
         vec![
-            LiquidityGateEvent::ExpectedSlippageSample { value_bps: 0.0 },
+            LiquidityGateEvent::ExpectedSlippageSample,
             LiquidityGateEvent::Allowed,
         ]
     );

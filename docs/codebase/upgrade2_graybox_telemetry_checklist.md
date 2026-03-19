@@ -1,6 +1,6 @@
 # Upgrade 2 Graybox Telemetry Coverage Checklist
 
-Status: PASS
+Status: Upgrade 2A PASS / Upgrade 2 overall FAIL (Upgrade 2B open)
 
 This checklist is the Upgrade 2 acceptance gate.
 Upgrade 2 is not complete until both Upgrade 2A and Upgrade 2B are complete.
@@ -59,7 +59,7 @@ This is the active rollout scope for Upgrade 2.
 | fee staleness | PASS | `crates/soldier_core/src/risk/fees.rs:89`, `crates/soldier_core/src/risk/fees.rs:177` | `ProductionFeeEvents` adapts the sink path back into metrics. |
 | expected slippage | PASS | `crates/soldier_core/src/execution/gate.rs:147`, `crates/soldier_core/src/execution/gate.rs:352`, `crates/soldier_core/src/execution/gate.rs:666` | Covered inside `execution/gate.rs`, not as a separate module. |
 | quantize | PASS | `crates/soldier_core/src/execution/quantize.rs:315`, `crates/soldier_core/src/execution/quantize.rs:385`, `crates/soldier_core/src/execution/quantize_tests.rs:763`, `crates/soldier_core/src/execution/quantize_tests.rs:833` | `ProductionQuantizeEvents` adapts the sink path back into metrics. |
-| pricer | PASS | `crates/soldier_core/src/execution/pricer.rs:83`, `crates/soldier_core/src/execution/pricer.rs:199` | `ProductionPricerEvents` adapts the sink path back into metrics. |
+| pricer | PASS | `crates/soldier_core/src/execution/pricer.rs:83`, `crates/soldier_core/src/execution/pricer.rs:199`, `crates/soldier_core/src/execution/pricer_tests.rs:540`, `crates/soldier_core/src/execution/pricer_tests.rs:617` | `ProductionPricerEvents` adapts the sink path back into metrics, with graybox and wrapper parity tests proving the seam preserves the legacy metrics contract. |
 | inventory skew | PASS | `crates/soldier_core/src/execution/inventory_skew.rs:73`, `crates/soldier_core/src/execution/inventory_skew.rs:213` | `ProductionInventorySkewEvents` adapts the sink path back into metrics. |
 | post-only | PASS | `crates/soldier_core/src/execution/post_only_guard.rs:45`, `crates/soldier_core/src/execution/post_only_guard.rs:130`, `crates/soldier_core/src/execution/post_only_guard_tests.rs:320`, `crates/soldier_core/src/execution/post_only_guard_tests.rs:367` | `ProductionPostOnlyEvents` adapts the sink path back into metrics. |
 | margin | PASS | `crates/soldier_core/src/risk/margin_gate.rs`, `crates/soldier_core/src/risk/margin_gate_tests.rs` | `evaluate_margin_headroom_gate_with_events` funnels reject paths through `ProductionMarginGateEvents`, with graybox tests proving `evaluate_margin_headroom_gate_with_events` stays side-effect free and wrapper tests preserving metric line behavior. |

@@ -1,21 +1,30 @@
 ---
 status: in-progress
 priority: P3
-branch: project/execution-facade-refactor
-pr:
+branch: project/execution-facade-refactor-v2
+base: main
+pr: 216
 started: "2026-03-05"
-worktree: .worktrees/execution-facade-refactor
+worktree: /private/tmp/opus-pr216-review-64409
+scope_paths:
+  - crates/soldier_core/src/execution/
+  - crates/soldier_core/src/risk/fees.rs
+  - crates/soldier_core/tests/test_fee_staleness.rs
+  - docs/codebase/upgrade2_graybox_telemetry_checklist.md
+  - obsidian/Projects/Execution Facade Refactor.md
+  - obsidian/Debriefs/Execution Facade Refactor 2026-03-19 Review Closure Fixes.md
 ---
 
 ## Current State
-PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `execution/gate.rs`, `execution/gates.rs`, `execution/quantize.rs`, `execution/pricer.rs`, `execution/inventory_skew.rs`, `execution/post_only_guard.rs`, `execution/preflight.rs`, `risk/margin_gate.rs`, `risk/pending_exposure.rs`, `risk/exposure_budget.rs`, `execution/group.rs`, `execution/build_order_intent.rs`. The Upgrade 2 graybox telemetry coverage checklist now lives at [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md) and is now split into Upgrade 2A (leaf event-sink rollout) and Upgrade 2B (orchestration/chokepoint event-sink rollout). Upgrade 2A and 2B are PASS by checklist (status flipped 2026-03-18); remaining 1C (risk/venue/infra) remains open.
+PR #216 is active on `project/execution-facade-refactor-v2` against `main`. The latest review-closure batch is verified locally: pricer graybox/parity evidence is restored, invalid fee input now fails closed with a conservative configured fallback, and liquidity/net-edge graybox events no longer carry new numeric telemetry payloads. The Upgrade 2 checklist header now correctly states that Upgrade 2A is green while Upgrade 2 overall remains open because Upgrade 2B is still incomplete.
 
 ## Commits
-- `pending` — 2026-03-19 — review-stack fix + rustfmt: preflight calls check_post_only() production wrapper (P1-1), margin gate includes reason in metric line (P1-2), liquidity gate aligned to (input, metrics, events) signature (P1-3), bump functions refactored to _inner pattern (P2-1), upgrade2 checklist 4 stale FAIL rows corrected (P2-3), rustfmt applied.
-- `pending` — 2026-03-18 — remove dead code, duplicate warn, 15x clippy needless_return, test deadlock fix (raw METRICS_TEST_LOCK→begin_metrics_test), add 3 graybox tests for build_order_intent chokepoint, flip Upgrade 2 checklist PASS, close stale handoff.
-- `pending` — 2026-03-17 — migrate `execution/group.rs` and `execution/build_order_intent.rs` instrumentation to crate-private `EventSink` seams with graybox parity coverage; mark Upgrade 2B rows PASS in checklist.
-- `pending` — 2026-03-17 — add preflight event-sink seam with `PreflightEvent` and graybox/wrapper parity coverage.
-- `pending` — 2026-03-17 — add `CSP-063` to `specs/TRACE.yaml` to satisfy quick pre-push traceability.
+- `40f27959` — 2026-03-19 — review-stack fix + rustfmt: preflight calls check_post_only() production wrapper (P1-1), margin gate includes reason in metric line (P1-2), liquidity gate aligned to (input, metrics, events) signature (P1-3), bump functions refactored to _inner pattern (P2-1), upgrade2 checklist 4 stale FAIL rows corrected (P2-3), rustfmt applied.
+- `pending` — 2026-03-19 — close remaining review findings: add pricer graybox/parity tests, replace invalid fee fallback `0.0` with configurable fail-closed rate, narrow liquidity/net-edge graybox events to semantic-only payloads, and correct Upgrade 2 checklist header status.
+- `22baab12` — 2026-03-18 — remove dead code, duplicate warn, 15x clippy needless_return, test deadlock fix (raw METRICS_TEST_LOCK→begin_metrics_test), add 3 graybox tests for build_order_intent chokepoint, flip Upgrade 2 checklist PASS, close stale handoff.
+- `9012e4e4` — 2026-03-17 — migrate `execution/group.rs` and `execution/build_order_intent.rs` instrumentation to crate-private `EventSink` seams with graybox parity coverage; mark Upgrade 2B rows PASS in checklist.
+- `80183f35` — 2026-03-17 — add preflight event-sink seam with `PreflightEvent` and graybox/wrapper parity coverage.
+- `ed835479` — 2026-03-17 — add `CSP-063` to `specs/TRACE.yaml` to satisfy quick pre-push traceability.
 - `94f5e639` — 2026-03-17 — add the inventory skew event seam, graybox/wrapper parity coverage, and flip the Upgrade 2A checklist row to `PASS`.
 - `5c6f972c` — 2026-03-17 — add the post-only event seam, graybox/wrapper parity coverage, and flip the Upgrade 2A checklist row to `PASS`.
 - `bdb1cec1` — 2026-03-17 — add the pricer event seam, graybox/wrapper parity coverage, and flip the Upgrade 2A checklist row to `PASS`.
@@ -24,8 +33,7 @@ PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `exe
 - `429fe236` — 2026-03-17 — record the fee pilot commit hash in the Execution Facade Refactor project tracking notes.
 - `0c5abc78` — 2026-03-17 — add the fee staleness event seam with typed events and parity-preserving production adapter coverage.
 - `523a6434` — 2026-03-17 — add the crate-private telemetry sink seam used by graybox gate tests.
-- `pending` — 2026-03-17 — add margin event seam with graybox + wrapper parity coverage in `risk/margin_gate.rs`.
-- `pending` — 2026-03-17 — add risk leaf event seams in `risk/pending_exposure.rs` and `risk/exposure_budget.rs` with graybox + wrapper parity coverage.
+- `9ea1386f` — 2026-03-17 — add risk leaf event seams in `risk/pending_exposure.rs`, `risk/exposure_budget.rs`, and related margin coverage updates.
 
 ## Key Files
 - crates/soldier_core/src/execution/
@@ -40,6 +48,7 @@ PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `exe
 - obsidian/Upgrades for AI/1/Status 2026-03-05.md
 
 ## Debriefs
+- [[Execution Facade Refactor 2026-03-19 Review Closure Fixes]]
 - [[Execution Facade Refactor 2026-03-17 Upgrade 2A Preflight Seam]]
 - [[Execution Facade Refactor 2026-03-17 Upgrade 2A Inventory Skew Seam]]
 - [[Execution Facade Refactor 2026-03-17 Upgrade 2A Post-Only Seam]]
@@ -65,6 +74,13 @@ PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `exe
 - [[Execution Facade Refactor 2026-03-17 Upgrade 2A Risk Exposure Seams Handoff]]
 
 ## Log
+### 2026-03-19
+- Added missing pricer graybox and wrapper-parity tests, then cited them directly in the Upgrade 2 checklist so the `PASS` claim matches the evidence.
+- Replaced the invalid fee-input fallback of `0.0` with `FeeStalenessConfig::fee_rate_fail_closed` (default `0.01`) and expanded fee tests to prove fail-closed behavior for NaN/inf/negative rates.
+- Removed numeric payloads from `LiquidityGateEvent` and `NetEdgeEvent`; production wrappers now emit the legacy numeric metrics from gate results while graybox events stay semantic-only.
+- Corrected the checklist header from global `PASS` to `Upgrade 2A PASS / Upgrade 2 overall FAIL (Upgrade 2B open)`.
+- Verified with `cargo test -p soldier_core --lib --locked`, `cargo test -p soldier_core --test test_fee_staleness --locked`, and `cargo fmt --all -- --check`.
+
 ### 2026-03-18 (session 2 — cherry-pick recovery)
 - Discarded broken dirty state from failed bulk cherry-pick (-n).
 - Re-cherry-picked 5 seam commits one at a time with compilation checks: post-only, inventory skew, preflight, risk exposure (pending+exposure_budget+margin), cleanup/deadlock fix.

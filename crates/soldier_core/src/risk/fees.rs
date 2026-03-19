@@ -23,6 +23,8 @@ pub struct FeeStalenessConfig {
     pub fee_cache_hard_s: u64,
     /// Multiplicative buffer for soft-stale window (default: 0.20).
     pub fee_stale_buffer: f64,
+    /// Conservative fallback fee rate when cached fee input is invalid (default: 0.01 = 100 bps).
+    pub fee_rate_fail_closed: f64,
 }
 
 impl Default for FeeStalenessConfig {
@@ -31,6 +33,7 @@ impl Default for FeeStalenessConfig {
             fee_cache_soft_s: 300,
             fee_cache_hard_s: 900,
             fee_stale_buffer: 0.20,
+            fee_rate_fail_closed: 0.01,
         }
     }
 }
@@ -130,6 +133,8 @@ impl Default for FeeMetrics {
 
 static FEE_STALENESS_HARD_STALE_TOTAL: AtomicU64 = AtomicU64::new(0);
 
+const DEFAULT_FAIL_CLOSED_FEE_RATE: f64 = 0.01;
+
 /// Process-lifetime counter for hard-stale fee cache evaluations.
 ///
 /// Counts the number of times `evaluate_fee_staleness` classified the
@@ -160,6 +165,19 @@ fn bump_fee_staleness_hard_stale_inner() {
     tracing::debug!("FeeStalenessHardStale");
 }
 
+fn safe_fail_closed_fee_rate(config: &FeeStalenessConfig) -> f64 {
+    if !config.fee_rate_fail_closed.is_finite() || config.fee_rate_fail_closed <= 0.0 {
+        tracing::warn!(
+            rate = config.fee_rate_fail_closed,
+            fallback = DEFAULT_FAIL_CLOSED_FEE_RATE,
+            "fee staleness: non-finite/non-positive fail-closed fee rate, using default"
+        );
+        DEFAULT_FAIL_CLOSED_FEE_RATE
+    } else {
+        config.fee_rate_fail_closed
+    }
+}
+
 // ─── Evaluator ──────────────────────────────────────────────────────────
 
 /// Evaluate fee cache staleness per CONTRACT.md §4.2.
@@ -176,12 +194,12 @@ pub(crate) fn evaluate_fee_staleness_with_events<E: EventSink<FeeEvent>>(
     events: &mut E,
 ) -> FeeEvaluation {
     // Guard: non-finite or negative fee_rate → HardStale + Degraded (fail-closed)
-    // Do NOT propagate bad rate via multiplication — use 0.0 as safe default.
+    // Preserve a conservative fee estimate instead of making execution look free.
     if !snapshot.fee_rate.is_finite() || snapshot.fee_rate < 0.0 {
         events.emit(FeeEvent::HardStale);
         return FeeEvaluation {
             staleness: FeeStaleness::HardStale,
-            fee_rate_effective: 0.0,
+            fee_rate_effective: safe_fail_closed_fee_rate(config),
             cache_age_s: None,
             risk_state: RiskState::Degraded,
         };
@@ -285,6 +303,35 @@ mod tests {
         let result = evaluate_fee_staleness_with_events(&snapshot, &config, &mut events);
 
         assert_eq!(result.staleness, FeeStaleness::HardStale);
+        assert_eq!(events, vec![FeeEvent::HardStale]);
+        assert_eq!(fee_staleness_hard_stale_total(), before);
+
+        let lines = take_execution_metric_lines();
+        assert!(
+            lines.is_empty(),
+            "graybox path must not emit global metric lines: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn fee_graybox_invalid_rate_uses_conservative_fallback_without_global_side_effects() {
+        let _guard = begin_metrics_test();
+        let before = fee_staleness_hard_stale_total();
+
+        let snapshot = FeeCacheSnapshot {
+            fee_rate: f64::NAN,
+            fee_model_cached_at_ts_ms: Some(1_000),
+            now_ms: 1_500,
+        };
+        let config = FeeStalenessConfig::default();
+        let mut events = Vec::new();
+
+        let result = evaluate_fee_staleness_with_events(&snapshot, &config, &mut events);
+
+        assert_eq!(result.staleness, FeeStaleness::HardStale);
+        assert!((result.fee_rate_effective - 0.01).abs() < 1e-12);
+        assert_eq!(result.cache_age_s, None);
+        assert_eq!(result.risk_state, RiskState::Degraded);
         assert_eq!(events, vec![FeeEvent::HardStale]);
         assert_eq!(fee_staleness_hard_stale_total(), before);
 

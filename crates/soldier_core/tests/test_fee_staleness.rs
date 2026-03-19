@@ -169,6 +169,7 @@ fn test_config_defaults() {
     assert_eq!(config.fee_cache_soft_s, 300);
     assert_eq!(config.fee_cache_hard_s, 900);
     assert!((config.fee_stale_buffer - 0.20).abs() < 1e-12);
+    assert!((config.fee_rate_fail_closed - 0.01).abs() < 1e-12);
 }
 
 // ─── Zero fee rate → valid (not rejected) ────────────────────────────────
@@ -218,7 +219,7 @@ fn test_nan_fee_rate_returns_hard_stale_degraded() {
     let result = evaluate_fee_staleness(&snapshot, &config);
     assert_eq!(result.staleness, FeeStaleness::HardStale);
     assert_eq!(result.risk_state, RiskState::Degraded);
-    assert_eq!(result.fee_rate_effective, 0.0);
+    assert!((result.fee_rate_effective - 0.01).abs() < 1e-12);
 }
 
 #[test]
@@ -232,7 +233,7 @@ fn test_infinity_fee_rate_returns_hard_stale_degraded() {
     let result = evaluate_fee_staleness(&snapshot, &config);
     assert_eq!(result.staleness, FeeStaleness::HardStale);
     assert_eq!(result.risk_state, RiskState::Degraded);
-    assert_eq!(result.fee_rate_effective, 0.0);
+    assert!((result.fee_rate_effective - 0.01).abs() < 1e-12);
 }
 
 #[test]
@@ -246,7 +247,7 @@ fn test_negative_fee_rate_returns_hard_stale_degraded() {
     let result = evaluate_fee_staleness(&snapshot, &config);
     assert_eq!(result.staleness, FeeStaleness::HardStale);
     assert_eq!(result.risk_state, RiskState::Degraded);
-    assert_eq!(result.fee_rate_effective, 0.0);
+    assert!((result.fee_rate_effective - 0.01).abs() < 1e-12);
 }
 
 #[test]
@@ -260,7 +261,7 @@ fn test_neg_infinity_fee_rate_returns_hard_stale_degraded() {
     let result = evaluate_fee_staleness(&snapshot, &config);
     assert_eq!(result.staleness, FeeStaleness::HardStale);
     assert_eq!(result.risk_state, RiskState::Degraded);
-    assert_eq!(result.fee_rate_effective, 0.0);
+    assert!((result.fee_rate_effective - 0.01).abs() < 1e-12);
 }
 
 // ─── Invalid fee_stale_buffer → safe fallback ───────────────────────────
@@ -277,6 +278,7 @@ fn test_nan_buffer_uses_zero_buffer() {
         fee_cache_soft_s: 300,
         fee_cache_hard_s: 900,
         fee_stale_buffer: f64::NAN,
+        fee_rate_fail_closed: 0.01,
     };
     let result = evaluate_fee_staleness(&snapshot, &config);
     assert_eq!(result.staleness, FeeStaleness::SoftStale);
@@ -295,6 +297,7 @@ fn test_negative_buffer_uses_zero_buffer() {
         fee_cache_soft_s: 300,
         fee_cache_hard_s: 900,
         fee_stale_buffer: -0.5,
+        fee_rate_fail_closed: 0.01,
     };
     let result = evaluate_fee_staleness(&snapshot, &config);
     assert_eq!(result.staleness, FeeStaleness::SoftStale);
@@ -313,6 +316,7 @@ fn test_infinity_buffer_uses_zero_buffer() {
         fee_cache_soft_s: 300,
         fee_cache_hard_s: 900,
         fee_stale_buffer: f64::INFINITY,
+        fee_rate_fail_closed: 0.01,
     };
     let result = evaluate_fee_staleness(&snapshot, &config);
     assert_eq!(result.staleness, FeeStaleness::SoftStale);
@@ -330,6 +334,7 @@ fn test_custom_config_thresholds_respected() {
         fee_cache_soft_s: 60,
         fee_cache_hard_s: 120,
         fee_stale_buffer: 0.10,
+        fee_rate_fail_closed: 0.01,
     };
 
     // age = 59s → Fresh (under custom soft=60)

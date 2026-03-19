@@ -139,14 +139,8 @@ pub struct LiquidityGateResult {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum LiquidityGateEvent {
     Allowed,
-    Reject {
-        reason: LiquidityGateRejectReason,
-        wap: Option<f64>,
-        slippage_bps: Option<f64>,
-    },
-    ExpectedSlippageSample {
-        value_bps: f64,
-    },
+    Reject { reason: LiquidityGateRejectReason },
+    ExpectedSlippageSample,
 }
 
 // --- Metrics -------------------------------------------------------------
@@ -313,21 +307,21 @@ fn record_expected_slippage_sample_inner(slippage_bps: f64) {
     super::emit_execution_metric_line(super::METRIC_EXPECTED_SLIPPAGE_BPS, &tail);
 }
 
-struct ProductionLiquidityGateEvents;
+#[derive(Default)]
+struct ProductionLiquidityGateEvents {
+    saw_expected_slippage_sample: bool,
+    reject_reason: Option<LiquidityGateRejectReason>,
+}
 
 impl EventSink<LiquidityGateEvent> for ProductionLiquidityGateEvents {
     fn emit(&mut self, event: LiquidityGateEvent) {
         match event {
             LiquidityGateEvent::Allowed => {}
-            LiquidityGateEvent::Reject {
-                reason,
-                wap,
-                slippage_bps,
-            } => {
-                bump_liquidity_gate_reject(reason, wap, slippage_bps);
+            LiquidityGateEvent::Reject { reason } => {
+                self.reject_reason = Some(reason);
             }
-            LiquidityGateEvent::ExpectedSlippageSample { value_bps } => {
-                record_expected_slippage_sample(value_bps);
+            LiquidityGateEvent::ExpectedSlippageSample => {
+                self.saw_expected_slippage_sample = true;
             }
         }
     }
@@ -509,11 +503,7 @@ fn reject_with_events<E: EventSink<LiquidityGateEvent>>(
             metrics.record_reject_depth_shortfall()
         }
     }
-    events.emit(LiquidityGateEvent::Reject {
-        reason,
-        wap,
-        slippage_bps,
-    });
+    events.emit(LiquidityGateEvent::Reject { reason });
     LiquidityGateResult {
         decision: LiquidityGateDecision::Rejected { reason },
         metadata: LiquidityGateMetadata {
@@ -655,8 +645,8 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
             Err(FillableDepthError::NoDepthWithinBudget) => {
                 let (wap, slippage_bps) =
                     compute_reject_diagnostics(levels, input.order_qty, best_price);
-                if let Some(value) = slippage_bps {
-                    events.emit(LiquidityGateEvent::ExpectedSlippageSample { value_bps: value });
+                if slippage_bps.is_some() {
+                    events.emit(LiquidityGateEvent::ExpectedSlippageSample);
                 }
                 let reject_reason = match input.intent_class {
                     GateIntentClass::Open => {
@@ -684,8 +674,8 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
             if fillable_qty + 1e-12 < input.order_qty {
                 let (wap, slippage_bps) =
                     compute_reject_diagnostics(levels, input.order_qty, best_price);
-                if let Some(value) = slippage_bps {
-                    events.emit(LiquidityGateEvent::ExpectedSlippageSample { value_bps: value });
+                if slippage_bps.is_some() {
+                    events.emit(LiquidityGateEvent::ExpectedSlippageSample);
                 }
                 return reject_with_events(
                     metrics,
@@ -748,9 +738,7 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
             Some(allowed_qty),
         );
     }
-    events.emit(LiquidityGateEvent::ExpectedSlippageSample {
-        value_bps: slippage_bps,
-    });
+    events.emit(LiquidityGateEvent::ExpectedSlippageSample);
 
     // Reject if slippage exceeds max.
     if slippage_bps > input.max_slippage_bps {
@@ -787,8 +775,21 @@ pub(crate) fn evaluate_liquidity_gate(
     input: &LiquidityGateInput,
     metrics: &mut LiquidityGateMetrics,
 ) -> LiquidityGateResult {
-    let mut events = ProductionLiquidityGateEvents;
-    evaluate_liquidity_gate_with_events(input, metrics, &mut events)
+    let mut events = ProductionLiquidityGateEvents::default();
+    let result = evaluate_liquidity_gate_with_events(input, metrics, &mut events);
+
+    if events.saw_expected_slippage_sample {
+        if let Some(slippage_bps) = result.metadata.slippage_bps {
+            record_expected_slippage_sample(slippage_bps);
+        }
+    }
+
+    if let LiquidityGateDecision::Rejected { reason } = result.decision {
+        debug_assert_eq!(events.reject_reason, Some(reason));
+        bump_liquidity_gate_reject(reason, result.metadata.wap, result.metadata.slippage_bps);
+    }
+
+    result
 }
 
 #[cfg(test)]

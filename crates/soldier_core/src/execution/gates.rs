@@ -63,10 +63,7 @@ pub enum NetEdgeResult {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum NetEdgeEvent {
     Allowed,
-    Reject {
-        reason: NetEdgeRejectReason,
-        net_edge_usd: Option<f64>,
-    },
+    Reject { reason: NetEdgeRejectReason },
 }
 
 // --- Metrics -------------------------------------------------------------
@@ -187,18 +184,12 @@ impl EventSink<NetEdgeEvent> for ProductionNetEdgeEvents<'_> {
             NetEdgeEvent::Allowed => {
                 self.metrics.record_allowed();
             }
-            NetEdgeEvent::Reject {
-                reason,
-                net_edge_usd,
-            } => {
-                match reason {
-                    NetEdgeRejectReason::NetEdgeTooLow => self.metrics.record_reject_too_low(),
-                    NetEdgeRejectReason::NetEdgeInputMissing => {
-                        self.metrics.record_reject_input_missing()
-                    }
+            NetEdgeEvent::Reject { reason } => match reason {
+                NetEdgeRejectReason::NetEdgeTooLow => self.metrics.record_reject_too_low(),
+                NetEdgeRejectReason::NetEdgeInputMissing => {
+                    self.metrics.record_reject_input_missing()
                 }
-                bump_net_edge_reject(reason, net_edge_usd);
-            }
+            },
         }
     }
 }
@@ -208,10 +199,7 @@ fn reject_with_events<E: EventSink<NetEdgeEvent>>(
     reason: NetEdgeRejectReason,
     net_edge_usd: Option<f64>,
 ) -> NetEdgeResult {
-    events.emit(NetEdgeEvent::Reject {
-        reason,
-        net_edge_usd,
-    });
+    events.emit(NetEdgeEvent::Reject { reason });
     NetEdgeResult::Rejected {
         reason,
         net_edge_usd,
@@ -220,10 +208,7 @@ fn reject_with_events<E: EventSink<NetEdgeEvent>>(
 
 fn reject_missing<E: EventSink<NetEdgeEvent>>(events: &mut E) -> NetEdgeResult {
     let reason = NetEdgeRejectReason::NetEdgeInputMissing;
-    events.emit(NetEdgeEvent::Reject {
-        reason,
-        net_edge_usd: None,
-    });
+    events.emit(NetEdgeEvent::Reject { reason });
     NetEdgeResult::Rejected {
         reason,
         net_edge_usd: None,
@@ -298,7 +283,20 @@ pub(crate) fn evaluate_net_edge(
     metrics: &mut NetEdgeMetrics,
 ) -> NetEdgeResult {
     let mut events = ProductionNetEdgeEvents { metrics };
-    evaluate_net_edge_with_events(input, &mut events)
+    let result = evaluate_net_edge_with_events(input, &mut events);
+    if let NetEdgeResult::Rejected {
+        reason,
+        net_edge_usd,
+    } = result
+    {
+        bump_net_edge_reject(reason, net_edge_usd);
+        NetEdgeResult::Rejected {
+            reason,
+            net_edge_usd,
+        }
+    } else {
+        result
+    }
 }
 
 #[cfg(test)]
