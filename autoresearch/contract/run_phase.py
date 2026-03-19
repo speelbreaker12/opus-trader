@@ -423,10 +423,13 @@ def _sections_compatible(proposal_section: str, finding_section: str) -> bool:
         return False
     for p in p_nums:
         for f in f_nums:
-            # Check if they share a common ancestor (at least 2 levels deep)
             p_parts = p.split(".")
             f_parts = f.split(".")
-            common = min(len(p_parts), len(f_parts), 2)
+            # Require at least 2-level overlap to avoid false positives
+            # (e.g. "1.3" vs "1.4" should NOT match)
+            common = min(len(p_parts), len(f_parts))
+            if common < 2:
+                continue
             if p_parts[:common] == f_parts[:common]:
                 return True
     return False

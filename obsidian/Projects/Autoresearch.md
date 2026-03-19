@@ -82,3 +82,4 @@ Phase 4 gap detection COMPLETE (2026-03-18). Phase 1: 23 live findings (score 1.
 - Phase 4 proposals: 2/5 sections succeeded (LG: 4 proposed, OPL: 5 proposed). 3/5 fail pipeline (EC/EG/TMC: section mismatch + empty output)
 - Infrastructure: added 5 per-section snapshot targets (§1.3, §2.2.2, §2.2.3, §2.2.4, §3.1), eval_live.json, per-fixture eval configs
 - Pipeline fix: relaxed section-match validation to use section-number prefix matching instead of exact string equality (fixes known ~100% failure on TMC/EC)
+- Review fix: tightened section-compatibility to require 2-level prefix overlap (prevents false positives like §1.3 matching §1.4). Gitignored proposals_index.lock.
