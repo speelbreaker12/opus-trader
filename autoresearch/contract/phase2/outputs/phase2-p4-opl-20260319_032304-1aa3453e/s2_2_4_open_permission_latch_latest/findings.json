@@ -1,0 +1,76 @@
+{
+  "generated_at": "2026-03-18T12:00:00Z",
+  "validator_version": "phase2-gap-detector-v1",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "\u00a72.2.4 Reconciliation success criteria",
+      "category": "missing_at_pair",
+      "severity": "P1",
+      "description": "Reconciliation success criteria list four conditions (lines 25-28). Criterion 3 (missing trades) has AT-1100 and AT-1263 covering failure and REST-error paths. However, criterion 1 (inflight intent matching) and criterion 2 (position matching within epsilon) have no dedicated ATs testing reconciliation failure when they individually fail. An implementation could skip these checks and the latch would clear prematurely, allowing OPEN intents.",
+      "evidence": {
+        "line": 25,
+        "quote": "Ledger inflight intents (non-terminal) match exchange open orders by label (all matched within label disambiguation rules per \u00a71.1.2).",
+        "context": "Criterion 1 has no AT testing reconciliation failure when inflight intents do not match exchange open orders. Similarly, criterion 2 (line 26, position matching within epsilon) has no failure-path AT."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add AT for reconciliation failure when inflight intents do not match exchange orders (criterion 1), and AT for failure when positions exceed epsilon (criterion 2). Each AT should verify latch remains set and OPEN stays blocked when that specific criterion fails while others pass."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "\u00a72.2.4 Acceptance Tests",
+      "category": "missing_at_pair",
+      "severity": "P1",
+      "description": "AT-1242 tests individual trigger events setting the latch with a single reason code. AT-011 tests reconciliation clearing a single reason. No AT covers the scenario where multiple reason codes are concurrently active (e.g., WS_BOOK_GAP + INVENTORY_MISMATCH) and one trigger resolves while the other remains. An implementation could incorrectly clear the latch when removing one reason code, even though another reason code is still present.",
+      "evidence": {
+        "line": 83,
+        "quote": "AT-1242",
+        "context": "AT-1242 tests each trigger in isolation (a-e). No AT tests two concurrent triggers firing, nor partial resolution where one trigger clears but another remains, verifying the latch stays set."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add AT testing: Given latch true with two concurrent reason codes (e.g., WS_BOOK_GAP + INVENTORY_MISMATCH). When the WS gap trigger resolves but inventory mismatch remains. Then latch stays true, reason_codes contains only the remaining code, OPEN remains blocked. Latch clears only when all reason codes are resolved."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "\u00a72.2.4 Semantics",
+      "category": "gate_interaction_gap",
+      "severity": "P2",
+      "description": "Semantics describe dual enforcement: direct latch gate blocking OPEN intents AND indirect blocking via PolicyGuard SystemIntegrityAxis DEGRADED producing ReduceOnly. All ATs in this section test the direct latch path (dispatch count remains 0). No AT verifies the indirect PolicyGuard integration \u2014 that latch==true actually feeds DEGRADED into SystemIntegrityAxis and produces ReduceOnly. If the PolicyGuard integration breaks, the secondary enforcement layer fails silently.",
+      "evidence": {
+        "line": 10,
+        "quote": "OPEN blocking is enforced both directly (latch gate) and indirectly (via PolicyGuard TradingMode dispatch authorization).",
+        "context": "Dual enforcement claimed but only direct path is tested by ATs in this section. The indirect PolicyGuard path may be tested in \u00a72.2.3.2 but is not cross-referenced here."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add AT or cross-reference to existing AT in \u00a72.2.3.2 that explicitly verifies: Given latch==true, PolicyGuard SystemIntegrityAxis receives DEGRADED input and computes ReduceOnly. Alternatively, add a cross-reference note to the specific AT in \u00a72.2.3.2 that covers this integration."
+    },
+    {
+      "finding_id": "F-004",
+      "section": "\u00a72.2.4 Reconciliation stall observability",
+      "category": "stale_input_unspecified",
+      "severity": "P2",
+      "description": "The `reconcile_stall_max_delay_s` parameter (line 31) has no specified default value, and no behavior is defined for missing, zero, or negative configuration. Compare with `reconcile_trade_lookback_sec` (default: 300s) and `position_reconcile_epsilon` (default: min_amount or 1e-6) which both have explicit defaults. A missing or zero value could either disable stall detection entirely (silent failure) or cause immediate spam emission on every tick.",
+      "evidence": {
+        "line": 31,
+        "quote": "If reconciliation remains blocked and `open_permission_blocked_latch` stays true for longer than `reconcile_stall_max_delay_s`",
+        "context": "No default value specified. Other config parameters in this section (reconcile_trade_lookback_sec, position_reconcile_epsilon) define explicit defaults."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Specify a default value for `reconcile_stall_max_delay_s` (e.g., 60s) and define fail-closed behavior: if missing or <= 0, treat as the default value and emit a startup warning. Alternatively, require the value in config schema validation."
+    },
+    {
+      "finding_id": "F-005",
+      "section": "\u00a72.2.4 State fields",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "Line 14 specifies a biconditional invariant: `open_permission_reason_codes` MUST be `[]` iff `open_permission_blocked_latch == false`. AT-011 tests the forward direction (reconciliation clears latch \u2192 codes become []). No AT tests the reverse direction \u2014 that the system cannot reach a state where latch==true but reason_codes==[]. AT-027 (\u00a77.0) validates /status representation but not domain-level enforcement of this invariant.",
+      "evidence": {
+        "line": 14,
+        "quote": "`open_permission_reason_codes` (`OpenPermissionReasonCode[]`; MUST be `[]` iff `open_permission_blocked_latch == false`)",
+        "context": "Biconditional invariant. The 'only if' direction (codes empty implies latch false) is untested. A bug could set latch=true with empty codes, hiding the reason for OPEN blocking."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add AT testing the invariant symmetrically: Given any state transition that sets latch=true, reason_codes MUST be non-empty. Given any state where reason_codes==[], latch MUST be false. This could be a property-based assertion enforced at every latch mutation point."
+    }
+  ]
+}

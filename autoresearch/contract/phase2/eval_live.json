@@ -1,0 +1,120 @@
+{
+  "description": "Contract autoresearch phase 2 live proposal generation — runs detection + proposal on current CONTRACT.md section snapshots",
+  "tests": [
+    {
+      "id": "live-liquidity-gate",
+      "fixture": "fixtures/snapshot/s1_3_liquidity_gate_latest.md",
+      "output_file": "s1_3_liquidity_gate_latest/proposals.json",
+      "assertions": [
+        {
+          "id": "lg-p2-schema",
+          "check": "proposal payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase2/proposals.schema.json"
+          }
+        },
+        {
+          "id": "lg-p2-unique-ids",
+          "check": "proposal ids stay unique",
+          "rule": {
+            "type": "json_unique_field",
+            "path": "$.proposals[*].proposal_id"
+          }
+        }
+      ]
+    },
+    {
+      "id": "live-evidence-guard",
+      "fixture": "fixtures/snapshot/s2_2_2_evidence_guard_latest.md",
+      "output_file": "s2_2_2_evidence_guard_latest/proposals.json",
+      "assertions": [
+        {
+          "id": "eg-p2-schema",
+          "check": "proposal payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase2/proposals.schema.json"
+          }
+        },
+        {
+          "id": "eg-p2-unique-ids",
+          "check": "proposal ids stay unique",
+          "rule": {
+            "type": "json_unique_field",
+            "path": "$.proposals[*].proposal_id"
+          }
+        }
+      ]
+    },
+    {
+      "id": "live-trading-mode-computation",
+      "fixture": "fixtures/snapshot/s2_2_3_trading_mode_computation_latest.md",
+      "output_file": "s2_2_3_trading_mode_computation_latest/proposals.json",
+      "assertions": [
+        {
+          "id": "tmc-p2-schema",
+          "check": "proposal payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase2/proposals.schema.json"
+          }
+        },
+        {
+          "id": "tmc-p2-unique-ids",
+          "check": "proposal ids stay unique",
+          "rule": {
+            "type": "json_unique_field",
+            "path": "$.proposals[*].proposal_id"
+          }
+        }
+      ]
+    },
+    {
+      "id": "live-open-permission-latch",
+      "fixture": "fixtures/snapshot/s2_2_4_open_permission_latch_latest.md",
+      "output_file": "s2_2_4_open_permission_latch_latest/proposals.json",
+      "assertions": [
+        {
+          "id": "opl-p2-schema",
+          "check": "proposal payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase2/proposals.schema.json"
+          }
+        },
+        {
+          "id": "opl-p2-unique-ids",
+          "check": "proposal ids stay unique",
+          "rule": {
+            "type": "json_unique_field",
+            "path": "$.proposals[*].proposal_id"
+          }
+        }
+      ]
+    },
+    {
+      "id": "live-emergency-close",
+      "fixture": "fixtures/snapshot/s3_1_emergency_close_latest.md",
+      "output_file": "s3_1_emergency_close_latest/proposals.json",
+      "assertions": [
+        {
+          "id": "ec-p2-schema",
+          "check": "proposal payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase2/proposals.schema.json"
+          }
+        },
+        {
+          "id": "ec-p2-unique-ids",
+          "check": "proposal ids stay unique",
+          "rule": {
+            "type": "json_unique_field",
+            "path": "$.proposals[*].proposal_id"
+          }
+        }
+      ]
+    }
+  ]
+}

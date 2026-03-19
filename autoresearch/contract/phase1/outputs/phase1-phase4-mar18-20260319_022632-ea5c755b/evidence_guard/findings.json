@@ -1,0 +1,62 @@
+{
+  "generated_at": "2026-03-18T02:30:00Z",
+  "validator_version": "phase1-gap-detector-v1",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "2.2.2 EvidenceGuard \u2014 GREEN/RED criteria",
+      "category": "missing_at_pair",
+      "severity": "P1",
+      "description": "Required counter `attribution_write_errors` is listed at line 32 as one of 5 counters that MUST be defined and parseable (fail-closed). AT-214 covers wal_write_errors, AT-215 covers decision_snapshot_write_errors, AT-415 covers truth_capsule_write_errors and parquet_queue_overflow_count. No AT tests attribution_write_errors missing/unparseable. An implementation could omit the parseable check for this counter without any AT catching it.",
+      "evidence": {
+        "line": 32,
+        "quote": "Required counters (minimum): `truth_capsule_write_errors`, `decision_snapshot_write_errors`, `wal_write_errors`, `parquet_queue_overflow_count`, `attribution_write_errors`.",
+        "context": "AT-214 (wal), AT-215 (decision_snapshot), AT-415 (truth_capsule + parquet_queue_overflow) cover 4 of 5; attribution_write_errors has no missing/unparseable AT."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add AT covering: Given attribution_write_errors is missing or unparseable, Then EvidenceChainState MUST be not GREEN and OPEN intents MUST be blocked. Mirror structure of AT-214/AT-215."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "2.2.2 EvidenceGuard \u2014 GREEN/RED criteria",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "Line 38 requires `parquet_queue_overflow_count` has not increased within the window as a GREEN criterion. No AT tests the scenario where this counter increments and trips the guard. AT-335 only tests missing/unparseable queue metrics; AT-422 only tests queue depth percentage. Contrast with AT-107 (wal increment), AT-334 (decision_snapshot increment), AT-414 (attribution failure) which each cover their counter's increment path.",
+      "evidence": {
+        "line": 38,
+        "quote": "`parquet_queue_overflow_count` has not increased within the last `evidenceguard_window_s`",
+        "context": "Other window-increment criteria have dedicated ATs (AT-107, AT-334, AT-105) but parquet_queue_overflow_count increment has none."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add AT covering: Given parquet_queue_overflow_count increments within evidenceguard_window_s, Then EvidenceChainState MUST be not GREEN and OPEN intents MUST be blocked."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "2.2.2 EvidenceGuard \u2014 Profile gating",
+      "category": "missing_at_pair",
+      "severity": "P1",
+      "description": "Lines 6-9 define four MUST/MUST-NOT requirements for CSP profile: EvidenceGuard MUST be NOT_ENFORCED, MUST NOT change TradingMode, MUST NOT change OpenPermissionLatch, MUST NOT block CSP-permitted dispatch. No AT verifies any of these. An implementation could accidentally enforce EvidenceGuard in CSP mode, blocking valid opens or mutating TradingMode when it should be completely bypassed.",
+      "evidence": {
+        "line": 6,
+        "quote": "When `enforced_profile == CSP`, EvidenceGuard MUST be treated as **NOT_ENFORCED** and MUST NOT:",
+        "context": "Four MUST-level normative requirements with zero acceptance test coverage."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add AT covering: Given enforced_profile == CSP and EvidenceChainState != GREEN, When an OPEN intent arrives, Then EvidenceGuard does not block dispatch, does not change TradingMode, does not change OpenPermissionLatch."
+    },
+    {
+      "finding_id": "F-004",
+      "section": "2.2.2 EvidenceGuard \u2014 GREEN/RED criteria (clear hysteresis)",
+      "category": "missing_fail_closed",
+      "severity": "P2",
+      "description": "Line 46 references `evidenceguard_global_cooldown` in the clear hysteresis formula (max of queue_clear_window_s and evidenceguard_global_cooldown). Line 26 references 'cooldown window' for GREEN recovery. Unlike evidenceguard_window_s (default 60, line 29) and evidenceguard_counters_max_age_ms (default 60000, line 33), evidenceguard_global_cooldown has no default value specified. AT-422 sets it to 0 for testing. Without a stated default, an implementation could default to 0, eliminating the cooldown and allowing faster GREEN recovery than intended.",
+      "evidence": {
+        "line": 46,
+        "quote": "cleared only after max(queue_clear_window_s, evidenceguard_global_cooldown) with all criteria satisfied",
+        "context": "No default value specified; other safety-critical config params in this section have explicit defaults."
+      },
+      "proposed_fix_type": "mechanical",
+      "proposed_fix": "Add default value for evidenceguard_global_cooldown (e.g., 'default evidenceguard_global_cooldown = 30; see Appendix A') consistent with the pattern used for evidenceguard_window_s and evidenceguard_counters_max_age_ms."
+    }
+  ]
+}

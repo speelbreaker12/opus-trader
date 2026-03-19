@@ -247,7 +247,7 @@ Rejections for schema/length violations MUST use `Rejected(LabelTooLong)` (or a 
 **Legacy Documentation Format (non-sent):** `s4:{strat_id}:{group_id}:{leg_idx}:{intent_hash}`  
 This expanded format is for human-readable logs and internal documentation only. It MUST NOT be sent to the exchange.
 
-**Recovery / Matching Rule (Normative):**
+**Recovery / Matching Rule (Normative):** <!-- CSP-063 -->
 - For canonical `s4` labels, recovery and reconciliation MUST require exact full parsed identity `{sid8, gid12, leg_idx, ih16}`.
 - Canonical `s4` labels MUST NOT use heuristic or tie-breaker fallback once parsed.
 - Legacy fallback tie-breakers MAY be used only for explicitly non-canonical legacy labels recovered from pre-v5.2 history.
@@ -326,11 +326,9 @@ AT-1098
 - Pass criteria: all fills have a valid `group_id` + `leg_idx`; atomic slippage per group is computable from the attributed fills.
 - Fail criteria: any fill lacks `group_id` or `leg_idx`, or a fill maps to multiple groups.
 
-**Recovery / Matching Rule (Normative):**
-- For canonical `s4` labels, recovery and reconciliation MUST require exact full parsed identity `{sid8, gid12, leg_idx, ih16}`.
-- Canonical `s4` labels MUST NOT use heuristic or tie-breaker fallback once parsed.
-- Legacy fallback tie-breakers MAY be used only for explicitly non-canonical legacy labels recovered from pre-v5.2 history.
-- If the applicable matcher yields none or more than one candidate, the system MUST fail closed with `RiskState::Degraded` and OPENs blocked until ambiguity is resolved.
+**Recovery / Matching Rule (Normative):** <!-- CSP-063: canonical copy is in §1.1; see anchor below -->
+See **CSP-063** Recovery / Matching Rule (§1.1). The normative rule is defined once at the §1.1 block tagged `<!-- CSP-063 -->` and reproduced here only as a cross-reference to prevent divergence.
+
 #### **1.1.2 Label Parse + Disambiguation (Collision-Safe)**
 
 **Requirement:** Label collisions can still occur (hash collisions or non-conforming labels). The Soldier must deterministically map exchange orders to local intents.
@@ -713,7 +711,6 @@ OPEN rejections due to missing/unparseable/stale L2 MUST use `Rejected(Liquidity
 
 **Scope (explicit):**
 - Applies to normal dispatch and containment rescue IOC orders (see §1.1 containment Step A).
-- CLOSE/HEDGE order placement intents with valid, fresh L2 ARE subject to the slippage threshold check (steps 1-4), including containment rescue IOC orders (Step A). If slippage exceeds `max_slippage_bps` for a CLOSE/HEDGE, the gate rejects with `Rejected(ExpectedSlippageTooHigh)`. Deterministic Emergency Close (§3.1) and containment Step B remain exempt.
 - Does NOT apply to Deterministic Emergency Close (§3.1) or containment Step B; emergency close MUST NOT be blocked by profitability gates.
 - Emergency close still requires a valid price source; missing/stale L2 MUST use the §3.1 fallback price source and MUST block only if no fallback source is valid.
 - When no valid fallback source exists, `RiskState::Degraded` is set (see §2.2.3.2 SystemIntegrityAxis), producing `TradingMode::ReduceOnly` via the axis resolver.
@@ -762,12 +759,6 @@ AT-1216
 - Pass criteria: dispatch count increases by 1 and no liquidity reject reason is emitted.
 - Fail criteria: intent is rejected by Liquidity Gate despite valid/fresh L2 and in-budget slippage.
 
-AT-1247
-- Given: a CLOSE/HEDGE order placement intent with valid, fresh `L2BookSnapshot` and computed `slippage_bps > max_slippage_bps`.
-- When: Liquidity Gate evaluates the order.
-- Then: the intent is rejected with `Rejected(ExpectedSlippageTooHigh)` and no dispatch occurs.
-- Pass criteria: dispatch count remains 0; rejection reason is `ExpectedSlippageTooHigh`.
-- Fail criteria: CLOSE/HEDGE dispatches despite exceeding the slippage threshold with valid L2.
 
 
 ### **1.4 Fee-Aware IOC Limit Pricer (No Market Orders)**
@@ -801,6 +792,13 @@ AT-223
 - Then: the system never fills worse than `limit_price` and `Realized Edge >= Min_Edge` at the limit price.
 - Pass criteria: no fills beyond `limit_price`; realized edge meets minimum.
 - Fail criteria: fill worse than `limit_price` or realized edge below minimum.
+
+AT-1257
+- Given: a pricer input where `fair_price` is NaN, or `qty <= 0`, or `fee_estimate_usd` is missing/unparseable.
+- When: the pricer evaluates the intent.
+- Then: the intent is rejected with `Rejected(PricerInputMissing)` or `Rejected(PricerInputInvalid)` and dispatch count remains 0.
+- Pass criteria: specific reject reason is one of `PricerInputMissing` or `PricerInputInvalid`; dispatch count == 0.
+- Fail criteria: dispatch occurs, or reject reason is absent or is a different reason code.
 
 **OPEN chokepoint sequence (Normative):**
 - `DispatchAuth -> Preflight -> Quantize -> DispatchConsistency -> FeeCache/Policy -> Expiry -> Liquidity -> NetEdge -> InventorySkew -> NetEdge re-check (if Inventory Skew adjusts min_edge_usd) -> Pricer -> RecordedBeforeDispatch -> venue/network dispatch`
@@ -870,7 +868,8 @@ Rejections for missing `delta_limit` MUST use `Rejected(InventorySkewDeltaLimitM
   - Require higher edge: `min_edge_usd := min_edge_usd * (1 + inventory_skew_k * inventory_bias)` where `inventory_skew_k = 0.5` (default; see Appendix A)
   - Be less aggressive: shift `limit_price` **away** from the touch by `bias_ticks(inventory_bias)` where `bias_ticks(x) = ceil(abs(x) * inventory_skew_tick_penalty_max)` and `inventory_skew_tick_penalty_max = 3` (default; see Appendix A)
 - **SELL intents when `inventory_bias > 0` (already long):**
-  - Allow slightly lower edge (within bounds) and/or be more aggressive to **flatten** inventory
+  - Allow lower edge: `min_edge_usd := min_edge_usd * max(1 - inventory_skew_k * inventory_bias, inventory_skew_sell_floor)` where `inventory_skew_sell_floor >= 0` (see Appendix A; default: `0.5`)
+  - May be more aggressive on price: shift `limit_price` **toward** the touch by `bias_ticks(inventory_bias)` (risk-reducing direction)
 - Mirror the above for `inventory_bias < 0` (already short).
 
 **Hard Rule:**
@@ -885,6 +884,13 @@ AT-224
 - Then: BUY intent that previously passed Net Edge is rejected; SELL intent passes (risk-reducing); SELL intent that initially fails Net Edge passes after `min_edge_usd` adjustment and re-evaluation.
 - Pass criteria: BUY rejected; SELL allowed; re-evaluation uses adjusted `min_edge_usd`.
 - Fail criteria: BUY allowed or SELL rejected contrary to rules.
+
+AT-1258
+- Given: `inventory_bias = 1.0`, `inventory_skew_k = 0.5`, `inventory_skew_sell_floor = 0.5`, and a SELL intent whose base `min_edge_usd` initially fails Net Edge Gate.
+- When: Inventory Skew applies the SELL edge-loosening formula and the Net Edge Gate is re-evaluated.
+- Then: adjusted `min_edge_usd = base_min_edge_usd * 0.5`; if adjusted value allows SELL, it proceeds.
+- Pass criteria: adjusted min_edge_usd equals exactly base_min_edge_usd * 0.5; re-evaluation uses this value.
+- Fail criteria: adjusted value differs from formula or re-evaluation does not use adjusted value.
 
 AT-043
 - Given: `delta_limit` is missing/unparseable.
@@ -956,6 +962,20 @@ AT-910
 - Pass criteria: rejection reason matches; dispatch count remains 0.
 - Fail criteria: dispatch occurs or reason missing/mismatched.
 
+AT-1255
+- Given: `RiskState::Healthy` is active (not Kill).
+- When: `drain_all()` is called on PendingExposure.
+- Then: `drain_all()` MUST be refused; no reservations are cleared; pending_delta is unchanged; dispatch count is unaffected.
+- Pass criteria: drain_all() returns an error or no-op result; no reservation state is modified.
+- Fail criteria: drain_all() executes and clears reservations while RiskState != Kill.
+
+AT-1256
+- Given: `RiskState::Kill` is active and one or more in-flight TLSMs exist from before drain_all() was called; drain_all() has executed and cleared all reservations.
+- When: the system evaluates whether normal trading (TradingMode::Active / RiskState::Healthy) may resume.
+- Then: normal trading MUST NOT resume until all pre-drain TLSMs have reached a terminal state.
+- Pass criteria: TradingMode remains Kill or ReduceOnly; no OPEN is dispatched while pre-drain TLSMs are non-terminal.
+- Fail criteria: TradingMode transitions to Active or RiskState returns to Healthy before all pre-drain TLSMs are terminal.
+
 ### **1.4.2.2 Global Exposure Budget (Cross‑Instrument, Correlation‑Aware)**
 **Goal:** Prevent “safe per‑instrument” trades from stacking into unsafe portfolio exposure.
 
@@ -1003,6 +1023,29 @@ AT-929
 
 **Inputs:** `/private/get_account_summary` → `maintenance_margin`, `initial_margin`, `equity`  
 **Computed:** `mm_util = maintenance_margin / max(equity, epsilon)`
+
+**Fail-closed rule (Non-Negotiable):** If any of `maintenance_margin`, `equity`, or `initial_margin` returned by `/private/get_account_summary` is missing, unparseable, or NaN, the gate MUST treat `mm_util` as `>= mm_util_reduceonly` (fail-closed: force ReduceOnly at minimum) and set `RiskState::Degraded`. Rejections for missing/unparseable/NaN inputs MUST use `Rejected(MarginHeadroomInputMissing)`. No OPEN dispatch MAY occur while `RiskState::Degraded` is set due to this condition.
+
+AT-1254
+- Given: `/private/get_account_summary` returns a response where `equity` is NaN or `maintenance_margin` is missing.
+- When: the Margin Headroom Gate evaluates any OPEN intent.
+- Then: `RiskState::Degraded` is set, the OPEN is rejected with `Rejected(MarginHeadroomInputMissing)`, and dispatch count remains 0.
+- Pass criteria: rejection reason matches; dispatch count == 0; RiskState == Degraded.
+- Fail criteria: dispatch occurs, or gate defaults mm_util to 0.0 and allows OPEN, or rejection reason is absent.
+
+**Account Summary Staleness (Non-Negotiable):**
+- `account_summary_max_age_ms` (Appendix A): maximum age in milliseconds of the last successful response from `/private/get_account_summary`. Default: `5000` ms.
+- If the last successful fetch of `/private/get_account_summary` is older than `account_summary_max_age_ms`, the gate MUST treat `mm_util` as `>= mm_util_reduceonly` (fail-closed: force ReduceOnly at minimum) and set `RiskState::Degraded`. No OPEN dispatch MAY occur while this stale condition holds.
+- **Required observability (contract-bound names):**
+  - `account_summary_age_s` (gauge): seconds since last successful account_summary fetch
+  - `account_summary_stale_total` (counter): incremented each evaluation cycle where age > threshold
+
+AT-1259
+- Given: `account_summary_age_s > account_summary_max_age_ms / 1000` (last successful fetch is stale).
+- When: an OPEN intent is evaluated by the Margin Headroom Gate.
+- Then: `RiskState::Degraded` is set, TradingMode is at minimum ReduceOnly, and the OPEN is blocked before dispatch.
+- Pass criteria: OPEN dispatch count remains 0; RiskState == Degraded; account_summary_stale_total counter incremented.
+- Fail criteria: OPEN dispatches while account_summary is stale, or RiskState remains Healthy.
 
 **Rules (deterministic):**
 - If `mm_util` >= `mm_util_reject_opens` (see Appendix A for `mm_util_reject_opens`) → **Reject** any **NEW opens**

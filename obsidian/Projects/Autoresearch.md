@@ -7,11 +7,12 @@ started: 2026-03-16
 ---
 
 ## Commits
+- pending — 2026-03-18 — Phase 4 gap detection: 23 findings, 10 proposals (2/5 sections), pipeline infra improvements.
 - `1c48e654` — 2026-03-18 — Hardened contract render-review for sample fixture guard and add regression.
 
 ## Current State
 
-Phase 3 patch APPLIED to CONTRACT.md (2026-03-17). 16 accepted proposals from run phase2-mar17-20260317_141745-bb818649. 11 new ATs (AT-1254..AT-1264), 2 SHALL->MUST, CSP-063 dedup, AT-1243->AT-1253 renumber, 3 new RejectReasonCode entries, bunker_mode_last_update_ts_ms, cortex_override critical input, account_summary staleness, inventory_skew_sell_floor formula. proposals_index.json status set to "applied".
+Phase 4 gap detection COMPLETE (2026-03-18). Phase 1: 23 live findings (score 1.000), run `phase1-phase4-mar18-20260319_022632-ea5c755b`. Phase 2: 10 proposals from 2/5 sections (LG: 4 proposed + 1 rejected, OPL: 5 proposed). 3/5 fixtures fail automated Phase 2 pipeline (section mismatch + empty output). Infrastructure: added 5 per-section snapshot targets, eval_live.json, relaxed section-match validation. Remaining 3 sections (EC, EG, TMC — 15 findings) need manual proposal generation or pipeline fix.
 
 ## Key Files
 - `autoresearch/contract/render_review.py`
@@ -77,3 +78,7 @@ Phase 3 patch APPLIED to CONTRACT.md (2026-03-17). 16 accepted proposals from ru
 - Added hard-fail guard in `autoresearch/contract/render_review.py` to prevent accidental acceptance of `sample_contract_patch` in `--accepted-only`.
 - Added regression in `autoresearch/tests/test_contract_render_review.py` to assert sample fixture proposals cannot be accepted.
 - Updated proposal seeding helper to support configurable fixture names and dedupe keys for targeted tests.
+- Phase 4 gap detection: Phase 1 run on refreshed CONTRACT.md — 23 live findings across 5 sections (score 1.000)
+- Phase 4 proposals: 2/5 sections succeeded (LG: 4 proposed, OPL: 5 proposed). 3/5 fail pipeline (EC/EG/TMC: section mismatch + empty output)
+- Infrastructure: added 5 per-section snapshot targets (§1.3, §2.2.2, §2.2.3, §2.2.4, §3.1), eval_live.json, per-fixture eval configs
+- Pipeline fix: relaxed section-match validation to use section-number prefix matching instead of exact string equality (fixes known ~100% failure on TMC/EC)
