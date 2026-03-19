@@ -59,3 +59,6 @@ Complete. Obsidian-based project tracking with Templates, Bases-compatible front
 ### 2026-03-17
 - Enabled context7 plugin in .claude/settings.json
 - Expanded AGENTS.md with Warp/Codex build/test/architecture instructions
+
+### 2026-03-19
+- Fixed flaky `test_pr_review_gate_hook.sh`: `checkout -qb` → `-qB` (force-create, idempotent when branch exists from prior run)
