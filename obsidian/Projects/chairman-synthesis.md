@@ -27,6 +27,7 @@ Also fixed `review_logged.sh` to always build diff context for all tools so that
 the codex exec fallback path has content available.
 
 ## Commits
+- `pending` — 2026-03-19 — Harden chairman synthesis script (cleanup, tee check, sidecar fields, JSON validation)
 - `pending` — 2026-03-19 — Integrate chairman synthesis into parallel review pipeline
 
 ## Key Files
@@ -37,6 +38,7 @@ the codex exec fallback path has content available.
 ## Debriefs
 - [[chairman-synthesis 2026-03-19 Add Chairman Script]]
 - [[chairman-synthesis 2026-03-19 Pipeline Integration]]
+- [[chairman-synthesis 2026-03-19 Harden Script]]
 
 ## Log
 ### 2026-03-19
@@ -48,3 +50,4 @@ the codex exec fallback path has content available.
 - Integrated chairman into `parallel_review.sh` via `--chairman <sonnet|opus>` flag
 - Fixed citation regex in chairman_synthesis.sh to accept line ranges (e.g. `file.py:10-20`)
 - Fixed `review_logged.sh` to always build diff context for all tools (codex exec fallback fix)
+- Hardened chairman_synthesis.sh: consolidated temp cleanup, early model ID, tee exit check, broader citation regex, sidecar description/fix fields, JSON validation gate

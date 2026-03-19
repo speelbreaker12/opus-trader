@@ -67,6 +67,12 @@ case "$STYLE" in
   *) die "--style must be generic or enriched (got: $STYLE)" ;;
 esac
 
+# ── Resolve model ID early (used by dry-run and real run) ────────────
+case "$CHAIRMAN_TOOL" in
+  sonnet) model_id="claude-sonnet-4-6" ;;
+  opus)   model_id="claude-opus-4-6" ;;
+esac
+
 # Resolve RUN_DIR
 if [[ "$RUN_DIR_ARG" = /* ]]; then
   RUN_DIR="$RUN_DIR_ARG"
@@ -97,10 +103,15 @@ echo "  style:    $STYLE"
 echo "  chairman: $CHAIRMAN_TOOL"
 echo
 
+# ── Temp file management (single trap) ──────────────────────────────
+CLEANUP_FILES=()
+add_cleanup() { CLEANUP_FILES+=("$@"); }
+cleanup() { rm -f "${CLEANUP_FILES[@]}"; }
+trap cleanup EXIT
+
 # ── Build prompt ─────────────────────────────────────────────────────
 PROMPT_TMP="$(mktemp)"
-cleanup() { rm -f "$PROMPT_TMP"; }
-trap cleanup EXIT
+add_cleanup "$PROMPT_TMP"
 
 {
   cat <<'PREAMBLE'
@@ -118,7 +129,7 @@ Instructions:
    - One-sentence description
    - Concrete fix
 
-6. After the finding list, add a ## Kimi-only / Solo Findings section for findings flagged by only one reviewer that may be lower confidence.
+6. After the finding list, add a ## Solo Findings section for findings flagged by only one reviewer that may be lower confidence.
 7. End with ## Reviewer Agreement — a one-paragraph summary of where reviewers agreed and where they diverged.
 
 Output format for each finding:
@@ -153,7 +164,7 @@ PREAMBLE
 # ── Dry run ──────────────────────────────────────────────────────────
 if [[ "$DRY_RUN" == "true" ]]; then
   echo "[dry-run] Prompt written to: $PROMPT_TMP"
-  echo "[dry-run] Chairman command would be: claude --model claude-${CHAIRMAN_TOOL}-4-6 --print --verbose"
+  echo "[dry-run] Chairman command would be: claude --model $model_id --print --verbose"
   cat "$PROMPT_TMP"
   exit 0
 fi
@@ -168,15 +179,10 @@ mkdir -p "$OUTDIR"
 CANONICAL="$OUTDIR/chairman.md"
 SIDECAR="$OUTDIR/chairman.sidecar.json"
 TRANSCRIPT_TMP="$(mktemp)"
-trap 'rm -f "$PROMPT_TMP" "$TRANSCRIPT_TMP"' EXIT
+add_cleanup "$TRANSCRIPT_TMP"
 
 ts_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 head_sha="$(git rev-parse HEAD 2>/dev/null || echo "?")"
-
-case "$CHAIRMAN_TOOL" in
-  sonnet) model_id="claude-sonnet-4-6" ;;
-  opus)   model_id="claude-opus-4-6" ;;
-esac
 
 echo "Running chairman ($model_id)..."
 start_epoch="$(date +%s)"
@@ -184,6 +190,7 @@ start_epoch="$(date +%s)"
 set +e
 claude --model "$model_id" --print --verbose < "$PROMPT_TMP" 2>&1 | tee "$TRANSCRIPT_TMP"
 chairman_rc="${PIPESTATUS[0]}"
+tee_rc="${PIPESTATUS[1]}"
 set -e
 
 end_epoch="$(date +%s)"
@@ -191,6 +198,10 @@ duration="$((end_epoch - start_epoch))"
 
 if [[ $chairman_rc -ne 0 ]]; then
   echo "ERROR: chairman model exited $chairman_rc (${duration}s)" >&2
+  exit 1
+fi
+if [[ $tee_rc -ne 0 ]]; then
+  echo "ERROR: transcript capture failed (tee exit $tee_rc) — artifact may be truncated" >&2
   exit 1
 fi
 
@@ -232,7 +243,9 @@ pattern = re.compile(
     r"###\s+\[(P[0-3])\]\s+(.+?)\s+\((\d+)/(\d+)\s+reviewers?\)",
     re.IGNORECASE
 )
-citation_pat = re.compile(r"`([A-Za-z0-9_./:-]+\.[A-Za-z0-9_]+:\d+(?:-\d+)?)`")
+# Match backtick-quoted citations: `path/file.ext:line` or `path/file.ext:line-line`
+# Also handles extensionless files like `Makefile:42` via optional extension group.
+citation_pat = re.compile(r"`([A-Za-z0-9_./:-]+(?:\.[A-Za-z0-9_]+)?:\d+(?:-\d+)?)`")
 
 lines = text.splitlines()
 for idx, line in enumerate(lines):
@@ -240,19 +253,27 @@ for idx, line in enumerate(lines):
     if not m:
         continue
     severity, title, count, total = m.group(1), m.group(2).strip(), int(m.group(3)), int(m.group(4))
-    # Look ahead up to 6 lines for a citation
+    # Look ahead up to 10 lines for citation, description, fix
     citation = ""
-    for la in lines[idx:idx+6]:
-        cm = citation_pat.search(la)
-        if cm:
-            citation = cm.group(1)
-            break
+    description = ""
+    suggested_fix = ""
+    for la in lines[idx:idx+10]:
+        if not citation:
+            cm = citation_pat.search(la)
+            if cm:
+                citation = cm.group(1)
+        if la.strip().startswith("**Issue:**"):
+            description = la.strip().removeprefix("**Issue:**").strip()
+        if la.strip().startswith("**Fix:**"):
+            suggested_fix = la.strip().removeprefix("**Fix:**").strip()
     findings.append({
         "severity": severity,
         "title": title,
         "consensus_count": count,
         "reviewer_total": total,
         "citation": citation,
+        "description": description,
+        "suggested_fix": suggested_fix,
     })
 
 payload = {
@@ -267,6 +288,12 @@ payload = {
 sidecar.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 print(f"Parsed {len(findings)} findings into sidecar.")
 PY
+
+# ── Validate sidecar JSON ────────────────────────────────────────────
+if ! python3 -m json.tool "$SIDECAR" > /dev/null 2>&1; then
+  echo "ERROR: sidecar JSON is malformed" >&2
+  exit 1
+fi
 
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
