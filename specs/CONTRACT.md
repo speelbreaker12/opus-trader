@@ -1510,11 +1510,11 @@ AT-344
 - Fail criteria: OPEN dispatch proceeds without a valid L2 snapshot, or rejection reason is missing/mismatched.
 
 AT-909
-- Given: `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms` for an OPEN.
+- Given: `L2BookSnapshot` is present, parseable, and its age is exactly `l2_book_snapshot_max_age_ms` for an OPEN; the walked book remains within `max_slippage_bps`; all non-liquidity gates are forced pass.
 - When: Liquidity Gate evaluates the order.
-- Then: the intent is rejected with `Rejected(LiquidityGateNoL2)` and no dispatch occurs.
-- Pass criteria: rejection reason matches; dispatch count remains 0.
-- Fail criteria: dispatch occurs or reason missing/mismatched.
+- Then: the snapshot is treated as still fresh (inclusive boundary), so the intent is NOT rejected with `Rejected(LiquidityGateNoL2)` and proceeds through the normal Liquidity Gate checks.
+- Pass criteria: dispatch count >= 1 and no `LiquidityGateNoL2` rejection reason is emitted.
+- Fail criteria: the snapshot is treated as stale at the exact threshold, `Rejected(LiquidityGateNoL2)` is emitted, or the OPEN is blocked solely by the boundary-age check.
 
 AT-421
 - Given: `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`.
@@ -2434,7 +2434,7 @@ EvidenceChainState = GREEN iff ALL are true (rolling window; default `evidencegu
   - Metrics MUST exist: `parquet_queue_depth` (gauge, count), `parquet_queue_capacity` (gauge, count).
   - Derived: `parquet_queue_depth_pct = parquet_queue_depth / max(parquet_queue_capacity, 1)`
   - Trip (breach window): if `parquet_queue_depth_pct > parquet_queue_trip_pct` for >= `parquet_queue_trip_window_s` seconds → EvidenceChainState != GREEN
-  - Clear (hysteresis): require `parquet_queue_depth_pct < parquet_queue_clear_pct` for >= `queue_clear_window_s` seconds before GREEN (cleared only after max(queue_clear_window_s, evidenceguard_global_cooldown) with all criteria satisfied)
+  - Clear (hysteresis): require `parquet_queue_depth_pct < parquet_queue_clear_pct` for >= `queue_clear_window_s` seconds before GREEN (cleared only after max(queue_clear_window_s, evidenceguard_global_cooldown) with all criteria satisfied; default `evidenceguard_global_cooldown = 120`; see Appendix A)
 
 **Where enforced (must be explicit):**
 - When `enforced_profile != CSP`, PolicyGuard `get_effective_mode()` MUST include EvidenceGuard in the axis resolver.
@@ -2469,6 +2469,20 @@ AT-414
 - Then: EvidenceChainState MUST be not GREEN (fail-closed); OPEN intents blocked.
 - Pass criteria: EvidenceChainState not GREEN; OPEN does not dispatch.
 - Fail criteria: EvidenceChainState remains GREEN or OPEN dispatch occurs.
+
+AT-1274
+- Given: `attribution_write_errors` counter is missing or unparseable; all other EvidenceGuard counters are present and nominal.
+- When: EvidenceGuard evaluates EvidenceChainState.
+- Then: EvidenceChainState MUST be not GREEN (fail-closed); OPEN intents blocked.
+- Pass criteria: EvidenceChainState not GREEN; OPEN does not dispatch.
+- Fail criteria: EvidenceChainState remains GREEN despite missing/unparseable `attribution_write_errors`.
+
+AT-1275
+- Given: `parquet_queue_overflow_count` increments within the last `evidenceguard_window_s`; all other EvidenceGuard criteria nominal.
+- When: EvidenceGuard evaluates EvidenceChainState.
+- Then: EvidenceChainState MUST be not GREEN (fail-closed); OPEN intents blocked.
+- Pass criteria: EvidenceChainState not GREEN; OPEN does not dispatch.
+- Fail criteria: EvidenceChainState remains GREEN despite `parquet_queue_overflow_count` increment within window.
 
 AT-334
 - Given: `decision_snapshot_write_errors` increments within the `evidenceguard_window_s`.
@@ -2526,6 +2540,12 @@ AT-923
 - Pass criteria: OPEN does not dispatch because required counters are stale.
 - Fail criteria: EvidenceChainState becomes GREEN or any OPEN dispatch occurs while counters are stale.
 
+AT-1276
+- Given: `enforced_profile == CSP` and `EvidenceChainState != GREEN` (e.g., `wal_write_errors` incremented); an OPEN intent arrives.
+- When: dispatch authorization evaluates the OPEN intent.
+- Then: EvidenceGuard MUST NOT block the OPEN dispatch, MUST NOT change `TradingMode`, and MUST NOT change `OpenPermissionLatch`. The OPEN proceeds subject to other gates only.
+- Pass criteria: OPEN dispatches (assuming other gates pass); TradingMode and OpenPermissionLatch unchanged by EvidenceGuard.
+- Fail criteria: OPEN blocked by EvidenceGuard while `enforced_profile == CSP`, or TradingMode/OpenPermissionLatch mutated by EvidenceGuard.
 
 **Canonical TradingMode computation (axis resolver + staleness + watchdog semantics + reason codes) is defined in §2.2.3 (PolicyGuard-owned).**
 
@@ -2639,6 +2659,41 @@ AT-1261
 - When: TradingMode is computed.
 - Then: TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE.
 - Pass criteria: OPEN blocked; correct reason code emitted. Fail criteria: Active returned or reason missing.
+
+AT-1277
+- Given: `cortex_override == ForceKill`; all other Kill triggers inactive (mm_util nominal, risk_state Healthy, no watchdog/disk/session kill).
+- When: TradingMode is computed.
+- Then: `TradingMode == Kill` and `mode_reasons` includes `KILL_CORTEX_FORCE_KILL`.
+- Pass criteria: Kill computed; `KILL_CORTEX_FORCE_KILL` present; no other Kill reason codes present.
+- Fail criteria: Active or ReduceOnly returned, or `KILL_CORTEX_FORCE_KILL` absent from `mode_reasons`.
+
+AT-1278
+- Given: `cortex_override == ForceReduceOnly`; all Kill triggers inactive; all other ReduceOnly predicates pass (nominal).
+- When: TradingMode is computed.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY`.
+- Pass criteria: ReduceOnly computed; correct reason code present; no other ReduceOnly reasons.
+- Fail criteria: Active returned, or `REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY` absent from `mode_reasons`.
+
+AT-1279
+- Given: `mm_util >= mm_util_kill`; all other Kill triggers inactive (risk_state Healthy, cortex_override absent, no watchdog/disk/session kill).
+- When: TradingMode is computed.
+- Then: `TradingMode == Kill` and `mode_reasons` includes `KILL_MARGIN_MM_UTIL_CRITICAL`.
+- Pass criteria: Kill computed; `KILL_MARGIN_MM_UTIL_CRITICAL` present.
+- Fail criteria: Active or ReduceOnly returned, or `KILL_MARGIN_MM_UTIL_CRITICAL` absent.
+
+AT-1280
+- Given: `risk_state == Maintenance`; all Kill triggers inactive; all other ReduceOnly predicates pass (nominal).
+- When: TradingMode is computed.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_RISKSTATE_MAINTENANCE` and does NOT include `REDUCEONLY_RISKSTATE_DEGRADED`.
+- Pass criteria: correct reason code present; wrong reason code absent.
+- Fail criteria: wrong code emitted, or both codes emitted, or Active returned.
+
+AT-1281
+- Given: `risk_state == Degraded`; all Kill triggers inactive; all other ReduceOnly predicates pass (nominal).
+- When: TradingMode is computed.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_RISKSTATE_DEGRADED` and does NOT include `REDUCEONLY_RISKSTATE_MAINTENANCE`.
+- Pass criteria: correct reason code present; wrong reason code absent.
+- Fail criteria: wrong code emitted, or both codes emitted, or Active returned.
 
 ---
 
@@ -2796,7 +2851,7 @@ AT-1244
 
 ##### **2.2.3.6 Kill Semantics (Capital Supremacy Safe, CSP)**
 
-**Kill SHALL mean:**
+**Kill MUST mean:**
 - No creation of new exposure.
 - Only risk-reducing actions are permitted until exposure is neutral.
 
@@ -2858,9 +2913,9 @@ AT-337
 AT-918
 - Given: `risk_state == Kill`.
 - When: TradingMode is computed by the Axis Resolver.
-- Then: `TradingMode == Kill`.
-- Pass criteria: Kill is computed regardless of other non-kill gates.
-- Fail criteria: ReduceOnly/Active is computed while `risk_state == Kill`.
+- Then: `TradingMode == Kill` and `mode_reasons` includes `KILL_RISKSTATE_KILL`.
+- Pass criteria: Kill is computed regardless of other non-kill gates; `KILL_RISKSTATE_KILL` present in `mode_reasons`.
+- Fail criteria: ReduceOnly/Active is computed while `risk_state == Kill`, or `KILL_RISKSTATE_KILL` absent from `mode_reasons`.
 
 **EvidenceGuard Forces ReduceOnly**
 AT-416
@@ -3728,7 +3783,7 @@ Profile: CSP
 **Algorithm (Deterministic, 3 tries):**
 1. Attempt **IOC limit close** at best ± `close_buffer_ticks` (default 5 ticks; see Appendix A for `close_buffer_ticks`). This is attempt 1.
 2. If partial fill: repeat for remaining qty (max 3 total attempts including the initial; buffer doubles each retry: attempt 2 = 10 ticks, attempt 3 = 20 ticks).
-3. If still exposed after retries: submit **reduce-only perp hedge** to neutralize delta (bounded size). If hedge dispatch fails (rejected, timeout, or venue error), log the failure and proceed to step 4 with exposure unchanged; the system MUST NOT retry the hedge indefinitely.
+3. If still exposed after retries: submit **reduce-only perp hedge** to neutralize delta (bounded size). If hedge dispatch fails (rejected, timeout, or venue error), log the failure and proceed to step 4 with exposure unchanged; the system MUST NOT retry the hedge indefinitely. If the hedge is partially filled, treat the partial fill as partial success: account for the filled quantity in exposure reduction and proceed to step 4 with the remaining exposure; MUST NOT retry for the unfilled remainder.
 4. Log `AtomicNakedEvent` with group_id + exposure + time-to-delta-neutral.
 
 **AtomicNakedEvent schema (minimum):**
@@ -3740,7 +3795,7 @@ Profile: CSP
 - `time_to_delta_neutral_ms` (integer)
 - `close_attempts` (integer; 1-3)
 - `hedge_used` (bool)
-- `cause` (string; non-empty; recommended values: `atomic_legging_failure|emergency_close_exhausted|hedge_fallback`)
+- `cause` (string; non-empty; MUST be one of: `atomic_legging_failure|emergency_close_exhausted|hedge_fallback`)
 - `trading_mode_at_event` (`Active|ReduceOnly|Kill`)
 - `evidence_chain_state_at_event` (EvidenceChainState per §2.2.2; e.g., `GREEN|RED`; required only when `enforced_profile != CSP`)
 
@@ -3774,6 +3829,20 @@ AT-235
 - Then: close attempts run and fallback hedge executes if still exposed; exposure goes to ~0.
 - Pass criteria: bounded close attempts then hedge fallback if needed; exposure neutralized.
 - Fail criteria: no close attempts or exposure remains.
+
+AT-1272
+- Given: one leg filled, close attempts exhausted with remaining exposure, and hedge dispatch fails (rejected, timeout, or venue error).
+- When: emergency close completes step 3 and proceeds to step 4.
+- Then: exactly one `AtomicNakedEvent` is emitted with `exposure_usd_after > 0`, `hedge_used == true`, and the system does not retry the hedge indefinitely.
+- Pass criteria: AtomicNakedEvent emitted with accurate remaining exposure; no retry loop; system proceeds to step 4 within bounded time.
+- Fail criteria: system hangs retrying hedge, or AtomicNakedEvent omitted, or `exposure_usd_after` does not reflect remaining exposure.
+
+AT-1273
+- Given: one leg filled, close attempts exhausted, and hedge order is partially filled (partial qty filled, remainder unfilled).
+- When: emergency close evaluates the hedge result.
+- Then: the partial fill is treated as partial success; `exposure_usd_after` in AtomicNakedEvent reflects the reduced (but non-zero) exposure after partial hedge fill; the system MUST NOT retry for the unfilled remainder and MUST proceed to step 4.
+- Pass criteria: AtomicNakedEvent emitted; `exposure_usd_after` accounts for partial hedge fill; no retry for remainder.
+- Fail criteria: partial fill treated as full failure (ignoring filled portion), or system retries indefinitely for remainder.
 
 AT-236
 - Given: Liquidity Gate reject conditions are present.
@@ -6895,3 +6964,4 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-15 | CCL-2026-03-15-05 | P0-D Break-Glass clarifications/AT-1237; §1.2.2 Churn Breaker; §2.2.4 Open Permission Latch; §7.0 /status; Appendix A defaults/summary; Appendix CONTRACT_CHANGE_LEDGER | hardening | Implement remediation-order-v4 Task 3 contract hardening: exposed-case drill proof, reconciliation-stall observability, informational `pending_reduceonly_reasons`, and churn-breaker early-clear semantics. | Close remaining fail-open/observability gaps while preserving fail-closed authorization boundaries and deterministic diagnostics. | AT-1237, AT-1243, AT-1244, AT-1245, AT-1246 | local/remediation-order-v4-task3 |
 | 2026-03-15 | CCL-2026-03-15-06 | §2.2.4 Open Permission Latch (AT-1243 cadence); Appendix CONTRACT_CHANGE_LEDGER | clarify | Clarify deterministic `RECONCILE_STALL` emission cadence: one emission per continuous stall episode at threshold exceedance, re-emission only on failing-criterion change or new post-clear episode. | Prevent alert/log spam ambiguity while preserving deterministic observability and fail-closed latch semantics. | AT-1243 | local/remediation-order-v4-task3-quality-fix |
 | 2026-03-17 | CCL-2026-03-17-01 | §1.3 Liquidity Gate; §1.4 Pricer; §2.2.1.2 Critical Inputs; §2.2.2 EvidenceGuard; §2.2.3.2 MarketIntegrityAxis; §2.2.3.4 Rename; §2.2.4 OPL; §3.1 Emergency Close; Appendix A; Appendix B RejectReasonCode; CSP table; CONTRACT_CHANGE_LEDGER | hardening | Autoresearch Phase 2+3: 16 accepted machine-generated proposals — margin headroom NaN/missing fail-closed, account_summary staleness gate, cortex_override missing → ForceReduceOnly, inventory_skew_sell_floor formula, bunker_mode_last_update_ts_ms critical input, session_termination rename ATs, hedge qty bound, monotonic retry, SHALL→MUST tightening, CSP-063 dedup, AT renumber 1243→1253. | Close contract gaps identified by automated gap detection across execution pipeline and PolicyGuard fixtures. | AT-1251, AT-1252, AT-1253, AT-1254, AT-1255, AT-1256, AT-1257, AT-1258, AT-1259, AT-1260, AT-1261, AT-1262, AT-1263, AT-1264 | autoresearch/phase3-contract-patch |
+| 2026-03-19 | CCL-2026-03-19-01 | §1.3 Liquidity Gate; §2.2.4 Open Permission Latch; Appendix A; Appendix CONTRACT_CHANGE_LEDGER | hardening | Autoresearch Phase 4 accepted proposal patch: sharpen AT-909 to the exact stale-L2 boundary, add replace-order stale-L2 fallback/no-fallback ATs, codify the slippage equality boundary, add negative reconciliation-criteria ATs, and tighten latch invariants/defaults/cross-references. | Close the remaining accepted Liquidity Gate and Open Permission Latch gaps from the Phase 4 proposal batch without introducing implementation-specific architecture requirements. | AT-222, AT-909, AT-1265, AT-1266, AT-1267, AT-1268, AT-1269, AT-1270, AT-1271 | autoresearch/phase4-contract-patch |

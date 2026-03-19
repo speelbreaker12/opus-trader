@@ -7,14 +7,15 @@ started: 2026-03-16
 ---
 
 ## Commits
-- pending — 2026-03-19 — Phase 4 patch: 7 accepted proposals applied to CONTRACT.md (AT-1265..AT-1271)
+- pending — 2026-03-19 — Phase 4 remaining 3 sections: 10 new ATs (AT-1272..AT-1281) + 3 mechanical fixes
+- `049b85dd` — 2026-03-19 — Phase 4 LG+OPL patch: 7 new ATs (AT-1265..AT-1271)
 - `120759bc` — 2026-03-18 — Phase 4 section-compatibility fix + gitignore lock
 - `5ec15230` — 2026-03-18 — Phase 4 gap detection: 23 findings, 10 proposals (2/5 sections), pipeline infra improvements.
 - `1c48e654` — 2026-03-18 — Hardened contract render-review for sample fixture guard and add regression.
 
 ## Current State
 
-Phase 4 patch APPLIED to CONTRACT.md (2026-03-19). 7 accepted proposals from LG + OPL runs. 7 new ATs: AT-1265 (replace order stale-L2 fallback), AT-1266 (replace order no-fallback), AT-1267 (slippage boundary ==), AT-1268 (recon criteria 1 failure), AT-1269 (recon criteria 2 failure), AT-1270 (concurrent reason codes partial resolution), AT-1271 (biconditional latch↔codes invariant). Also: AT-222 bypass pass/fail criteria, §2.2.4 cross-ref, reconcile_stall_max_delay_s inline default + fail-closed. 3/5 sections (EC, EG, TMC — 15 findings) still need proposals.
+Phase 4 COMPLETE (2026-03-19). All 5 sections patched. 17 new ATs total (AT-1265..AT-1281), plus mechanical fixes (AT-222 criteria, AT-918 reason code, SHALL→MUST, cause enum, EG cooldown default, EC partial fill, §2.2.4 cross-ref, reconcile_stall default). 23 findings triaged: 19 accepted, 4 rejected.
 
 ## Key Files
 - `autoresearch/contract/render_review.py`
@@ -86,5 +87,6 @@ Phase 4 patch APPLIED to CONTRACT.md (2026-03-19). 7 accepted proposals from LG 
 - Pipeline fix: relaxed section-match validation to use section-number prefix matching instead of exact string equality (fixes known ~100% failure on TMC/EC)
 - Review fix: tightened section-compatibility to require 2-level prefix overlap (prevents false positives like §1.3 matching §1.4). Gitignored proposals_index.lock.
 ### 2026-03-19
-- Reviewed 10 Phase 4 proposals manually against CONTRACT.md source text: 7 accepted, 2 rejected (P-001 impl detail, P-003 rewrites existing AT), 1 pre-rejected by enforcement
-- Applied 7 proposals to CONTRACT.md: 7 new ATs (AT-1265..AT-1271), AT-222 bypass criteria, §2.2.4 cross-ref, reconcile_stall_max_delay_s default + fail-closed
+- Reviewed 10 Phase 4 proposals manually against CONTRACT.md source text: 7 accepted, 2 rejected (P-001 impl detail, P-003 AT-909 rewrite), 1 pre-rejected
+- Applied 7 accepted proposals to CONTRACT.md: 7 new ATs (AT-1265..AT-1271); AT-222 bypass criteria; §2.2.4 cross-ref; reconcile_stall_max_delay_s default + fail-closed
+- Manual proposals for EC/EG/TMC: triaged 15 findings, accepted 12, rejected 3. 10 new ATs (AT-1272..AT-1281) + 3 mechanical fixes (cause enum closed, SHALL→MUST, AT-918 reason code, EG cooldown default, EC partial fill text)
