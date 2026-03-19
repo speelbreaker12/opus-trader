@@ -599,9 +599,10 @@ fn test_liquidity_gate_graybox_emits_reject_and_sample_events_without_global_sid
 
     let snap = book(vec![(100.0, 1.0), (110.0, 1.0)], vec![], 900);
     let input = gate_input(2.0, true, GateIntentClass::Open, Some(snap));
+    let mut metrics = LiquidityGateMetrics::new();
     let mut events = Vec::new();
 
-    let result = evaluate_liquidity_gate_with_events(&input, &mut events);
+    let result = evaluate_liquidity_gate_with_events(&input, &mut metrics, &mut events);
 
     assert!(matches!(
         result.decision,
@@ -644,9 +645,10 @@ fn test_liquidity_gate_graybox_emits_reject_and_sample_events_without_global_sid
 #[test]
 fn test_cancel_only_graybox_emits_allowed_event_only() {
     let input = gate_input(1.0, true, GateIntentClass::CancelOnly, None);
+    let mut metrics = LiquidityGateMetrics::new();
     let mut events = Vec::new();
 
-    let result = evaluate_liquidity_gate_with_events(&input, &mut events);
+    let result = evaluate_liquidity_gate_with_events(&input, &mut metrics, &mut events);
 
     assert!(matches!(result.decision, LiquidityGateDecision::Allowed));
     assert_eq!(events, vec![LiquidityGateEvent::Allowed]);
@@ -659,9 +661,10 @@ fn test_liquidity_gate_graybox_emits_allowed_and_sample_events_without_global_si
 
     let snap = book(vec![(100.0, 10.0)], vec![], 900);
     let input = gate_input(5.0, true, GateIntentClass::Open, Some(snap));
+    let mut metrics = LiquidityGateMetrics::new();
     let mut events = Vec::new();
 
-    let result = evaluate_liquidity_gate_with_events(&input, &mut events);
+    let result = evaluate_liquidity_gate_with_events(&input, &mut metrics, &mut events);
 
     assert!(matches!(result.decision, LiquidityGateDecision::Allowed));
     assert_eq!(

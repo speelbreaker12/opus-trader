@@ -33,10 +33,14 @@ fn bump_margin_gate_reject(reason: MarginGateRejectReason) {
     }
 }
 
-fn bump_margin_gate_reject_inner(_reason: MarginGateRejectReason) {
+fn bump_margin_gate_reject_inner(reason: MarginGateRejectReason) {
     MARGIN_GATE_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
-    crate::execution::emit_execution_metric_line(crate::execution::METRIC_MARGIN_GATE_REJECT, "");
-    tracing::debug!("MarginGateReject");
+    let tail = format!("reason={reason:?}");
+    crate::execution::emit_execution_metric_line(
+        crate::execution::METRIC_MARGIN_GATE_REJECT,
+        &tail,
+    );
+    tracing::debug!("MarginGateReject reason={:?}", reason);
 }
 
 /// Internal margin gate events for graybox testing.

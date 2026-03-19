@@ -59,12 +59,12 @@ This is the active rollout scope for Upgrade 2.
 | fee staleness | PASS | `crates/soldier_core/src/risk/fees.rs:89`, `crates/soldier_core/src/risk/fees.rs:177` | `ProductionFeeEvents` adapts the sink path back into metrics. |
 | expected slippage | PASS | `crates/soldier_core/src/execution/gate.rs:147`, `crates/soldier_core/src/execution/gate.rs:352`, `crates/soldier_core/src/execution/gate.rs:666` | Covered inside `execution/gate.rs`, not as a separate module. |
 | quantize | PASS | `crates/soldier_core/src/execution/quantize.rs:315`, `crates/soldier_core/src/execution/quantize.rs:385`, `crates/soldier_core/src/execution/quantize_tests.rs:763`, `crates/soldier_core/src/execution/quantize_tests.rs:833` | `ProductionQuantizeEvents` adapts the sink path back into metrics. |
-| pricer | FAIL | `crates/soldier_core/src/execution/pricer.rs:150` | Emits metrics directly and has no sink seam. |
-| inventory skew | FAIL | `crates/soldier_core/src/execution/inventory_skew.rs:134` | Emits metrics directly and has no sink seam. |
+| pricer | PASS | `crates/soldier_core/src/execution/pricer.rs:83`, `crates/soldier_core/src/execution/pricer.rs:199` | `ProductionPricerEvents` adapts the sink path back into metrics. |
+| inventory skew | PASS | `crates/soldier_core/src/execution/inventory_skew.rs:73`, `crates/soldier_core/src/execution/inventory_skew.rs:213` | `ProductionInventorySkewEvents` adapts the sink path back into metrics. |
 | post-only | PASS | `crates/soldier_core/src/execution/post_only_guard.rs:45`, `crates/soldier_core/src/execution/post_only_guard.rs:130`, `crates/soldier_core/src/execution/post_only_guard_tests.rs:320`, `crates/soldier_core/src/execution/post_only_guard_tests.rs:367` | `ProductionPostOnlyEvents` adapts the sink path back into metrics. |
 | margin | PASS | `crates/soldier_core/src/risk/margin_gate.rs`, `crates/soldier_core/src/risk/margin_gate_tests.rs` | `evaluate_margin_headroom_gate_with_events` funnels reject paths through `ProductionMarginGateEvents`, with graybox tests proving `evaluate_margin_headroom_gate_with_events` stays side-effect free and wrapper tests preserving metric line behavior. |
-| pending exposure | FAIL | `crates/soldier_core/src/risk/pending_exposure.rs:28` | Emits metrics directly and has no sink seam. |
-| exposure budget | FAIL | `crates/soldier_core/src/risk/exposure_budget.rs:48` | Emits metrics directly and has no sink seam. |
+| pending exposure | PASS | `crates/soldier_core/src/risk/pending_exposure.rs:56`, `crates/soldier_core/src/risk/pending_exposure.rs:461` | `ProductionPendingExposureEvents` adapts the sink path back into metrics. |
+| exposure budget | PASS | `crates/soldier_core/src/risk/exposure_budget.rs:78`, `crates/soldier_core/src/risk/exposure_budget.rs:187` | `ProductionExposureBudgetEvents` adapts the sink path back into metrics. |
 | preflight | PASS | `crates/soldier_core/src/execution/preflight.rs:218`, `crates/soldier_core/src/execution/preflight.rs:249`, `crates/soldier_core/src/execution/preflight_tests.rs:531`, `crates/soldier_core/src/execution/preflight_tests.rs:567` | `ProductionPreflightEvents` adapts the sink path back into metrics. |
 
 ## Upgrade 2B — Orchestration Telemetry Decoupling

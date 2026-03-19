@@ -7,9 +7,7 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::post_only_guard::{
-    PostOnlyEvent, PostOnlyInput, PostOnlyMetrics, PostOnlyResult, check_post_only_with_events,
-};
+use super::post_only_guard::{PostOnlyInput, PostOnlyMetrics, PostOnlyResult, check_post_only};
 use crate::telemetry::EventSink;
 use crate::venue::InstrumentKind;
 
@@ -300,13 +298,8 @@ pub(crate) fn preflight_intent_with_events<E: EventSink<PreflightEvent>>(
     // Rule 4: post_only orders must not cross the touch (AT-916).
     if let Some(post_only_input) = input.post_only_input.as_ref() {
         let mut post_only_metrics = PostOnlyMetrics::new();
-        let mut post_only_events = Vec::<PostOnlyEvent>::new();
         if matches!(
-            check_post_only_with_events(
-                post_only_input,
-                &mut post_only_metrics,
-                &mut post_only_events
-            ),
+            check_post_only(post_only_input, &mut post_only_metrics),
             PostOnlyResult::Rejected
         ) {
             let reason = PreflightReject::PostOnlyWouldCross;

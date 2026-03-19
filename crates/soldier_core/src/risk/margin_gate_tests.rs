@@ -110,9 +110,10 @@ fn test_margin_gate_wrapper_emits_structured_reject_metric_line() {
     assert!(
         lines.iter().any(|line| {
             line.starts_with("margin_gate_reject_total")
+                && line.contains("reason=MarginHeadroomRejectOpens")
                 && line.contains("intent_id=intent-margin-gate-001")
                 && line.contains("run_id=run-margin-gate-001")
         }),
-        "expected structured reject metric line, got {lines:?}"
+        "expected structured reject metric line with reason, got {lines:?}"
     );
 }

@@ -149,42 +149,32 @@ fn bump_net_edge_reject(reason: NetEdgeRejectReason, net_edge_usd: Option<f64>) 
     #[cfg(test)]
     {
         crate::execution::with_metrics_update_lock(|| {
-            match reason {
-                NetEdgeRejectReason::NetEdgeTooLow => {
-                    NET_EDGE_REJECT_TOO_LOW_TOTAL.fetch_add(1, Ordering::Relaxed);
-                }
-                NetEdgeRejectReason::NetEdgeInputMissing => {
-                    NET_EDGE_REJECT_INPUT_MISSING_TOTAL.fetch_add(1, Ordering::Relaxed);
-                }
-            }
-            let tail = format!("reason={reason:?}");
-            super::emit_execution_metric_line(super::METRIC_NET_EDGE_REJECT, &tail);
-            tracing::debug!(
-                "NetEdgeReject reason={:?} net_edge_usd={:?}",
-                reason,
-                net_edge_usd
-            );
+            bump_net_edge_reject_inner(reason, net_edge_usd);
         })
     }
 
     #[cfg(not(test))]
     {
-        match reason {
-            NetEdgeRejectReason::NetEdgeTooLow => {
-                NET_EDGE_REJECT_TOO_LOW_TOTAL.fetch_add(1, Ordering::Relaxed);
-            }
-            NetEdgeRejectReason::NetEdgeInputMissing => {
-                NET_EDGE_REJECT_INPUT_MISSING_TOTAL.fetch_add(1, Ordering::Relaxed);
-            }
-        }
-        let tail = format!("reason={reason:?}");
-        super::emit_execution_metric_line(super::METRIC_NET_EDGE_REJECT, &tail);
-        tracing::debug!(
-            "NetEdgeReject reason={:?} net_edge_usd={:?}",
-            reason,
-            net_edge_usd
-        );
+        bump_net_edge_reject_inner(reason, net_edge_usd);
     }
+}
+
+fn bump_net_edge_reject_inner(reason: NetEdgeRejectReason, net_edge_usd: Option<f64>) {
+    match reason {
+        NetEdgeRejectReason::NetEdgeTooLow => {
+            NET_EDGE_REJECT_TOO_LOW_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+        NetEdgeRejectReason::NetEdgeInputMissing => {
+            NET_EDGE_REJECT_INPUT_MISSING_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    let tail = format!("reason={reason:?}");
+    super::emit_execution_metric_line(super::METRIC_NET_EDGE_REJECT, &tail);
+    tracing::debug!(
+        "NetEdgeReject reason={:?} net_edge_usd={:?}",
+        reason,
+        net_edge_usd
+    );
 }
 
 struct ProductionNetEdgeEvents<'a> {

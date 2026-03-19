@@ -144,24 +144,20 @@ fn bump_fee_staleness_hard_stale() {
     #[cfg(test)]
     {
         crate::execution::with_metrics_update_lock(|| {
-            FEE_STALENESS_HARD_STALE_TOTAL.fetch_add(1, Ordering::Relaxed);
-            crate::execution::emit_execution_metric_line(
-                crate::execution::METRIC_FEE_STALENESS_REJECT,
-                "",
-            );
-            tracing::debug!("FeeStalenessHardStale");
+            bump_fee_staleness_hard_stale_inner();
         })
     }
 
     #[cfg(not(test))]
     {
-        FEE_STALENESS_HARD_STALE_TOTAL.fetch_add(1, Ordering::Relaxed);
-        crate::execution::emit_execution_metric_line(
-            crate::execution::METRIC_FEE_STALENESS_REJECT,
-            "",
-        );
-        tracing::debug!("FeeStalenessHardStale");
+        bump_fee_staleness_hard_stale_inner();
     }
+}
+
+fn bump_fee_staleness_hard_stale_inner() {
+    FEE_STALENESS_HARD_STALE_TOTAL.fetch_add(1, Ordering::Relaxed);
+    crate::execution::emit_execution_metric_line(crate::execution::METRIC_FEE_STALENESS_REJECT, "");
+    tracing::debug!("FeeStalenessHardStale");
 }
 
 // ─── Evaluator ──────────────────────────────────────────────────────────
