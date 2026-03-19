@@ -35,6 +35,23 @@ git fetch origin --prune
 git log --left-right --cherry-pick --oneline origin/main...main
 ```
 
+### Worktree collision check (MANDATORY before any reset)
+
+Before moving the `main` ref (`git update-ref`, `git reset --hard`, or equivalent), check if any other worktree is currently on `main`:
+
+```bash
+git worktree list | grep '\[main\]'
+```
+
+If multiple worktrees show `[main]`, the reset will corrupt their state (they silently follow the ref move and end up on a branch they didn't choose). For each affected worktree:
+
+1. Switch it to its own branch first: `git -C <worktree-path> checkout <its-branch>`
+2. Or remove it if it's disposable: `git worktree remove <worktree-path>`
+
+**Only proceed with the main reset after no other worktree is on `main`.**
+
+This is the exact failure mode that caused the `obsidian-workflow-fixes` worktree to silently land on `main` after a `git update-ref refs/heads/main origin/main` in a different worktree.
+
 ## State classification
 
 Classify as exactly one primary state:

@@ -72,10 +72,26 @@ while read -r _local_ref _local_sha remote_ref _remote_sha; do
   if [[ -n "$current_tree" && "$current_tree" == "$cached_tree" ]]; then
     echo "Skipping verify.sh — tree $current_tree already verified (cached)"
   else
-    "$VERIFY_SH_PATH" quick
-    # Cache the verified tree SHA on success
-    if [[ -n "$current_tree" && -n "$git_dir" ]]; then
-      printf '%s\n' "$current_tree" > "$verify_cache"
+    # Change-class skip: if the branch has no crates/ changes vs origin/main,
+    # skip the full cargo verify (~5 min). Only workflow/docs/obsidian changed.
+    branch_base="$(git merge-base origin/main HEAD 2>/dev/null || true)"
+    has_crate_changes=0
+    if [[ -n "$branch_base" ]]; then
+      if git diff --name-only "${branch_base}...HEAD" | grep -q '^crates/'; then
+        has_crate_changes=1
+      fi
+    else
+      has_crate_changes=1  # fail-closed: can't determine, run verify
+    fi
+
+    if [[ "$has_crate_changes" -eq 0 ]]; then
+      echo "Skipping verify.sh — no crates/ changes on branch (docs/workflow only)"
+    else
+      "$VERIFY_SH_PATH" quick
+      # Cache the verified tree SHA on success
+      if [[ -n "$current_tree" && -n "$git_dir" ]]; then
+        printf '%s\n' "$current_tree" > "$verify_cache"
+      fi
     fi
   fi
 done
