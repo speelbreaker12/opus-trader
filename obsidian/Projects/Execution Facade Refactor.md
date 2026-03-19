@@ -57,6 +57,7 @@ PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `exe
 - [[Execution Facade Refactor 2026-03-18 Cleanup and Verify Pass]]
 
 ## Handoffs
+- [[Execution Facade Refactor 2026-03-18 Cherry-Pick Recovery Complete]]
 - [[Execution Facade Refactor 2026-03-17 Upgrade 2A Inventory Skew Handoff]]
 - [[Execution Facade Refactor 2026-03-17 Upgrade 2A Post-Only Handoff]]
 - [[Execution Facade Refactor 2026-03-17 Upgrade 2A Margin Gate Handoff]]

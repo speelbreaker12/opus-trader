@@ -164,7 +164,7 @@ pub fn try_build_created_intent_record(
 /// `WalLedger::append()` directly — `append()` always waits for fsync when
 /// durable storage is configured. This struct is retained only for API
 /// stability; its fields are ignored by `durable_append()`.
-/// Use `WalWriterConfig` in `store::ledger` to configure barrier timeout
+/// Use `WalWriterConfig` in `store` to configure barrier timeout
 /// and channel capacity.
 #[deprecated(
     since = "0.2.0",

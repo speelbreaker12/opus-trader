@@ -1,4 +1,11 @@
-//! Execution types, sizing logic, dispatch mapping, quantization, labeling, and preflight.
+//! Execution subsystem.
+//!
+//! Owns: order-intent compilation, execution gating, reject semantics,
+//! labeling, group atomicity, TLSM, emergency-close selection, and
+//! execution decisions at the dispatch chokepoint.
+//!
+//! Public API lives in `api.rs`.
+//! All other child modules are intentionally private implementation details.
 
 use std::cell::RefCell;
 use std::collections::VecDeque;

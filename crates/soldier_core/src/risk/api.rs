@@ -1,7 +1,17 @@
-//! Public execution risk façade.
+//! Public risk facade.
 //!
-//! This file intentionally enumerates the `soldier_core::risk` public surface.
+//! This file defines the intended public surface for `soldier_core::risk`.
 //! Symbols not re-exported here remain implementation details.
+//!
+//! **Public:** `RiskState`, fee evaluation, margin gate, pending exposure,
+//! exposure budget, `InstrumentState`.
+//!
+//! **Private:** `fees`, `margin_gate`, `pending_exposure`, `exposure_budget`,
+//! `state`, `instrument_state`.
+//!
+//! **Tests:** unit tests alongside implementation files; facade completeness
+//! in `facade_completeness_contract_tests.rs`; integration tests under
+//! `tests/` covering the public risk surface.
 
 pub use super::exposure_budget::{
     ExposureBucket, ExposureBudgetInput, ExposureBudgetMetrics, ExposureBudgetRejectReason,

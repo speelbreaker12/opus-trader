@@ -1,7 +1,21 @@
 //! Public execution facade.
 //!
 //! This file defines the intended public surface for `soldier_core::execution`.
-//! Symbols not re-exported here are implementation details.
+//! Symbols not re-exported here remain implementation details.
+//!
+//! **Public:** execution engine + inputs, side, gate steps, reject reason
+//! codes, group atomicity, TLSM + transitions, label encoding,
+//! emergency-close selection, recorded-before-dispatch gate.
+//!
+//! **Private:** `base_gates`, `build_order_intent`, `dispatch_map`,
+//! `domain_model`, `emergency_close`, `engine`, `gate`, `gate_outcome`,
+//! `gates`, `group`, `intent_assembly`, `inventory_skew`, `label`,
+//! `open_runtime`, `order_size`, `pipeline`, `post_only_guard`, `preflight`,
+//! `pricer`, `quantize`, `reject_reason`, `routing`, `tlsm`, `wal_gate`.
+//!
+//! **Tests:** unit tests alongside implementation files; facade completeness
+//! in `facade_completeness_contract_tests.rs`; integration tests under
+//! `tests/` covering the public execution surface.
 
 // Execution engine
 pub use super::engine::{
