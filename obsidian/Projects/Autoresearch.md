@@ -2,7 +2,7 @@
 status: in-progress
 priority: P1
 branch: project/contract-autoresearch
-pr: 214
+pr: 218
 started: 2026-03-16
 ---
 
