@@ -50,16 +50,7 @@ while read -r _local_ref _local_sha remote_ref _remote_sha; do
     continue
   fi
 
-  if [[ "$remote_ref" == "refs/heads/main" || "$remote_ref" == "refs/heads/master" ]]; then
-    echo "Pushing to protected branch: $remote_ref"
-    if [[ -z "${CI:-}" && "${VERIFY_ALLOW_LOCAL_FULL:-0}" != "1" ]]; then
-      echo "WARN: local full verify disabled; running quick and relying on CI"
-      "$VERIFY_SH_PATH" quick
-      continue
-    fi
-    "$VERIFY_SH_PATH" full
-  else
-    echo "Pushing to feature branch: $remote_ref"
-    "$VERIFY_SH_PATH" quick
-  fi
+  # Main/master push is blocked above — all remaining pushes are feature branches
+  echo "Pushing to feature branch: $remote_ref"
+  "$VERIFY_SH_PATH" quick
 done
