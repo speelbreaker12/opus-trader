@@ -5,7 +5,7 @@ branch: project/execution-facade-refactor-v2
 base: main
 pr: 216
 started: "2026-03-05"
-worktree: /private/tmp/opus-pr216-review-64409
+worktree: /Users/admin/Desktop/opus-trader/.worktrees/execution-facade-refactor-v2
 scope_paths:
   - crates/soldier_core/src/execution/
   - crates/soldier_core/src/risk/fees.rs
@@ -20,7 +20,8 @@ PR #216 is active on `project/execution-facade-refactor-v2` against `main`. The 
 
 ## Commits
 - `40f27959` — 2026-03-19 — review-stack fix + rustfmt: preflight calls check_post_only() production wrapper (P1-1), margin gate includes reason in metric line (P1-2), liquidity gate aligned to (input, metrics, events) signature (P1-3), bump functions refactored to _inner pattern (P2-1), upgrade2 checklist 4 stale FAIL rows corrected (P2-3), rustfmt applied.
-- `pending` — 2026-03-19 — close remaining review findings: add pricer graybox/parity tests, replace invalid fee fallback `0.0` with configurable fail-closed rate, narrow liquidity/net-edge graybox events to semantic-only payloads, and correct Upgrade 2 checklist header status.
+- `54facf4d` — 2026-03-19 — close remaining review findings: add pricer graybox/parity tests, replace invalid fee fallback `0.0` with configurable fail-closed rate, narrow liquidity/net-edge graybox events to semantic-only payloads, and correct Upgrade 2 checklist header status.
+- `pending` — 2026-03-19 — collapse the liquidity wrapper nested `if` surfaced by pre-push quick clippy so branch push can clear the Rust warning gate.
 - `22baab12` — 2026-03-18 — remove dead code, duplicate warn, 15x clippy needless_return, test deadlock fix (raw METRICS_TEST_LOCK→begin_metrics_test), add 3 graybox tests for build_order_intent chokepoint, flip Upgrade 2 checklist PASS, close stale handoff.
 - `9012e4e4` — 2026-03-17 — migrate `execution/group.rs` and `execution/build_order_intent.rs` instrumentation to crate-private `EventSink` seams with graybox parity coverage; mark Upgrade 2B rows PASS in checklist.
 - `80183f35` — 2026-03-17 — add preflight event-sink seam with `PreflightEvent` and graybox/wrapper parity coverage.
@@ -80,6 +81,7 @@ PR #216 is active on `project/execution-facade-refactor-v2` against `main`. The 
 - Removed numeric payloads from `LiquidityGateEvent` and `NetEdgeEvent`; production wrappers now emit the legacy numeric metrics from gate results while graybox events stay semantic-only.
 - Corrected the checklist header from global `PASS` to `Upgrade 2A PASS / Upgrade 2 overall FAIL (Upgrade 2B open)`.
 - Verified with `cargo test -p soldier_core --lib --locked`, `cargo test -p soldier_core --test test_fee_staleness --locked`, and `cargo fmt --all -- --check`.
+- Fixed a follow-up `clippy::collapsible_if` warning in `evaluate_liquidity_gate(...)` after the pre-push quick verify caught it, then reran `cargo clippy --workspace --lib -- -D warnings` successfully.
 
 ### 2026-03-18 (session 2 — cherry-pick recovery)
 - Discarded broken dirty state from failed bulk cherry-pick (-n).

@@ -5,7 +5,8 @@ status: complete
 ---
 
 ## Commits
-- `pending` — 2026-03-19 — close remaining execution facade review items.
+- `54facf4d` — 2026-03-19 — close remaining execution facade review items.
+- `pending` — 2026-03-19 — fix post-commit quick-clippy follow-up in the liquidity wrapper.
 
 ## 0) What shipped
 - Feature/behavior: Closed the remaining verified review findings on PR 216 by restoring pricer seam proof, fail-closing invalid fee input, and narrowing liquidity/net-edge graybox events to semantic-only payloads.
@@ -13,12 +14,12 @@ status: complete
 
 ## 1) Constraint (ONE)
 - How it manifested (2-3 concrete symptoms): Review findings were partly doc-claim drift rather than runtime bugs; a test-only assertion landed in the wrong liquidity test and broke the broad lib sweep; the project note had stale `pending` hashes and stale branch metadata while the active branch had already moved to `project/execution-facade-refactor-v2`.
-- Time/token drain it caused: One full lib rerun failed for a non-production reason, and the tracking files required reconciliation before the commit could satisfy repo workflow rules.
+- Time/token drain it caused: One full lib rerun failed for a non-production reason, the pre-push quick verify surfaced one last `clippy::collapsible_if`, and the tracking files required reconciliation before each commit could satisfy repo workflow rules.
 - Workaround I used this session (exploit): Narrowed the event enums instead of threading Decimal through telemetry, fixed the misplaced assertion directly, and backfilled the commit hashes already visible in `git log` before adding the new batch.
 - Next-agent default behavior (subordinate): When a review item is really about evidence or telemetry shape, preserve the production metric contract at the wrapper boundary and keep graybox events semantic-only unless the contract explicitly requires numeric payloads.
 - Permanent fix proposal (elevate): Add a lightweight lint or review check that blocks new `f32`/`f64` fields in event enums under `soldier_core` and another check that flags project-note `pending` entries older than the current HEAD.
 - Smallest increment: Add a repo grep gate for `enum .*Event` blocks containing `f32`/`f64`, and a project-note checker that matches `pending` entries against the last few commits on the tracked branch.
-- Validation (proof it got better): `cargo test -p soldier_core --lib --locked`, `cargo test -p soldier_core --test test_fee_staleness --locked`, and `cargo fmt --all -- --check` all passed after the patch set.
+- Validation (proof it got better): `cargo test -p soldier_core --lib --locked`, `cargo test -p soldier_core --test test_fee_staleness --locked`, `cargo clippy --workspace --lib -- -D warnings`, and `cargo fmt --all -- --check` all passed after the patch set.
 
 ## 2) Best follow-up
 - Single best next step: Finish the remaining Upgrade 2B graybox/chokepoint rollout so the checklist header can move from overall FAIL back to overall PASS without qualification.

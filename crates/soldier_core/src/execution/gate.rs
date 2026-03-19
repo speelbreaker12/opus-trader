@@ -778,10 +778,10 @@ pub(crate) fn evaluate_liquidity_gate(
     let mut events = ProductionLiquidityGateEvents::default();
     let result = evaluate_liquidity_gate_with_events(input, metrics, &mut events);
 
-    if events.saw_expected_slippage_sample {
-        if let Some(slippage_bps) = result.metadata.slippage_bps {
-            record_expected_slippage_sample(slippage_bps);
-        }
+    if events.saw_expected_slippage_sample
+        && let Some(slippage_bps) = result.metadata.slippage_bps
+    {
+        record_expected_slippage_sample(slippage_bps);
     }
 
     if let LiquidityGateDecision::Rejected { reason } = result.decision {
