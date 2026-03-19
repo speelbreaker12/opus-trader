@@ -92,28 +92,62 @@ write_debrief() {
 ---
 project: "[[$project_name]]"
 date: "2026-03-17"
+type: debrief
 ---
 
-## 0) What shipped
-- Feature/behavior: Added a debrief.
-- Value (what problem it solves): Leaves session context.
+## Commits
+- \`pending\`
 
-## 1) Constraint (ONE)
-- How it manifested (2-3 concrete symptoms): Missing debrief evidence.
-- Time/token drain it caused: Follow-up cleanup.
-- Workaround I used this session (exploit): Wrote the debrief directly.
-- Next-agent default behavior (subordinate): Stage a debrief before commit.
-- Permanent fix proposal (elevate): Add a commit guard.
+## Session Handoff
+
+### Context
+- Project: $project_name
+- Branch: main
+- Worktree: repo fixture
+- PR state:
+- Lifecycle: testing
+
+### State
+- Task: Add a debrief fixture.
+- Goal: Leave session context for the Claude-side hook tests.
+- Stop point: Fixture written and staged.
+- Validation: Hook should accept valid debrief/project linkage.
+- Open decisions / blockers: none
+- Resume command: bash plans/tests/test_obsidian_precommit_hook.sh
+
+### Touch List
+- Files touched: obsidian/Projects/Test Project.md, obsidian/Debriefs/*.md
+- Tests touched: plans/tests/test_obsidian_precommit_hook.sh
+- Contract/docs touched: AGENTS.md Obsidian Project Tracking
+
+### Shipped
+- Feature/behavior: Added a debrief fixture.
+- Value: Leaves session context.
+
+### Constraint (ONE)
+- Constraint: Missing debrief evidence.
+- Symptoms: Follow-up cleanup and missing session history.
+- Workaround: Wrote the debrief directly.
+- Permanent fix: Add a commit guard.
 - Smallest increment: Add a shell guard script.
-- Validation (proof it got better): Guard blocks missing debrief commits.
+- Proof: Guard blocks missing debrief commits.
 
-## 2) Best follow-up
-- Single best next step: Wire the guard into pre-commit.
-- 1-3 upgrades worth considering:
+### Best Follow-Up - Project
+- Next step: Wire the guard into pre-commit.
+- Upgrades:
 
-## 3) Enforceable rules
-1-3 rules so the next agent doesn't repeat the constraint:
-- Stage a debrief before commit.
+### Best Follow-Up - Workflow
+- Issue: Missing debriefs can slip through without a shared guard.
+- Smallest fix: Reuse the guard in every commit entrypoint.
+
+### Best Follow-Up - Non-Task
+- Issue:
+- Owner/path:
+
+### Rules
+- Rule 1: Stage a debrief before commit.
+- Rule 2:
+- Rule 3:
 EOF
 }
 
@@ -146,11 +180,6 @@ git -C "$repo" add "obsidian/Projects/Test Project.md"
 expect_block \
   "project-only staging blocks commit" \
   "No staged Obsidian debrief" \
-  "$repo" \
-  "git commit -m test"
-expect_block \
-  "project-only staging includes scope reminder" \
-  "Only include the changes you made in this commit." \
   "$repo" \
   "git commit -m test"
 

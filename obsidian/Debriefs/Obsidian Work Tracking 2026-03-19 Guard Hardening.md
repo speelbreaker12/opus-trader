@@ -4,26 +4,52 @@ date: "2026-03-19"
 type: debrief
 ---
 
-## What shipped
-- Risk-class commit classification: replaced size-based tiers (trivial/light/full) with semantic classes (docs_only, obsidian_only, non_critical, critical) driven by which paths are touched
-- Shared frontmatter parser: extracted `plans/lib/obsidian_frontmatter.py` to eliminate 3 duplicate `parse_frontmatter` implementations across context hook and scope guard
-- Context hook worktree-mismatch warning: compares CWD to project note's `worktree` field, warns if editing in wrong worktree
-- Context hook merged-PR detection: checks `gh pr view` for MERGED state, warns about stale branch
-- Force-push blocker fix: removed special-case bypass for `--force-with-lease` that could silently skip all Level 1 checks; now handled as a single pattern with descriptive message
-- Obsidian commit guard cleanup: replaced `recent_has_obsidian` (lookback-count based) with `branch_has_obsidian_update` (merge-base scoped), removed redundant "light tier" code paths
-- Scope guard improved error messages: `base:` field missing now gives actionable instructions instead of terse `die`
-- Pre-push frontmatter integrity hook: added conditional call to `post_rebase_frontmatter_check.sh` (guard for silent clobber after rebase)
-- Commit skill docs: updated SKILLS/commit.md with obsidian tracking soft-gate instructions and risk-class descriptions
+## Commits
+- `pending`
 
-## Constraint
-- Three independent copies of the frontmatter parser had diverged (context hook used `re.match`, one scope guard block used `str.split`). Any frontmatter format fix had to be applied three times. Extraction to a shared module was overdue.
+# Session Handoff
 
-## Follow-up
-- Add unit tests for `obsidian_frontmatter.py` (parse edge cases: nested lists, multiline values, empty frontmatter)
-- Wire up `post_rebase_frontmatter_check.sh` script (referenced in pre-push but may not exist yet)
-- Test merged-PR detection behavior when `gh` CLI is unavailable
+## Context
+- Project: Obsidian Work Tracking
+- Branch: workflow/obsidian-fixes
+- Worktree: /Users/admin/Desktop/opus-trader/.worktrees/obsidian-workflow-fixes
+- Owner: claude
+- PR state: not yet opened
+- Lifecycle: in-progress
+
+## State
+- Task: Debrief template upgrade + workspace policy expansion + test fixture alignment
+- Goal: Consolidate debrief as session handoff, add worktree lifecycle rules to workspace policy, align test fixtures to new debrief template, harden commit skill docs
+- Stop point: All changes staged, commit pending
+- Validation: Tests not yet run (docs/workflow changes only, no production code)
+
+## Shipped
+- Feature/behavior: Upgraded debrief template to include Session Handoff sections (Context, State, Touch List, Shipped, Constraint, Follow-ups, Rules). Added worktree lifecycle management to workspace-policy.md (session start/end, dirty resolution, sync, cap, abandoned rule). Updated AGENTS.md and obsidian-workflow.md to clarify debrief=handoff. Added code-review-expert attestation gate to commit skill. Aligned all 5 test fixture debriefs to new template format. Fixed test fixtures to copy shared frontmatter parser.
+- Value: Debriefs now serve double duty as session handoffs, eliminating separate handoff artifacts for normal project work. Workspace policy now covers full worktree lifecycle instead of just preflight checks.
+
+## Constraint (ONE)
+- Constraint: Test debrief fixtures were hardcoded to old template format
+- Symptoms: 5 test files each had inline debrief content matching old `## 0) What shipped` / `## 1) Constraint` format, would fail if guard ever validates structure
+- Workaround: Batch-updated all fixtures to match the new template
+- Permanent fix: Consider generating test fixtures from the template file itself
+- Smallest increment: none needed, batch update was the right call
+- Proof: All 5 test fixture debriefs now match the new template structure
+
+## Best Follow-Up - Project
+- Next step: Run the test suite (`bash plans/tests/test_obsidian_commit_guard.sh` etc.) to confirm fixtures work correctly, then push branch and open PR
+- Upgrades: Add frontmatter.py unit tests, wire up post-rebase frontmatter check
+
+## Best Follow-Up - Workflow
+- Issue: Test fixtures that embed template content will drift again if the template changes
+- Smallest fix: Generate fixture content from the template at test time
+- Proof/check: diff fixture debrief sections against template and flag mismatches
+
+## Best Follow-Up - Non-Task
+- Issue: none
+- Why it matters: n/a
+- Owner/path: n/a
 
 ## Rules
-- Change class must default to `critical` when classification fails (fail-closed)
-- Frontmatter parser is single-source: never duplicate parse logic in calling scripts
-- Context hook warnings (worktree mismatch, merged PR) are advisory only -- never block execution
+- Rule 1: When the debrief template changes, grep for inline debrief content in test fixtures and update them
+- Rule 2: Workspace-policy.md is the single source of truth for worktree lifecycle; do not duplicate rules elsewhere
+- Rule 3: Never call code_review_expert_attest.sh without actually running code-review-expert first

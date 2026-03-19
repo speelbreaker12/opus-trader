@@ -153,7 +153,7 @@ Key fintech rules:
 Every agent session must track work in `obsidian/Projects/`.
 
 **On session start:** Read all `obsidian/Projects/*.md` files to understand active work, priorities, and current state.
-If the Obsidian router hook points to `/obsidian-workflow`, use it as the project-page/debrief checklist companion.
+If the Obsidian router hook points to `/obsidian-workflow`, use it as the project-page/debrief checklist companion. For normal project work, the Obsidian debrief is also the session handoff unless a specialized workflow defines its own dedicated handoff artifact.
 Project notes may include optional frontmatter `aliases` and `keywords` to improve first-prompt router matching; keep them current when they materially help rediscovery.
 Project notes must also keep `branch`, `base`, `pr`, and explicit `scope_paths` current so hooks can enforce one-project/one-branch/one-PR ownership mechanically.
 If the first prompt matches a project note whose `branch` differs from the current branch/worktree, switch or create that project’s worktree before editing.
@@ -163,14 +163,14 @@ If the first prompt matches a project note whose `branch` differs from the curre
 2. Update `## Current State` if the project status shifted
 3. Update the `## Commits` section near the top of the note with date + hash (or `pending`) + short description for each project batch
 4. Update frontmatter (`status`, `priority`, `branch`, `base`, `pr`, `scope_paths`) if needed
-5. Write or update a matching debrief in `obsidian/Debriefs/` and link it from the project's `## Debriefs` section
+5. Write or update a matching debrief/session handoff in `obsidian/Debriefs/` and link it from the project's `## Debriefs` section
 
 **If no existing project matches your work:** Create a new one by copying `obsidian/Templates/Project.md` to `obsidian/Projects/<Project Name>.md` and filling in the fields.
 
 **The git pre-commit hook will block commits** that don't include staged changes to both `obsidian/Projects/*.md` and `obsidian/Debriefs/*.md`, it requires the staged project note to link at least one staged debrief, and all staged Obsidian project/debrief files in that commit must belong to exactly one project.
 The scope hooks will also block commits/pushes when files escape the active project note's declared `scope_paths`, when the branch is not owned by exactly one project note, or when project-note branch/PR metadata drifts from the branch being used.
 
-**At end of session:** Write a debrief in `obsidian/Debriefs/<Project> <date>.md` using the template in `obsidian/Templates/Debrief.md`. Include a `## Commits` section with the relevant commit hash(es); if the debrief is written before the commit exists, record `pending` and replace it once the commit is known. Keep the project note's `## Commits` section near the top in the same date/hash/summary format, and link the debrief from the project's `## Debriefs` section before committing.
+**At end of session:** Write a debrief in `obsidian/Debriefs/<Project> <date>.md` using the template in `obsidian/Templates/Debrief.md`. That debrief is the default end-of-session handoff unless a specialized workflow requires a separate artifact (for example `reviews/reconciliations/**/HANDOFF.md`). Include a `## Commits` section with the relevant commit hash(es); if the debrief is written before the commit exists, record `pending` and replace it once the commit is known. Keep the project note's `## Commits` section near the top in the same date/hash/summary format, and link the debrief from the project's `## Debriefs` section before committing.
 
 Hard rules:
 - Never commit files outside the active project note’s declared `scope_paths`.

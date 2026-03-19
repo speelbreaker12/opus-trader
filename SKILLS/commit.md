@@ -18,6 +18,7 @@ Follow `SKILLS/workspace-policy.md` before any mutating action.
 - never merge or rebase as part of this skill
 - never include unrelated files in the commit
 - never claim tests/validation ran if they did not
+- **never call `code_review_expert_attest.sh` unless you actually ran code-review-expert and reported findings in this session** — the attestation script is not a rubber stamp
 
 ## Required input
 At minimum, know:
@@ -56,7 +57,7 @@ If staged content includes unrelated work, unstage and fix before continuing.
 The pre-commit hook classifies changes by risk class (`docs_only`, `obsidian_only`, `non_critical`, `critical`). For `non_critical` and `critical` changes:
 
 - Update the project note (`obsidian/Projects/`) with what changed.
-- If this is the **first commit in a review window**, create or update a debrief (`obsidian/Debriefs/`) and link it from the project note's `## Debriefs` section.
+- If this is the **first commit in a review window**, create or update a debrief/session handoff (`obsidian/Debriefs/`) and link it from the project note's `## Debriefs` section.
 - If this is a **follow-up commit** (debrief already on this branch), set `OBSIDIAN_REVIEW_FIX=1` to skip the debrief requirement.
 - If **amending**, the guard auto-detects and passes.
 
@@ -68,17 +69,33 @@ git add path/to/impl obsidian/Projects/MyProject.md obsidian/Debriefs/MyProject\
 
 For `docs_only` and `obsidian_only` changes, the gate is skipped at commit time (enforced at push/PR boundary).
 
-### 3) Validation gate
+### 3) Code review gate
+
+For `non_critical` and `critical` changes, the pre-commit hook requires a code-review-expert attestation. This gate exists to ensure you actually reviewed your own work before committing.
+
+**You must run code-review-expert BEFORE attempting the commit.** The flow is:
+
+1. Run `code-review-expert` (the superpowers agent) on the staged changes
+2. Report the findings to the operator
+3. Fix any P0/P1 issues found
+4. Only then call `./plans/code_review_expert_attest.sh` to write the marker
+5. Proceed to commit
+
+**Do not call `code_review_expert_attest.sh` to unblock the gate without running the review.** That is fake compliance. If you did not review the code, say so in the commit result and let the operator decide.
+
+For `docs_only`, `obsidian_only`, and `formatting_only` changes, this gate is skipped at commit time.
+
+### 4) Validation record
 Before commit, record what was checked.
 
 Minimum output:
-- Validation run:
+- Code review: ran / skipped (with reason)
 - Tests run:
 - Remaining known risk:
 
 If nothing was validated, say so explicitly.
 
-### 4) Create commit
+### 5) Create commit
 Use a clear commit message aligned to the actual change.
 
 Format: `<area>: <what changed>`
@@ -101,7 +118,7 @@ EOF
 )"
 ```
 
-### 5) Record result
+### 6) Record result
 After commit, print:
 
 ```
