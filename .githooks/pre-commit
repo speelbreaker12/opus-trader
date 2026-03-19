@@ -9,6 +9,23 @@ cd "$(git rev-parse --show-toplevel)"
 
 echo "Running pre-commit checks..."
 
+# -1. Bare repo guard — never commit from the bare repo root.
+# Committing from bare root uses the wrong index and stages everything as deleted.
+if [[ "$(git rev-parse --is-bare-repository 2>/dev/null)" == "true" ]] || \
+   [[ ! -d "$(git rev-parse --show-toplevel 2>/dev/null)/.git" && \
+      -f "$(git rev-parse --show-toplevel 2>/dev/null)/.git" ]]; then
+  # We're either in a bare repo, or in a worktree (which has .git as a file, not dir).
+  # The dangerous case is bare repo — worktrees are fine.
+  if [[ "$(git rev-parse --is-bare-repository 2>/dev/null)" == "true" ]]; then
+    echo ""
+    echo "ERROR: Commits from the bare repo root are blocked."
+    echo "This would use the wrong index and delete all files."
+    echo "Switch to a worktree: cd .worktrees/<name>"
+    echo ""
+    exit 1
+  fi
+fi
+
 # 0. Main branch guard — no real work on main
 current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
