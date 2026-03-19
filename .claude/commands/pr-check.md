@@ -4,7 +4,7 @@
 Scan all open PRs, surface review comments and merge conflicts, resolve them, merge approved PRs, and sync local main.
 
 ## When to use
-- After `/commit-push-pr` to shepherd PRs to completion
+- After `/commit` + `/push-pr` to shepherd PRs to completion
 - Periodic housekeeping to keep PRs moving
 - When you want a single command to clear your PR queue
 

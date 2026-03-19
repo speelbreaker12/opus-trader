@@ -1,29 +1,56 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+cd "$(git rev-parse --show-toplevel)"
+
 VERIFY_SH_PATH="${VERIFY_SH_PATH:-./plans/verify.sh}"
 if [[ ! -x "$VERIFY_SH_PATH" ]]; then
   echo "ERROR: verify script not found or not executable: $VERIFY_SH_PATH" >&2
   exit 1
 fi
 
-if [[ "${SKIP_PRE_PUSH_VERIFY:-0}" == "1" ]]; then
-  echo "WARN: SKIP_PRE_PUSH_VERIFY=1, skipping verification"
-  exit 0
+current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+[[ -n "$current_branch" && "$current_branch" != "HEAD" ]] || {
+  echo "ERROR: pre-push requires a checked-out branch" >&2
+  exit 1
+}
+
+# Main branch guard — no direct pushes to main
+if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
+  echo "" >&2
+  echo "ERROR: Direct pushes from main are blocked." >&2
+  echo "Main is for syncing and cutting new worktrees only." >&2
+  echo "Push from a feature branch worktree instead." >&2
+  echo "" >&2
+  exit 1
 fi
 
 while read -r _local_ref _local_sha remote_ref _remote_sha; do
-  if [[ "$remote_ref" == "refs/heads/main" || "$remote_ref" == "refs/heads/master" ]]; then
-    echo "Pushing to protected branch: $remote_ref"
-    if [[ -z "${CI:-}" && "${VERIFY_ALLOW_LOCAL_FULL:-0}" != "1" ]]; then
-      echo "WARN: local full verify disabled; running quick and relying on CI"
-      "$VERIFY_SH_PATH" quick
-      continue
-    fi
-    "$VERIFY_SH_PATH" full
-  else
-    echo "Pushing to feature branch: $remote_ref"
-    "$VERIFY_SH_PATH" quick
-  fi
-done
+  case "$_local_ref" in
+    refs/heads/*) ;;
+    *) continue ;;
+  esac
 
+  if [[ "$_local_sha" == "0000000000000000000000000000000000000000" ]]; then
+    continue
+  fi
+
+  local_branch="${_local_ref#refs/heads/}"
+  if [[ "$local_branch" != "$current_branch" ]]; then
+    echo "ERROR: push the checked-out branch from its owning worktree." >&2
+    echo "Current branch: $current_branch" >&2
+    echo "Push target branch: $local_branch" >&2
+    exit 1
+  fi
+
+  ./plans/project_scope_guard.sh push --branch "$local_branch" --head "$_local_sha"
+
+  if [[ "${SKIP_PRE_PUSH_VERIFY:-0}" == "1" ]]; then
+    echo "WARN: SKIP_PRE_PUSH_VERIFY=1, skipping verification"
+    continue
+  fi
+
+  # Main/master push is blocked above — all remaining pushes are feature branches
+  echo "Pushing to feature branch: $remote_ref"
+  "$VERIFY_SH_PATH" quick
+done

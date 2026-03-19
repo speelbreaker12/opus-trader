@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Pre-rebase hook: force the agent to stop and confirm before rebasing.
+# This is a speed bump, not a smart gate.
+
+current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+
+# Hard block: never rebase on main
+if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
+  echo ""
+  echo "ERROR: Rebase on main is blocked."
+  echo "Main is sync-only. Use: git pull --ff-only origin main"
+  echo ""
+  exit 1
+fi
+
+# Speed bump: everything else requires confirmation
+echo ""
+echo "REBASE GUARD — confirmation required."
+echo ""
+echo "  Branch: $current_branch"
+echo "  Dirty files: $(git status --short | wc -l | tr -d ' ') (staged + unstaged + untracked)"
+echo ""
+echo "Before rebasing, read SKILLS/push-pr.md and confirm:"
+echo "  1. Is this branch review-bound (open PR)? If yes, use merge instead."
+echo "  2. Is the worktree clean? If no, commit or stash first."
+echo "  3. Is this branch published? If yes, you will need --force-with-lease after."
+echo ""
+echo "To proceed: re-run with ALLOW_REBASE=1"
+echo "To merge instead: git fetch origin --prune && git merge origin/main"
+echo ""
+
+if [[ "${ALLOW_REBASE:-0}" != "1" ]]; then
+  exit 1
+fi
