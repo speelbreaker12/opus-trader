@@ -1,3 +1,126 @@
+# AGENTS.md
+
+This file provides guidance to WARP (warp.dev) when working with code in this repository.
+
+## Commands
+
+### Rust
+
+```bash
+# Build
+cargo build --workspace
+
+# Format check (CI gate) / fix
+cargo fmt --all -- --check
+cargo fmt --all
+
+# Clippy — quick (lib targets only, used in quick verify)
+cargo clippy --workspace --lib -- -D warnings
+
+# Clippy — full (all targets, used in CI/full verify)
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+# All tests (full verify)
+cargo test --workspace --all-features --locked
+
+# Tests — quick (lib only)
+cargo test --workspace --lib --locked
+
+# Single test by name
+cargo test -p soldier_core --lib <test_name>
+cargo test -p soldier_core --lib <test_name> -- --nocapture
+
+# Facade contract tests (integration layer)
+cargo test -p soldier_core --locked \
+  --test test_execution_facade_public \
+  --test test_risk_facade_public \
+  --test test_venue_facade_public \
+  --test test_tlsm
+```
+
+### Verification gates
+
+```bash
+./plans/verify.sh quick   # Fast iteration: fmt + lib clippy + lib tests + fast schema checks
+./plans/verify.sh full    # CI completion gate: all targets, all tests, crossref, coverage, proof graph
+./plans/workflow_verify.sh  # Workflow-file-only changes; run before full verify
+```
+
+### Hook bootstrap
+
+After cloning or moving this repository, run:
+
+```bash
+bash scripts/setup_hooks.sh
+```
+
+This sets the repo and all current linked worktrees to use the shared hook set from this checkout's root `.githooks`.
+
+### Python
+
+```bash
+# Python gates are invoked by verify.sh via plans/lib/python_gates.sh
+# To run manually:
+python3 -m pytest tests/         # repo integration tests
+python3 python/proof_graph/validate.py <path>  # proof graph validation
+```
+
+## Architecture
+
+### Crate layout
+
+The Rust workspace has two crates (`Cargo.toml`):
+
+- **`soldier_core`** — pure domain logic; no network I/O, no async runtime. Dependencies: `serde`, `tracing`, `xxhash-rust` only. `#![forbid(unsafe_code)]`.
+- **`soldier_infra`** — exchange adapters and infra. Depends on `soldier_core`. Houses Deribit types, WAL, config/store bootstrap. All modules are private; only `pub use api::*` is exported.
+
+### soldier_core module breakdown
+
+| Module | Responsibility |
+|--------|----------------|
+| `execution` | Full order execution pipeline: intent assembly → gate chain → WAL gate → dispatch chokepoint → `build_order_intent` |
+| `risk` | Risk gates: exposure budget, fee staleness, margin headroom, pending exposure tracking, `RiskState` |
+| `venue` | `InstrumentKind` derivation, instrument cache with TTL (staleness → `RiskState::Degraded`) |
+| `idempotency` | Intent idempotency hashing |
+| `recovery` | Label matching for intent recovery/reconciliation |
+| `status_codes` | Generated and hand-authored status/reject reason codes |
+
+**Phase-1 facade lockdown:** every sub-module is `pub(crate)` / `#[cfg_attr(not(test), allow(dead_code))]`; external consumers MUST use the `api.rs` facade only. Test files `facade_completeness_contract_tests.rs` enforce this boundary.
+
+### Execution pipeline (soldier_core::execution)
+
+An `ExecutionInput` flows through a sequential gate chain inside `engine.rs`:
+
+```
+preflight → liquidity gate → net-edge gate → pricer → quantize →
+inventory-skew → post-only guard → fee staleness → margin gate →
+pending exposure → exposure budget → WAL gate (RecordedBeforeDispatchGate) →
+dispatch chokepoint (build_order_intent) → dispatch
+```
+
+Any gate can return an `ExecutionRejection` with a `RejectReasonCode`. All reject reason codes are registered in `reject_reason_registry()` and referenced in `specs/CONTRACT.md` ATs. The pipeline is synchronous (no async).
+
+Atomic group execution (`group.rs`, `GroupLock`) ensures multi-leg orders are dispatched atomically or rolled back — all legs succeed or none are dispatched.
+
+### Safety model
+
+Two independent layers:
+
+1. **RiskState** (`Healthy | Degraded | Maintenance | Kill`) — health/cause layer, set by instrument cache TTL misses, fee staleness, etc.
+2. **TradingMode** (`Active | ReduceOnly | Kill`) — enforcement layer, resolved by `PolicyGuard` each tick from RiskState + policy staleness + watchdog + exchange health + Cortex overrides.
+
+Fail-closed rule: any uncertain or missing input → `TradingMode::ReduceOnly`, never `Active`.
+
+The **Open Permission Latch** (`CP-001`) independently blocks OPEN intents after restart, WS gaps, or session kill until explicit reconciliation clears it.
+
+### Contract traceability
+
+`specs/CONTRACT.md` (v5.2) is the behavioral source of truth. Every gate has paired AT (acceptance test) IDs. PRD stories in `plans/prd.json` reference these ATs. The `plans/crossref_gate.sh` enforces that contract clauses have matching implementation traces in `specs/TRACE.yaml`.
+
+Two contracts, do not mix:
+- `specs/CONTRACT.md` — trading engine runtime behavior
+- `specs/WORKFLOW_CONTRACT.md` — coding workflow rules (story loop, verify gates)
+
 <!-- AGENTS_STUB_V2 -->
 <!-- INPUT_GUARD_V1 -->
 <!-- FOLLOWUP_NO_PREFLIGHT_V1 -->
@@ -30,17 +153,30 @@ Key fintech rules:
 Every agent session must track work in `obsidian/Projects/`.
 
 **On session start:** Read all `obsidian/Projects/*.md` files to understand active work, priorities, and current state.
+If the Obsidian router hook points to `/obsidian-workflow`, use it as the project-page/debrief checklist companion.
+Project notes may include optional frontmatter `aliases` and `keywords` to improve first-prompt router matching; keep them current when they materially help rediscovery.
+Project notes must also keep `branch`, `base`, `pr`, and explicit `scope_paths` current so hooks can enforce one-project/one-branch/one-PR ownership mechanically.
+If the first prompt matches a project note whose `branch` differs from the current branch/worktree, switch or create that project’s worktree before editing.
 
 **Before every commit:** Update or create the relevant project file in `obsidian/Projects/`:
 1. Add a dated entry under `## Log` describing what changed
 2. Update `## Current State` if the project status shifted
-3. Update frontmatter (`status`, `priority`, `branch`, `pr`) if needed
+3. Update the `## Commits` section near the top of the note with date + hash (or `pending`) + short description for each project batch
+4. Update frontmatter (`status`, `priority`, `branch`, `base`, `pr`, `scope_paths`) if needed
+5. Write or update a matching debrief in `obsidian/Debriefs/` and link it from the project's `## Debriefs` section
 
 **If no existing project matches your work:** Create a new one by copying `obsidian/Templates/Project.md` to `obsidian/Projects/<Project Name>.md` and filling in the fields.
 
-**The git pre-commit hook will block commits** that don't include a staged change to `obsidian/Projects/*.md`.
+**The git pre-commit hook will block commits** that don't include staged changes to both `obsidian/Projects/*.md` and `obsidian/Debriefs/*.md`, it requires the staged project note to link at least one staged debrief, and all staged Obsidian project/debrief files in that commit must belong to exactly one project.
+The scope hooks will also block commits/pushes when files escape the active project note's declared `scope_paths`, when the branch is not owned by exactly one project note, or when project-note branch/PR metadata drifts from the branch being used.
 
-**At end of session (optional but encouraged):** Write a debrief in `obsidian/Debriefs/<Project> <date>.md` using the template in `obsidian/Templates/Debrief.md`. Link it from the project's `## Debriefs` section.
+**At end of session:** Write a debrief in `obsidian/Debriefs/<Project> <date>.md` using the template in `obsidian/Templates/Debrief.md`. Include a `## Commits` section with the relevant commit hash(es); if the debrief is written before the commit exists, record `pending` and replace it once the commit is known. Keep the project note's `## Commits` section near the top in the same date/hash/summary format, and link the debrief from the project's `## Debriefs` section before committing.
+
+Hard rules:
+- Never commit files outside the active project note’s declared `scope_paths`.
+- Never push a branch whose full diff crosses project scope.
+- Never add work for a different project onto a branch with an open PR.
+- If scope changes, create a new project/worktree/branch instead of widening the current PR.
 
 ## Non-negotiables
 - Contract alignment is mandatory; if conflict, STOP and output `<promise>BLOCKED_CONTRACT_CONFLICT</promise>` with the violated section.
