@@ -17,6 +17,8 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::telemetry::EventSink;
+
 use super::quantize::Side;
 
 // --- Pricer input --------------------------------------------------------
@@ -70,6 +72,22 @@ pub enum PricerResult {
         /// Net edge if computable.
         net_edge_usd: Option<f64>,
     },
+}
+
+/// Internal pricer observability events for graybox testing.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum PricerEvent {
+    Reject { reason: PricerRejectReason },
+}
+
+struct ProductionPricerEvents;
+
+impl EventSink<PricerEvent> for ProductionPricerEvents {
+    fn emit(&mut self, event: PricerEvent) {
+        match event {
+            PricerEvent::Reject { reason } => bump_pricer_reject(reason),
+        }
+    }
 }
 
 // --- Metrics -------------------------------------------------------------
@@ -151,13 +169,25 @@ fn bump_pricer_reject(reason: PricerRejectReason) {
     tracing::debug!("PricerReject reason={:?}", reason);
 }
 
-fn reject_invalid(metrics: &mut PricerMetrics) -> PricerResult {
+fn reject_with_events<E: EventSink<PricerEvent>>(
+    reason: PricerRejectReason,
+    net_edge_usd: Option<f64>,
+    metrics: &mut PricerMetrics,
+    events: &mut E,
+) -> PricerResult {
     metrics.record_reject();
-    bump_pricer_reject(PricerRejectReason::InvalidInput);
+    events.emit(PricerEvent::Reject { reason });
     PricerResult::Rejected {
-        reason: PricerRejectReason::InvalidInput,
-        net_edge_usd: None,
+        reason,
+        net_edge_usd,
     }
+}
+
+fn reject_invalid<E: EventSink<PricerEvent>>(
+    metrics: &mut PricerMetrics,
+    events: &mut E,
+) -> PricerResult {
+    reject_with_events(PricerRejectReason::InvalidInput, None, metrics, events)
 }
 
 // --- Pricer evaluator ----------------------------------------------------
@@ -166,9 +196,10 @@ fn reject_invalid(metrics: &mut PricerMetrics) -> PricerResult {
 ///
 /// CONTRACT.md §1.4: "No Market Orders" — always produce a limit price
 /// that guarantees min_edge_usd at the limit.
-pub(crate) fn compute_limit_price(
+pub(crate) fn compute_limit_price_with_events<E: EventSink<PricerEvent>>(
     input: &PricerInput,
     metrics: &mut PricerMetrics,
+    events: &mut E,
 ) -> PricerResult {
     // Standalone fail-closed input validation.
     if !input.fair_price.is_finite()
@@ -183,23 +214,23 @@ pub(crate) fn compute_limit_price(
         || !input.qty.is_finite()
         || input.qty <= 0.0
     {
-        return reject_invalid(metrics);
+        return reject_invalid(metrics, events);
     }
 
     // net_edge = gross_edge - fees - expected_slippage
     let net_edge = input.gross_edge_usd - input.fee_estimate_usd - input.expected_slippage_usd;
     if !net_edge.is_finite() {
-        return reject_invalid(metrics);
+        return reject_invalid(metrics, events);
     }
 
     // Reject if net_edge < min_edge
     if net_edge < input.min_edge_usd {
-        metrics.record_reject();
-        bump_pricer_reject(PricerRejectReason::NetEdgeTooLow);
-        return PricerResult::Rejected {
-            reason: PricerRejectReason::NetEdgeTooLow,
-            net_edge_usd: Some(net_edge),
-        };
+        return reject_with_events(
+            PricerRejectReason::NetEdgeTooLow,
+            Some(net_edge),
+            metrics,
+            events,
+        );
     }
 
     // Per-unit calculations
@@ -212,7 +243,7 @@ pub(crate) fn compute_limit_price(
         || !slippage_per_unit.is_finite()
         || !min_edge_per_unit.is_finite()
     {
-        return reject_invalid(metrics);
+        return reject_invalid(metrics, events);
     }
 
     // max_price_for_min_edge (guarantees min edge at fill)
@@ -228,7 +259,7 @@ pub(crate) fn compute_limit_price(
     };
 
     if !max_price_for_min_edge.is_finite() || !proposed_limit.is_finite() {
-        return reject_invalid(metrics);
+        return reject_invalid(metrics, events);
     }
 
     // Clamp to guarantee min edge
@@ -238,7 +269,7 @@ pub(crate) fn compute_limit_price(
     };
 
     if !limit_price.is_finite() || limit_price <= 0.0 {
-        return reject_invalid(metrics);
+        return reject_invalid(metrics, events);
     }
 
     metrics.record_priced();
@@ -247,6 +278,14 @@ pub(crate) fn compute_limit_price(
         max_price_for_min_edge,
         net_edge_usd: net_edge,
     }
+}
+
+pub(crate) fn compute_limit_price(
+    input: &PricerInput,
+    metrics: &mut PricerMetrics,
+) -> PricerResult {
+    let mut events = ProductionPricerEvents;
+    compute_limit_price_with_events(input, metrics, &mut events)
 }
 
 #[cfg(test)]

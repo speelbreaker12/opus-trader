@@ -67,6 +67,7 @@ PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `exe
 - Discarded broken dirty state from failed bulk cherry-pick (-n).
 - Re-cherry-picked 5 seam commits one at a time with compilation checks: post-only, inventory skew, preflight, risk exposure (pending+exposure_budget+margin), cleanup/deadlock fix.
 - Removed 3 graybox tests from build_order_intent_gate_ordering_tests.rs that depend on Phase 2B code (build_order_intent_internal_with_events).
+- Restored pricer seam (`compute_limit_price_with_events`, `PricerEvent`, `ProductionPricerEvents`) that was silently dropped during cherry-pick conflict resolution.
 - 685 tests pass, 0 failures, clippy clean.
 
 ### 2026-03-18
