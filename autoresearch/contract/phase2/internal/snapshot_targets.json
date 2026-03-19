@@ -1,12 +1,24 @@
 {
   "targets": [
     {
-      "fixture_path": "phase2/fixtures/snapshot/s2_2_policyguard_latest.md",
-      "section_anchor": "2.2"
+      "fixture_path": "phase2/fixtures/snapshot/s1_3_liquidity_gate_latest.md",
+      "section_anchor": "1.3"
     },
     {
-      "fixture_path": "phase2/fixtures/snapshot/s1_execution_pipeline_latest.md",
-      "section_anchor": "1"
+      "fixture_path": "phase2/fixtures/snapshot/s2_2_2_evidence_guard_latest.md",
+      "section_anchor": "2.2.2"
+    },
+    {
+      "fixture_path": "phase2/fixtures/snapshot/s2_2_3_trading_mode_computation_latest.md",
+      "section_anchor": "2.2.3"
+    },
+    {
+      "fixture_path": "phase2/fixtures/snapshot/s2_2_4_open_permission_latch_latest.md",
+      "section_anchor": "2.2.4"
+    },
+    {
+      "fixture_path": "phase2/fixtures/snapshot/s3_1_emergency_close_latest.md",
+      "section_anchor": "3.1"
     }
   ]
 }

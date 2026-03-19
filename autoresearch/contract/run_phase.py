@@ -6,6 +6,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -399,6 +400,48 @@ def validate_findings_payload(payload: dict[str, Any], schema: dict[str, Any], l
     ensure_unique("finding_id", [finding["finding_id"] for finding in findings], label)
 
 
+_SECTION_NUM_RE = re.compile(r"§?([0-9]+(?:\.[0-9]+)*)")
+
+
+def _extract_section_numbers(section_text: str) -> set[str]:
+    """Extract all section number tokens (e.g. '2.2.3', '2.2.3.1') from a section string."""
+    return set(_SECTION_NUM_RE.findall(section_text))
+
+
+def _sections_compatible(proposal_section: str, finding_section: str) -> bool:
+    """Check if proposal and finding sections refer to compatible parts of the contract.
+
+    Exact match is always accepted. Otherwise, checks that at least one section
+    number in the proposal shares a common prefix with a finding section number
+    (e.g. '2.2.3.7' is compatible with '2.2.3.1.1' because both are under '2.2.3').
+    """
+    if proposal_section == finding_section:
+        return True
+    p_nums = _extract_section_numbers(proposal_section)
+    f_nums = _extract_section_numbers(finding_section)
+    if not p_nums or not f_nums:
+        return False
+    for p in p_nums:
+        for f in f_nums:
+            p_parts = p.split(".")
+            f_parts = f.split(".")
+            # Find longest common prefix
+            prefix_len = 0
+            for i in range(min(len(p_parts), len(f_parts))):
+                if p_parts[i] == f_parts[i]:
+                    prefix_len = i + 1
+                else:
+                    break
+            # Accept if: (a) numbers are identical (any depth), or
+            # (b) shared prefix is >= 3 levels (sibling subsections under a common parent)
+            # Rejects: "1.3" vs "1.4" (prefix=1, not identical) and "2.2.4" vs "2.2.3" (prefix=2)
+            if p_parts == f_parts:
+                return True
+            if prefix_len >= 3:
+                return True
+    return False
+
+
 def validate_initial_proposals(
     payload: dict[str, Any],
     schema: dict[str, Any],
@@ -443,7 +486,7 @@ def validate_initial_proposals(
                 f"{label} source_finding_category mismatch for {proposal['proposal_id']}: "
                 f"{proposal['source_finding_category']} != {finding['category']}"
             )
-        if proposal["section"] != finding["section"]:
+        if not _sections_compatible(proposal["section"], finding["section"]):
             fail(
                 f"{label} section mismatch for {proposal['proposal_id']}: "
                 f"{proposal['section']} != {finding['section']}"

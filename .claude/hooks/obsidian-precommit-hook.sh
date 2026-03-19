@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# PreToolUse hook (Bash matcher): BLOCK git commit unless Obsidian project file was updated
-# Exit 2 = block the tool call
+# PreToolUse hook (Bash matcher): delegate Obsidian commit enforcement to the
+# shared repo guard. Exit 2 = block the tool call.
+
+set -euo pipefail
 
 INPUT=$(cat)
 
@@ -13,43 +15,24 @@ except Exception:
     print('')
 " <<< "$INPUT" 2>/dev/null || echo "")
 
-if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])git commit( |$)'; then
-    # Check if any obsidian/Projects/*.md file has been modified in this worktree
-    CHANGED=$(git diff --name-only HEAD 2>/dev/null | grep '^obsidian/Projects/.*\.md$')
-    STAGED=$(git diff --cached --name-only 2>/dev/null | grep '^obsidian/Projects/.*\.md$')
-    UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null | grep '^obsidian/Projects/.*\.md$')
+# Exit early for non-commit commands — this hook only guards git commit
+if ! echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])git commit( |$)'; then
+    exit 0
+fi
 
-    if [ -n "$CHANGED" ] || [ -n "$STAGED" ] || [ -n "$UNTRACKED" ]; then
-        # Project file was touched — allow commit
-        exit 0
-    fi
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-    # List existing projects so the agent can pick one or decide to create new
-    EXISTING=$(ls obsidian/Projects/*.md 2>/dev/null | xargs -I{} basename {} .md | sed 's/^/  - /')
-
+if [[ ! -x "$ROOT/plans/obsidian_commit_guard.sh" ]]; then
     cat >&2 <<EOF
-BLOCKED: No Obsidian project file updated.
+BLOCKED: Missing shared Obsidian commit guard.
 
-Existing projects:
-${EXISTING:-  (none)}
-
-If one of these matches your work, update it:
-  1. Add a dated entry under ## Log with what changed
-  2. Update ## Current State if the project status shifted
-  3. Update frontmatter (status, branch, pr) if needed
-
-If NONE match, create a new project file:
-  1. Write obsidian/Projects/<Project Name>.md with this frontmatter:
-     ---
-     status: in-progress
-     priority: P1
-     branch: $(git branch --show-current 2>/dev/null || echo "")
-     pr:
-     started: "$(date +%Y-%m-%d)"
-     ---
-  2. Fill in ## Current State, ## Key Files, and ## Log
-
-Do NOT retry the commit until you have created or updated a project file.
+Expected executable:
+  $ROOT/plans/obsidian_commit_guard.sh
 EOF
+    exit 2
+fi
+
+if ! output="$(bash "$ROOT/plans/obsidian_commit_guard.sh" 2>&1)"; then
+    printf '%s\n' "$output" >&2
     exit 2
 fi

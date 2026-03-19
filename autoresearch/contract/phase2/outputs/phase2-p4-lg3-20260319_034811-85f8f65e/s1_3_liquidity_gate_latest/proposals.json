@@ -1,0 +1,98 @@
+{
+  "generated_at": "2026-03-19T03:48:00Z",
+  "validator_version": "1.0.0",
+  "proposals": [
+    {
+      "proposal_id": "P-001",
+      "source_finding": "F-001",
+      "source_finding_category": "missing_fail_closed",
+      "section": "\u00a71.3 Stale-L2 fail-closed path",
+      "change_type": "new_requirement",
+      "rationale": "F-001 identifies an actor ambiguity: line 8 implies LiquidityGate directly sets RiskState::Degraded on EmergencyCloseNoPrice, while line 26 attributes the set to \u00a72.2.3.2 SystemIntegrityAxis via axis resolver. Without an explicit ordering clause, the Degraded transition may not be atomic with the rejection, leaving RiskState inconsistent between gate return and the next axis evaluation cycle. This proposal designates SystemIntegrityAxis as the authoritative setter and requires LiquidityGate to trigger it synchronously before returning.",
+      "proposed_text": "**RiskState transition atomicity (\u00a71.3):** When LiquidityGate emits `Rejected(EmergencyCloseNoPrice)`, it MUST synchronously call into the SystemIntegrityAxis to record the no-price fault before returning the rejection. The SystemIntegrityAxis is the authoritative setter for `RiskState::Degraded` on this path; LiquidityGate is the required and sole trigger. The `RiskState::Degraded` state MUST be observable to any subsequent gate or dispatcher invocation within the same evaluation cycle.",
+      "status": "rejected",
+      "dedupe_key": "f001-emergencyclosenoprice-degraded-atomicity",
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ \u00a71.3 stale-L2 fail-closed @@\n+**RiskState transition atomicity (\u00a71.3):** When LiquidityGate emits `Rejected(EmergencyCloseNoPrice)`, it MUST synchronously call into the SystemIntegrityAxis to record the no-price fault before returning the rejection. The SystemIntegrityAxis is the authoritative setter for `RiskState::Degraded` on this path; LiquidityGate is the required and sole trigger. The `RiskState::Degraded` state MUST be observable to any subsequent gate or dispatcher invocation within the same evaluation cycle."
+    },
+    {
+      "proposal_id": "P-002",
+      "source_finding": "F-002",
+      "source_finding_category": "missing_at_pair",
+      "section": "\u00a71.3 CLOSE/HEDGE/replace stale-L2 AT coverage",
+      "change_type": "new_requirement",
+      "rationale": "F-002 identifies that line 8 normatively requires CLOSE/HEDGE/replace order placement MUST NOT be rejected solely for missing or stale L2, yet no AT covers the replace path. AT-421 tests only CANCEL and CLOSE/HEDGE. A replace order is entirely uncovered: an implementation could incorrectly block replace orders on stale L2, or dispatch them without a valid price source, and no AT would detect the regression.",
+      "proposed_text": "AT-PROP-001\n- Given: `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`; a valid \u00a73.1 fallback price source exists.\n- When: Liquidity Gate evaluates a replace order placement intent.\n- Then: the replace intent is NOT rejected solely for stale/missing L2; it uses the \u00a73.1 fallback price ladder and dispatches a strictly positive, monotonic risk-reducing quantity.\n- Pass criteria: dispatch count >= 1; dispatched quantity > 0 and risk-reducing; no `LiquidityGateNoL2` rejection reason is emitted.\n- Fail criteria: replace is blocked despite a valid \u00a73.1 fallback source, or dispatched quantity is 0 or risk-increasing.\n\nAT-PROP-003\n- Given: `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`; no valid \u00a73.1 fallback price source exists.\n- When: Liquidity Gate evaluates a replace order placement intent.\n- Then: the intent MUST be rejected with `Rejected(EmergencyCloseNoPrice)` and `RiskState` MUST transition to `Degraded`.\n- Pass criteria: dispatch count remains 0; rejection reason is `EmergencyCloseNoPrice`; `RiskState == Degraded`.\n- Fail criteria: dispatch occurs without a valid price source, rejection reason is missing/mismatched, or `RiskState` does not transition to `Degraded`.",
+      "status": "proposed",
+      "dedupe_key": "f002-replace-stale-l2-at-coverage",
+      "new_ats": [
+        {
+          "at_id": "AT-PROP-001",
+          "description": "Replace order placement with stale/missing L2 and a valid \u00a73.1 fallback source: replace proceeds via fallback price ladder with a strictly positive, risk-reducing quantity."
+        },
+        {
+          "at_id": "AT-PROP-003",
+          "description": "Replace order placement with stale/missing L2 and no valid \u00a73.1 fallback source: rejected with EmergencyCloseNoPrice and RiskState transitions to Degraded."
+        }
+      ],
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ -\u00a71.3 after AT-421 @@\n+AT-PROP-001\n+- Given: `L2BookSnapshot` missing/unparseable/stale; valid \u00a73.1 fallback exists.\n+- When: Liquidity Gate evaluates a replace order placement intent.\n+- Then: replace NOT rejected solely for stale L2; uses \u00a73.1 fallback; dispatches strictly positive risk-reducing quantity.\n+- Pass criteria: dispatch count >= 1; quantity > 0 and risk-reducing; no LiquidityGateNoL2 emitted.\n+- Fail criteria: replace blocked despite valid fallback, or quantity 0 or risk-increasing.\n+\n+AT-PROP-003\n+- Given: `L2BookSnapshot` missing/unparseable/stale; no valid \u00a73.1 fallback exists.\n+- When: Liquidity Gate evaluates a replace order placement intent.\n+- Then: rejected with Rejected(EmergencyCloseNoPrice); RiskState -> Degraded.\n+- Pass criteria: dispatch count 0; reason EmergencyCloseNoPrice; RiskState == Degraded.\n+- Fail criteria: dispatch occurs or reason missing/mismatched."
+    },
+    {
+      "proposal_id": "P-003",
+      "source_finding": "F-003",
+      "source_finding_category": "missing_at_pair",
+      "section": "\u00a71.3 AT-344 / AT-909 duplication",
+      "change_type": "mechanical",
+      "mechanical_ok": true,
+      "mechanical_details": "AT-909 (lines 44-49 of the fixture) is a near-duplicate of AT-344 (lines 37-42): identical Given (missing/unparseable/stale L2, OPEN intent), identical When, identical Then, identical outcome. Replace AT-909 in place with a staleness boundary scenario: snapshot age exactly == l2_book_snapshot_max_age_ms must be treated as stale (rejected). This eliminates the duplicate slot and covers the equality boundary that a >= vs > implementation error would silently pass.",
+      "rationale": "F-003 identifies AT-909 and AT-344 as near-identical, providing no distinct coverage. The replacement tests the exact staleness threshold boundary (age == l2_book_snapshot_max_age_ms) which existing ATs cannot detect as a regression vector for off-by-one boundary handling.",
+      "status": "proposed",
+      "dedupe_key": "f003-at909-replace-boundary-scenario",
+      "replace_span": {
+        "start_line": 44,
+        "end_line": 49,
+        "old_text": "AT-909\n- Given: `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms` for an OPEN.\n- When: Liquidity Gate evaluates the order.\n- Then: the intent is rejected with `Rejected(LiquidityGateNoL2)` and no dispatch occurs.\n- Pass criteria: rejection reason matches; dispatch count remains 0.\n- Fail criteria: dispatch occurs or reason missing/mismatched.",
+        "new_text": "AT-909\n- Given: `L2BookSnapshot` age is exactly `l2_book_snapshot_max_age_ms` milliseconds (snapshot is at the staleness threshold boundary) for an OPEN intent.\n- When: Liquidity Gate evaluates the order.\n- Then: the intent is rejected with `Rejected(LiquidityGateNoL2)` and no dispatch occurs.\n- Pass criteria: rejection reason is `LiquidityGateNoL2`; dispatch count remains 0.\n- Fail criteria: dispatch occurs or intent is allowed despite snapshot age equaling `l2_book_snapshot_max_age_ms`."
+      },
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ -44,6 +44,6 @@\n-AT-909\n-- Given: `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms` for an OPEN.\n-- When: Liquidity Gate evaluates the order.\n-- Then: the intent is rejected with `Rejected(LiquidityGateNoL2)` and no dispatch occurs.\n-- Pass criteria: rejection reason matches; dispatch count remains 0.\n-- Fail criteria: dispatch occurs or reason missing/mismatched.\n+AT-909\n+- Given: `L2BookSnapshot` age is exactly `l2_book_snapshot_max_age_ms` milliseconds (at staleness threshold boundary) for an OPEN intent.\n+- When: Liquidity Gate evaluates the order.\n+- Then: the intent is rejected with `Rejected(LiquidityGateNoL2)` and no dispatch occurs.\n+- Pass criteria: rejection reason is `LiquidityGateNoL2`; dispatch count remains 0.\n+- Fail criteria: dispatch occurs or intent is allowed despite snapshot age equaling `l2_book_snapshot_max_age_ms`."
+    },
+    {
+      "proposal_id": "P-004",
+      "source_finding": "F-004",
+      "source_finding_category": "weak_normative",
+      "section": "\u00a71.3 AT-222 emergency close bypass clause",
+      "change_type": "mechanical",
+      "mechanical_ok": true,
+      "mechanical_details": "Line 35 of the fixture contains the AT-222 'And' clause with no pass criteria, fail criteria, dispatch count assertion, or reject-reason check for the emergency close branch. The replacement appends explicit pass criteria (dispatch count >= 1; no LiquidityGateNoL2 or ExpectedSlippageTooHigh emitted) and fail criteria (emergency close blocked by slippage gate or liquidity reject reason emitted) directly under the 'And' line.",
+      "rationale": "F-004 identifies that AT-222's 'And' clause asserting emergency close bypass is unenforceable: no measurable outcome is specified. A conforming implementation can satisfy AT-222 without ever exercising the bypass path. Adding explicit pass/fail criteria with dispatch count and reject-reason checks makes the clause machine-verifiable.",
+      "enforcement_point": "LiquidityGate",
+      "callsite_evidence": "crates/soldier_core/src/execution/gate.rs \u2014 LiquidityGate::evaluate() emergency close intent path must bypass slippage check and return Allowed without emitting a liquidity reject reason",
+      "status": "proposed",
+      "dedupe_key": "f004-at222-emergency-bypass-pass-fail-criteria",
+      "replace_span": {
+        "start_line": 35,
+        "end_line": 35,
+        "old_text": "- And: emergency close proceeds even if Liquidity Gate would reject under the same slippage conditions.",
+        "new_text": "- And: emergency close proceeds even if Liquidity Gate would reject under the same slippage conditions.\n  - Pass criteria: emergency close dispatch count >= 1; no `LiquidityGateNoL2` or `ExpectedSlippageTooHigh` rejection reason is emitted for the emergency close path.\n  - Fail criteria: emergency close is blocked by the slippage gate or a liquidity rejection reason is emitted for the emergency close path."
+      },
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ -35,1 +35,3 @@\n-- And: emergency close proceeds even if Liquidity Gate would reject under the same slippage conditions.\n+- And: emergency close proceeds even if Liquidity Gate would reject under the same slippage conditions.\n+  - Pass criteria: emergency close dispatch count >= 1; no `LiquidityGateNoL2` or `ExpectedSlippageTooHigh` rejection reason is emitted for the emergency close path.\n+  - Fail criteria: emergency close is blocked by the slippage gate or a liquidity rejection reason is emitted for the emergency close path."
+    },
+    {
+      "proposal_id": "P-005",
+      "source_finding": "F-005",
+      "source_finding_category": "stale_input_unspecified",
+      "section": "\u00a71.3 Algorithm step 4 \u2014 slippage equality boundary",
+      "change_type": "new_requirement",
+      "rationale": "F-005 identifies that algorithm step 4 uses strict greater-than (slippage_bps > max_slippage_bps), so equality must be allowed. No existing AT tests this boundary. An implementation using >= instead of > would silently over-reject valid at-boundary orders without any AT detecting the regression. A boundary AT makes the strict inequality mechanically verifiable.",
+      "proposed_text": "AT-PROP-002\n- Given: an L2 book where `OrderQty` consumes multiple levels resulting in `slippage_bps` exactly equal to `max_slippage_bps`; all non-liquidity gates are forced pass.\n- When: Liquidity Gate evaluates an OPEN intent.\n- Then: the intent is allowed (not rejected), because `slippage_bps == max_slippage_bps` does not exceed the rejection threshold.\n- Pass criteria: dispatch count >= 1; no `ExpectedSlippageTooHigh` rejection reason is emitted.\n- Fail criteria: intent is rejected with `Rejected(ExpectedSlippageTooHigh)` despite `slippage_bps` being exactly at the boundary.",
+      "status": "proposed",
+      "dedupe_key": "f005-slippage-equality-boundary-at",
+      "new_ats": [
+        {
+          "at_id": "AT-PROP-002",
+          "description": "Slippage equality boundary: when slippage_bps == max_slippage_bps the intent MUST be Allowed (strict greater-than enforcement); any rejection at equality is a fail."
+        }
+      ],
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ -\u00a71.3 after AT-1216 @@\n+AT-PROP-002\n+- Given: L2 book where OrderQty yields slippage_bps exactly == max_slippage_bps; all non-liquidity gates forced pass.\n+- When: Liquidity Gate evaluates an OPEN intent.\n+- Then: intent is allowed (not rejected); slippage_bps == max_slippage_bps does not exceed threshold.\n+- Pass criteria: dispatch count >= 1; no ExpectedSlippageTooHigh emitted.\n+- Fail criteria: intent rejected with Rejected(ExpectedSlippageTooHigh) at exact boundary."
+    }
+  ]
+}

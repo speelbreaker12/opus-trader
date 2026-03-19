@@ -9,10 +9,27 @@ cd "$(git rev-parse --show-toplevel)"
 
 echo "Running pre-commit checks..."
 
-# 1. SSOT lint (existing)
+# 0. Main branch guard — no real work on main
+current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
+  echo ""
+  echo "ERROR: Commits on main are blocked."
+  echo "Main is for syncing and cutting new worktrees only."
+  echo "Create a worktree: git worktree add <path> -b <branch>"
+  echo ""
+  exit 1
+fi
+
+# 1. Obsidian tracking guard (all commits)
+plans/obsidian_commit_guard.sh
+
+# 2. Project scope guard (all commits)
+plans/project_scope_guard.sh commit
+
+# 3. SSOT lint (existing)
 plans/ssot_lint.sh
 
-# 2. Contract cross-reference check (if CONTRACT.md is staged)
+# 4. Contract cross-reference check (if CONTRACT.md is staged)
 if git diff --cached --name-only | grep -q "specs/CONTRACT.md"; then
   echo "CONTRACT.md staged - running cross-reference check..."
   if ! python3 scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --strict --check-at; then
@@ -23,7 +40,7 @@ if git diff --cached --name-only | grep -q "specs/CONTRACT.md"; then
   fi
 fi
 
-# 3. PRD schema check (if prd.json is staged)
+# 5. PRD schema check (if prd.json is staged)
 if git diff --cached --name-only | grep -q "plans/prd.json"; then
   echo "prd.json staged - running schema check..."
   if ! plans/prd_schema_check.sh plans/prd.json; then
@@ -34,7 +51,7 @@ if git diff --cached --name-only | grep -q "plans/prd.json"; then
   fi
 fi
 
-# 4. Check for unwrap() in staged Rust files (safety-critical paths only)
+# 6. Check for unwrap() in staged Rust files (safety-critical paths only)
 STAGED_RS=$(git diff --cached --name-only --diff-filter=ACM | grep -E "^crates/soldier_core/.*\.rs$" || true)
 if [[ -n "$STAGED_RS" ]]; then
   echo "Checking staged soldier_core files for unwrap()..."
@@ -58,7 +75,7 @@ if [[ -n "$STAGED_RS" ]]; then
   fi
 fi
 
-# 5. Enforce code-review-expert attestation for significant implementation changes
+# 7. Enforce code-review-expert attestation for significant implementation changes
 plans/code_review_expert_guard.sh
 
 echo "Pre-commit checks passed."

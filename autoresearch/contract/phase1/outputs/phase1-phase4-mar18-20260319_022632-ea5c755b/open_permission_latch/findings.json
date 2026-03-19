@@ -1,0 +1,62 @@
+{
+  "generated_at": "2026-03-18T12:00:00Z",
+  "validator_version": "phase1-gap-detector-v1",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "2.2.4 Reconciliation stall observability",
+      "category": "stale_input_unspecified",
+      "severity": "P2",
+      "description": "reconcile_stall_max_delay_s has no default value specified. Other tuning parameters in the same section (reconcile_trade_lookback_sec default 300s, position_reconcile_epsilon default min_amount/1e-6) have explicit defaults. Without a default, behavior when unconfigured is implementation-defined.",
+      "evidence": {
+        "line": 31,
+        "quote": "stays true for longer than `reconcile_stall_max_delay_s`, runtime MUST emit structured log `RECONCILE_STALL`",
+        "context": "Other reconciliation parameters in lines 26-27 specify defaults; this one does not."
+      },
+      "proposed_fix_type": "mechanical",
+      "proposed_fix": "Add an explicit default value for reconcile_stall_max_delay_s (e.g., default: 120s) consistent with the pattern used for reconcile_trade_lookback_sec and position_reconcile_epsilon."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "2.2.4 State fields",
+      "category": "missing_at_pair",
+      "severity": "P1",
+      "description": "open_permission_requires_reconcile MUST equal open_permission_blocked_latch (line 15) but only AT-430 tests this invariant at startup. No AT verifies the invariant holds during runtime latch transitions: when a trigger sets the latch (AT-1242 does not check open_permission_requires_reconcile) or when reconciliation clears it (AT-011 checks latch and reason_codes but not requires_reconcile).",
+      "evidence": {
+        "line": 15,
+        "quote": "open_permission_requires_reconcile (bool; MUST equal open_permission_blocked_latch for v5.2)",
+        "context": "AT-430 tests startup only. AT-1242 and AT-011 omit requires_reconcile from pass criteria."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add pass criteria to AT-1242 and AT-011 requiring open_permission_requires_reconcile == open_permission_blocked_latch after the transition, or add a dedicated invariant AT covering all latch state transitions."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "2.2.4 Reconciliation success criteria",
+      "category": "missing_at_pair",
+      "severity": "P1",
+      "description": "Reconciliation criteria 1 (label matching) and 2 (position matching within epsilon) have no negative ATs proving reconciliation fails when they are not met. AT-1100 covers missing trades and AT-1263 covers REST failure, but no AT tests that the latch remains set when inflight intents do not match exchange orders or when positions diverge beyond position_reconcile_epsilon.",
+      "evidence": {
+        "line": 25,
+        "quote": "Ledger inflight intents (non-terminal) match exchange open orders by label (all matched within label disambiguation rules per \u00a71.1.2).",
+        "context": "Lines 25-26 define two success criteria with no corresponding negative ATs. Only criteria 3 (AT-1100, AT-1263) has negative coverage."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add two ATs: one proving reconciliation fails and latch remains set when inflight intents do not match exchange open orders by label, and one proving reconciliation fails when positions diverge beyond position_reconcile_epsilon."
+    },
+    {
+      "finding_id": "F-004",
+      "section": "2.2.4 Reconciliation success criteria",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "open_permission_reason_codes is an array and criterion 4 requires 'All reconcile-class reason codes cleared' before reconciliation succeeds. No AT tests the multi-code accumulation scenario where multiple triggers fire (e.g., WS_BOOK_GAP + INVENTORY_MISMATCH) and only one is resolved \u2014 verifying the latch remains set until all codes are cleared.",
+      "evidence": {
+        "line": 28,
+        "quote": "All reconcile-class reason codes cleared (no unresolved WS gaps, inventory mismatches, or session termination flags).",
+        "context": "AT-1242 tests individual trigger events. AT-011 tests successful reconciliation but from a single-code precondition."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an AT with precondition of two or more concurrent reason codes where only a subset of triggering conditions are resolved, proving reconciliation fails and latch remains set until all codes are cleared."
+    }
+  ]
+}

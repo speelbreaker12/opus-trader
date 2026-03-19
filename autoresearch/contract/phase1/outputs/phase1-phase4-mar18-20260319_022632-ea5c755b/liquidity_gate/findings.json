@@ -1,0 +1,62 @@
+{
+  "generated_at": "2026-03-18T03:00:00Z",
+  "validator_version": "phase1-gap-detector-v1",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "\u00a71.3 Algorithm step 1-2",
+      "category": "missing_fail_closed",
+      "severity": "P1",
+      "description": "Algorithm does not specify fail-closed behavior when cumulative L2 book depth on the relevant side is less than OrderQty (including zero levels). WAP computation is undefined if the book walk exhausts available depth before filling the order. Without an explicit reject rule, the gate could produce NaN/panic or silently pass an order that would sweep the entire visible book.",
+      "evidence": {
+        "line": 16,
+        "quote": "Walk the L2 book on the correct side (asks for buy, bids for sell).",
+        "context": "Steps 1-2 assume sufficient depth exists to compute WAP for OrderQty. No branch handles partial fill or empty-side books."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add to Algorithm step 1: 'If cumulative available depth on the relevant side is less than OrderQty, reject with Rejected(ExpectedSlippageTooHigh) and log LiquidityGateReject with available_depth and order_qty. Do not attempt WAP computation on insufficient depth.' Add corresponding AT."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "\u00a71.3 Acceptance Tests",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "No AT covers CLOSE/HEDGE intent evaluation when L2BookSnapshot is present, parseable, and fresh. AT-1216 tests only the OPEN happy path. AT-421 tests CLOSE/HEDGE only on the stale-L2 fallback path. The normal slippage-check path (steps 1-5) for CLOSE/HEDGE with valid L2 is untested, leaving no proof that risk-reducing orders are subject to the same slippage budget.",
+      "evidence": {
+        "line": 65,
+        "quote": "AT-1216 ... Liquidity Gate evaluates an OPEN intent.",
+        "context": "Only AT testing fresh-L2 happy path. No equivalent for CLOSE/HEDGE through the book-walk algorithm."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add AT for CLOSE/HEDGE with fresh valid L2 where slippage is within budget: prove it passes through the normal book-walk algorithm (steps 1-5) and dispatches. Also add AT for CLOSE/HEDGE with fresh L2 but slippage exceeding max_slippage_bps to prove slippage rejection applies to risk-reducing orders."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "\u00a71.3 Staleness rules",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "Normative text on line 8 specifies 'CLOSE/HEDGE/replace order placement MUST NOT be rejected solely for missing or stale L2' \u2014 the 'replace' intent class appears only here and has zero AT coverage. No acceptance test verifies that replace orders use the \u00a73.1 fallback path or are correctly excluded from LiquidityGateNoL2 rejection.",
+      "evidence": {
+        "line": 8,
+        "quote": "CLOSE/HEDGE/replace order placement MUST NOT be rejected solely for missing or stale L2",
+        "context": "'replace' intent class is normatively constrained but has no AT proving the behavior."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Either add an AT covering replace-order placement under stale L2 (proving it uses \u00a73.1 fallback and is not rejected with LiquidityGateNoL2), or clarify in normative text that 'replace' is subsumed by CLOSE/HEDGE classification and remove it as a separate intent class."
+    },
+    {
+      "finding_id": "F-004",
+      "section": "\u00a71.3 Algorithm step 0 vs Scope",
+      "category": "gate_interaction_gap",
+      "severity": "P2",
+      "description": "When L2 is stale, step 0 routes CLOSE/HEDGE to \u00a73.1 fallback and says 'Do not proceed to book walk', which skips the slippage budget check (steps 1-5) entirely. The contract does not state whether this is intentional or whether fallback-priced CLOSE/HEDGE orders should have an equivalent slippage bound. The scope section says the gate 'Applies to normal dispatch and containment rescue IOC orders' without distinguishing fallback-routed orders.",
+      "evidence": {
+        "line": 15,
+        "quote": "CLOSE/HEDGE \u2192 \u00a73.1 fallback). Do not proceed to book walk.",
+        "context": "Step 0 skips all slippage checking for fallback-priced risk-reducing orders. No explicit statement that fallback pricing is exempt from slippage budget."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add explicit normative statement: either '\u00a73.1 fallback-priced CLOSE/HEDGE orders are exempt from the max_slippage_bps check because the fallback ladder already constrains adverse pricing' or specify an equivalent slippage bound applied to the fallback price vs mark price."
+    }
+  ]
+}
