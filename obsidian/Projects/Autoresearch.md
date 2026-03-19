@@ -93,3 +93,4 @@ Phase 4 COMPLETE (2026-03-19). All 5 sections patched. 17 new ATs total (AT-1265
 - Manual proposals for EC/EG/TMC: triaged 15 findings, accepted 12, rejected 3. 10 new ATs (AT-1272..AT-1281) + 3 mechanical fixes (cause enum closed, SHALL→MUST, AT-918 reason code, EG cooldown default, EC partial fill text)
 - Refreshed context (at_registry, context_manifest, section_index, fixtures, contract_kernel) after CONTRACT.md edits
 - Rebuilt contract_kernel.json (hash mismatch blocked push)
+- Fix: section-compatibility now uses longest common prefix (>= 3 levels for siblings, or exact match). §2.2.3.7 vs §2.2.3.1.1 → True; §1.3 vs §1.4 → False.

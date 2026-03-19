@@ -425,12 +425,19 @@ def _sections_compatible(proposal_section: str, finding_section: str) -> bool:
         for f in f_nums:
             p_parts = p.split(".")
             f_parts = f.split(".")
-            # Require at least 2-level overlap to avoid false positives
-            # (e.g. "1.3" vs "1.4" should NOT match)
-            common = min(len(p_parts), len(f_parts))
-            if common < 2:
-                continue
-            if p_parts[:common] == f_parts[:common]:
+            # Find longest common prefix
+            prefix_len = 0
+            for i in range(min(len(p_parts), len(f_parts))):
+                if p_parts[i] == f_parts[i]:
+                    prefix_len = i + 1
+                else:
+                    break
+            # Accept if: (a) numbers are identical (any depth), or
+            # (b) shared prefix is >= 3 levels (sibling subsections under a common parent)
+            # Rejects: "1.3" vs "1.4" (prefix=1, not identical) and "2.2.4" vs "2.2.3" (prefix=2)
+            if p_parts == f_parts:
+                return True
+            if prefix_len >= 3:
                 return True
     return False
 
