@@ -7,7 +7,7 @@ started: 2026-03-16
 ---
 
 ## Commits
-- pending — 2026-03-19 — Phase 4 remaining 3 sections: 10 new ATs (AT-1272..AT-1281) + 3 mechanical fixes
+- `54b97205` — 2026-03-19 — Phase 4 remaining sections: 10 new ATs (AT-1272..AT-1281) + 3 mechanical fixes
 - `049b85dd` — 2026-03-19 — Phase 4 LG+OPL patch: 7 new ATs (AT-1265..AT-1271)
 - `120759bc` — 2026-03-18 — Phase 4 section-compatibility fix + gitignore lock
 - `5ec15230` — 2026-03-18 — Phase 4 gap detection: 23 findings, 10 proposals (2/5 sections), pipeline infra improvements.
@@ -87,6 +87,7 @@ Phase 4 COMPLETE (2026-03-19). All 5 sections patched. 17 new ATs total (AT-1265
 - Pipeline fix: relaxed section-match validation to use section-number prefix matching instead of exact string equality (fixes known ~100% failure on TMC/EC)
 - Review fix: tightened section-compatibility to require 2-level prefix overlap (prevents false positives like §1.3 matching §1.4). Gitignored proposals_index.lock.
 ### 2026-03-19
-- Reviewed 10 Phase 4 proposals manually against CONTRACT.md source text: 7 accepted, 2 rejected (P-001 impl detail, P-003 AT-909 rewrite), 1 pre-rejected
-- Applied 7 accepted proposals to CONTRACT.md: 7 new ATs (AT-1265..AT-1271); AT-222 bypass criteria; §2.2.4 cross-ref; reconcile_stall_max_delay_s default + fail-closed
+- Reviewed 10 Phase 4 LG+OPL proposals manually against CONTRACT.md source text: 7 accepted, 2 rejected (P-001 impl detail, P-003 AT-909 rewrite), 1 pre-rejected
+- Applied 7 accepted LG+OPL proposals to CONTRACT.md: 7 new ATs (AT-1265..AT-1271); tightened AT-222 bypass criteria; added §2.2.4 cross-ref plus reconcile_stall_max_delay_s default + fail-closed text
+- Fix: reverted spurious AT-909 rewrite (rejected P-003 was applied by hook; restored original stale-L2 reject semantics)
 - Manual proposals for EC/EG/TMC: triaged 15 findings, accepted 12, rejected 3. 10 new ATs (AT-1272..AT-1281) + 3 mechanical fixes (cause enum closed, SHALL→MUST, AT-918 reason code, EG cooldown default, EC partial fill text)
