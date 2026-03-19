@@ -6,11 +6,29 @@ Customized for opus-trader: adds Cargo.lock, .wf/, specs/, plans/ protection
 """
 
 import json
+import os
 import sys
 import re
 
 data = json.load(sys.stdin)
 cmd = data.get("tool_input", {}).get("command", "")
+
+# === LEVEL 0: CONTEXT-AWARE ALLOWLISTS ===
+
+# Allow --force-with-lease on non-main branches (normal post-rebase workflow).
+# Still block bare --force (without -with-lease) and any force to main/master.
+if re.search(r"\bgit\s+push\s+.*--force-with-lease", cmd, re.IGNORECASE):
+    if re.search(r"\bgit\s+push\s+(\S+\s+)?(main|master)\b", cmd, re.IGNORECASE):
+        print("BLOCKED: --force-with-lease to main/master is never allowed", file=sys.stderr)
+        sys.exit(2)
+    # Allow on feature branches
+    sys.exit(0)
+
+# Allow git reset --hard during main recovery (env var set by /main-recovery skill).
+if re.search(r"\bgit\s+reset\s+--hard", cmd, re.IGNORECASE):
+    if os.environ.get("MAIN_RECOVERY", "") == "1":
+        print("ALLOWED: git reset --hard (MAIN_RECOVERY=1)", file=sys.stderr)
+        sys.exit(0)
 
 # === LEVEL 1: CATASTROPHIC COMMANDS (ALWAYS BLOCK) ===
 catastrophic_patterns = [
@@ -25,9 +43,8 @@ catastrophic_patterns = [
     (r"\bchmod\s+(-R\s+)?777\s+/", "chmod 777 on root"),
     (r"\bchown\s+(-R\s+)?.*\s+/(\s|$)", "chown on root directory"),
     (r"\bgit\s+push\s+.*--force(?!-with-lease)(\s|$)", "git force push (use --force-with-lease)"),
-    (r"\bgit\s+push\s+.*--force-with-lease", "git force push --force-with-lease (rewrites history, can invalidate review artifacts)"),
     (r"\bgit\s+push\s+(\S+\s+)?(main|master)\b", "git push to main/master (use a feature branch)"),
-    (r"\bgit\s+reset\s+--hard(\s|$)", "git reset --hard (use /main-recovery skill instead)"),
+    (r"\bgit\s+reset\s+--hard(\s|$)", "git reset --hard (set MAIN_RECOVERY=1 for recovery)"),
 ]
 
 for pattern, desc in catastrophic_patterns:
