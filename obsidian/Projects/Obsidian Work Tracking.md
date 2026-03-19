@@ -1,13 +1,14 @@
 ---
 status: in-progress
 priority: P1
-branch: project/obsidian-work-tracking
+branch: workflow/obsidian-skills-clean
 base: main
 pr:
 started: "2026-03-16"
 scope_paths:
   - .claude/commands/**
   - .claude/hooks/**
+  - .claude/settings.json
   - .claude/skills/**
   - .githooks/**
   - AGENTS.md
