@@ -5,8 +5,10 @@ type: debrief
 ---
 
 ## Commits
-- `42e930c7`
-- `f0a9febe`
+- `pending` — fix skills index validation
+- `e56b088e`
+- `6d235f31`
+- `b007c317`
 
 # Session Handoff
 

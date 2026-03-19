@@ -6,6 +6,7 @@ base: main
 pr:
 started: "2026-03-16"
 scope_paths:
+  - .codex/commands/**
   - .claude/commands/**
   - .claude/hooks/**
   - .claude/scripts/**
@@ -33,14 +34,18 @@ scope_paths:
 ---
 
 ## Current State
-In progress. Replacing size-based commit tiers (trivial/light/full) with risk-class classification (docs_only/obsidian_only/non_critical/critical). Extracting shared frontmatter parser to `plans/lib/obsidian_frontmatter.py` to eliminate 3 duplicate implementations. Adding worktree-mismatch and merged-PR warnings to context hook. Hardening force-push blocker and scope guard error messages.
+In progress. Obsidian debrief now acts as the default session handoff for normal project work, and the repo is adding Codex mirrors for `/commit` and `/push-pr` so the same workflow skills are available outside Claude-specific wrappers.
 
 ## Commits
-- `42e930c7` — 2026-03-19 — add /merge-cleanup skill, restructure skills index, add workflow index
-- `f0a9febe` — 2026-03-19 — debrief template upgrade, workspace policy expansion, test fixture alignment
-- `a02ccf67` — 2026-03-19 — risk-class commit gates, shared frontmatter parser, context hook warnings
+- `pending` — 2026-03-19 — fix skills index validation (review-stack entries, command format)
+- `e56b088e` — 2026-03-19 — update commit refs and runtime state
+- `6d235f31` — 2026-03-19 — add /merge-cleanup skill, restructure skills index, add workflow index
+- `b007c317` — 2026-03-19 — debrief template upgrade, workspace policy expansion, test fixture alignment
+- `821fabe3` — 2026-03-19 — risk-class commit gates, shared frontmatter parser, context hook warnings
 
 ## Key Files
+- .codex/commands/commit.md
+- .codex/commands/push-pr.md
 - obsidian/Templates/Project.md
 - obsidian/Templates/Debrief.md
 - .claude/hooks/obsidian-context-hook.sh
@@ -53,6 +58,7 @@ In progress. Replacing size-based commit tiers (trivial/light/full) with risk-cl
 - [[Obsidian Work Tracking 2026-03-17 Post-Commit Dashboard Sync Notice]]
 - [[Obsidian Work Tracking 2026-03-19 Workflow Skill Split]]
 - [[Obsidian Work Tracking 2026-03-19 Guard Hardening]]
+- [[Obsidian Work Tracking 2026-03-19 Codex Command Mirrors]]
 
 ## Log
 ### 2026-03-16
@@ -69,3 +75,6 @@ In progress. Replacing size-based commit tiers (trivial/light/full) with risk-cl
 ### 2026-03-17
 - Enabled context7 plugin in .claude/settings.json
 - Expanded AGENTS.md with Warp/Codex build/test/architecture instructions
+### 2026-03-19
+- Mirrored `/commit` and `/push-pr` into `.codex/commands/` so Codex can invoke the same repo-backed skills as Claude.
+- Extended `plans/tests/test_review_command_wrappers.sh` to prove both Claude and Codex command wrappers point at the same `SKILLS/` source files.

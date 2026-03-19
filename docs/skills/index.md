@@ -2,7 +2,8 @@
 
 Canonical catalog for prompt-backed workflow skills in this repository.
 
-Validation command: `python3 scripts/check_skills_index.py`
+Validation command:
+- `python3 scripts/check_skills_index.py`
 
 ## Workflow lifecycle
 
@@ -43,18 +44,19 @@ Supporting skills:
 
 ## Review skills
 
-| Skill | Purpose |
-|-------|---------|
-| `/pr-review` | General PR review checklist |
-| `/failure-mode-review` | Implementation-level failure path analysis |
-| `/strategic-failure-review` | Systemic/architectural risk review |
-| `/contract-review` | Fast fail-open safety filter |
-| `/validator-audit` | Validator completeness and gap audit |
-| `/devils-advocate` | Mutation-style test-the-tests review |
-| `/loss-risk-gate` | Trading loss / profit-block economic safety review |
-| `/review-stack` (or `/6`) | All 7 review skills in sequence |
-| `/external-review-generic` | 4 external reviewers in parallel |
-| `/super-pr-review` | 7 internal + 4 external with cross-validation |
+| Skill | File | Purpose |
+|-------|------|---------|
+| `/pr-review` | `SKILLS/pr-review.md` | General PR review checklist |
+| `/failure-mode-review` | `SKILLS/failure-mode-review.md` | Implementation-level failure path analysis |
+| `/strategic-failure-review` | `SKILLS/strategic-failure-review.md` | Systemic/architectural risk review |
+| `/contract-review` | `SKILLS/contract-review.md` | Fast fail-open safety filter |
+| `/validator-audit` | `SKILLS/validator-audit.md` | Validator completeness and gap audit |
+| `/devils-advocate` | `SKILLS/devils-advocate.md` | Mutation-style test-the-tests review |
+| `/loss-risk-gate` | `SKILLS/loss-risk-gate.md` | Trading loss / profit-block economic safety review |
+| `/review-stack` | `SKILLS/review-stack.md` | Run 7 review skills in sequence |
+| 7-Skill Review Stack | `plans/prompts/review-stack.md` | All 7 review skills in sequence |
+| `/external-review-generic` | `SKILLS/external-review-generic.md` | 4 external reviewers in parallel |
+| `/super-pr-review` | `SKILLS/super-pr-review.md` | 7 internal + 4 external with cross-validation |
 
 ## Implementation skills
 
