@@ -1,13 +1,14 @@
 ---
 status: in-progress
 priority: P1
-branch: workflow/obsidian-skills-clean
+branch: workflow/obsidian-fixes
 base: main
 pr:
 started: "2026-03-16"
 scope_paths:
   - .claude/commands/**
   - .claude/hooks/**
+  - .claude/scripts/**
   - .claude/settings.json
   - .claude/skills/**
   - .githooks/**
@@ -15,21 +16,25 @@ scope_paths:
   - SKILLS/**
   - docs/skills/index.md
   - obsidian/**
+  - plans/code_review_expert_guard.sh
   - plans/obsidian_commit_guard.sh
+  - plans/post_rebase_frontmatter_check.sh
   - plans/project_scope_guard.sh
   - plans/open_project_pr.sh
   - plans/tests/**
   - plans/verify_fork.sh
+  - plans/worktree_commit_push.sh
   - plans/workflow_files_allowlist.txt
   - plans/workflow_verify.sh
+  - plans/write_review_gate_marker.sh
   - scripts/setup_hooks.sh
 ---
 
 ## Current State
-Complete. Obsidian-based project tracking with Templates, Bases-compatible frontmatter, Claude Code hooks, git pre-commit hook, and AGENTS.md instructions for Codex/all agents.
+In progress. Hardening workflow guards: slim context hook (branch-deterministic routing), tiered commit gates (trivial/light/full), review-fix and amend-aware obsidian guard, verify cache in pre-push, scope guard dry-run and hotfix exemptions, force-with-lease allowance on feature branches, and new helper scripts (worktree_commit_push, post_rebase_frontmatter_check, write_review_gate_marker).
 
 ## Commits
-- `pending` — 2026-03-17 — post-commit prints dashboard auto-sync status when `obsidian/Active Projects.md` changed.
+- `pending` — 2026-03-19 — workflow guard hardening: tiered commits, slim context hook, review-fix mode, helper scripts
 
 ## Key Files
 - obsidian/Templates/Project.md
@@ -43,6 +48,7 @@ Complete. Obsidian-based project tracking with Templates, Bases-compatible front
 ## Debriefs
 - [[Obsidian Work Tracking 2026-03-17 Post-Commit Dashboard Sync Notice]]
 - [[Obsidian Work Tracking 2026-03-19 Workflow Skill Split]]
+- [[Obsidian Work Tracking 2026-03-19 Guard Hardening]]
 
 ## Log
 ### 2026-03-16

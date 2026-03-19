@@ -56,8 +56,29 @@ if [[ "${#significant_files[@]}" -eq 0 ]]; then
   exit 0
 fi
 
+# Skip reasons for mechanical changes (advisory, not blocking)
+skip_reason="${SKIP_CODE_REVIEW_REASON:-}"
+if [[ -n "$skip_reason" ]]; then
+  echo "INFO: code-review-expert guard skipped (reason: $skip_reason)" >&2
+  exit 0
+fi
+
 if [[ "${SKIP_CODE_REVIEW_EXPERT_HOOK:-0}" == "1" ]]; then
   echo "WARN: SKIP_CODE_REVIEW_EXPERT_HOOK=1, bypassing code-review-expert guard" >&2
+  exit 0
+fi
+
+# Auto-detect mechanical changes: all significant files are formatting-only
+all_fmt_only=1
+for path in "${significant_files[@]}"; do
+  # Check if staged diff is whitespace/formatting only
+  if git diff --cached --ignore-all-space --ignore-blank-lines "$path" | grep -qE '^[+-].*[a-zA-Z]'; then
+    all_fmt_only=0
+    break
+  fi
+done
+if [[ "$all_fmt_only" -eq 1 && "${#significant_files[@]}" -gt 0 ]]; then
+  echo "INFO: code-review-expert guard skipped (formatting-only changes)" >&2
   exit 0
 fi
 

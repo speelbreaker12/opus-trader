@@ -52,5 +52,24 @@ while read -r _local_ref _local_sha remote_ref _remote_sha; do
 
   # Main/master push is blocked above — all remaining pushes are feature branches
   echo "Pushing to feature branch: $remote_ref"
-  "$VERIFY_SH_PATH" quick
+
+  # Cache-aware skip: if the current tree SHA was already verified in this
+  # session, skip the redundant verify.sh run (~5 min savings).
+  git_dir="$(git rev-parse --git-dir 2>/dev/null || true)"
+  verify_cache="${git_dir:-.git}/.verify-cache"
+  current_tree="$(git rev-parse HEAD^{tree} 2>/dev/null || true)"
+  cached_tree=""
+  if [[ -f "$verify_cache" ]]; then
+    cached_tree="$(cat "$verify_cache" 2>/dev/null || true)"
+  fi
+
+  if [[ -n "$current_tree" && "$current_tree" == "$cached_tree" ]]; then
+    echo "Skipping verify.sh — tree $current_tree already verified (cached)"
+  else
+    "$VERIFY_SH_PATH" quick
+    # Cache the verified tree SHA on success
+    if [[ -n "$current_tree" && -n "$git_dir" ]]; then
+      printf '%s\n' "$current_tree" > "$verify_cache"
+    fi
+  fi
 done

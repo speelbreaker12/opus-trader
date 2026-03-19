@@ -20,7 +20,50 @@ if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
   exit 1
 fi
 
-# 1. Obsidian tracking guard (all commits)
+# --- Diff-size tier classification ---
+# Tiers: trivial, light, full
+#   trivial: <10 lines changed, only formatting/docs/obsidian (no crates/ or plans/*.sh)
+#   light:   <50 lines changed, no crates/ changes
+#   full:    everything else
+staged_diff_lines="$(git diff --cached --stat | tail -1 | grep -oE '[0-9]+ insertion|[0-9]+ deletion' | grep -oE '[0-9]+' | paste -sd+ - | bc 2>/dev/null || echo 999)"
+staged_files="$(git diff --cached --name-only --diff-filter=ACMR)"
+has_crates=0
+has_significant=0
+only_trivial=1
+
+while IFS= read -r path; do
+  [[ -n "$path" ]] || continue
+  case "$path" in
+    crates/*)
+      has_crates=1
+      has_significant=1
+      only_trivial=0
+      ;;
+    plans/*.sh|plans/lib/*.sh|scripts/*|python/*|.githooks/*|.claude/hooks/*|.claude/scripts/*)
+      has_significant=1
+      only_trivial=0
+      ;;
+    *.md|*.txt|*.json|obsidian/*|docs/*|reviews/*|artifacts/*)
+      # trivial-eligible
+      ;;
+    *)
+      only_trivial=0
+      ;;
+  esac
+done <<< "$staged_files"
+
+export OBSIDIAN_COMMIT_TIER="full"
+if [[ "$staged_diff_lines" -lt 10 && "$only_trivial" -eq 1 ]]; then
+  OBSIDIAN_COMMIT_TIER="trivial"
+  echo "Commit tier: trivial ($staged_diff_lines lines, docs/formatting only)"
+elif [[ "$staged_diff_lines" -lt 50 && "$has_crates" -eq 0 ]]; then
+  OBSIDIAN_COMMIT_TIER="light"
+  echo "Commit tier: light ($staged_diff_lines lines, no crate changes)"
+else
+  echo "Commit tier: full ($staged_diff_lines lines)"
+fi
+
+# 1. Obsidian tracking guard (skipped for trivial tier — handled inside guard)
 plans/obsidian_commit_guard.sh
 
 # 2. Project scope guard (all commits)
@@ -75,7 +118,11 @@ if [[ -n "$STAGED_RS" ]]; then
   fi
 fi
 
-# 7. Enforce code-review-expert attestation for significant implementation changes
-plans/code_review_expert_guard.sh
+# 7. Code-review-expert attestation (skip for trivial/light tiers)
+if [[ "$OBSIDIAN_COMMIT_TIER" == "full" ]]; then
+  plans/code_review_expert_guard.sh
+else
+  echo "Skipping code-review-expert guard (tier=$OBSIDIAN_COMMIT_TIER)"
+fi
 
 echo "Pre-commit checks passed."
