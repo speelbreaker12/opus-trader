@@ -528,11 +528,14 @@ $(cat "$f")
   done
 fi
 
-# ── Build diff/files context (shared by sonnet/opus, kimi, and codex --files) ──
+# ── Build diff/files context ──────────────────────────────────────────
+# Built for all tools so that fallback paths (e.g. codex timeout → codex exec)
+# always have content available. Previously only built for non-codex tools,
+# causing the codex exec fallback to review "(no content available)".
 diff_context=""
 review_context_label="Diff"
 codex_exec_mode=false
-if [[ "$tool" == "sonnet" || "$tool" == "opus" || "$tool" == "kimi" || "$tool" == "gemini" || ("$tool" == "codex" && "$mode" == "files") ]]; then
+if [[ "$tool" == "sonnet" || "$tool" == "opus" || "$tool" == "kimi" || "$tool" == "gemini" || "$tool" == "codex" ]]; then
   case "$mode" in
     commit)
       resolved="$(git rev-parse "${commit}^{commit}" 2>/dev/null || true)"

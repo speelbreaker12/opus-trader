@@ -18,6 +18,7 @@ set -euo pipefail
 #   --commit <REF>     Commit ref (passed through)
 #   --files <LIST>     Files list (passed through)
 #   --prompt <STYLE>   Prompt style: generic or enriched (default: enriched)
+#   --chairman <TOOL>  Run chairman synthesis after reviews (sonnet or opus)
 #   --proof-graph      Generate + aggregate proof graphs
 #   --dry-run          Print commands without executing
 #   --no-aggregate     Skip aggregate_proofs.sh even with --proof-graph
@@ -35,6 +36,7 @@ set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "ERROR: not in a git repo" >&2; exit 2; }
 AGGREGATE_SCRIPT="$ROOT/plans/aggregate_proofs.sh"
+CHAIRMAN_SCRIPT="$ROOT/plans/chairman_synthesis.sh"
 
 usage() {
   sed -n '3,/^$/{ s/^# //; s/^#$//; p; }' "$0" >&2
@@ -66,6 +68,7 @@ REVIEW_SCRIPT_OVERRIDE=""
 MODE_ARGS=()
 PROMPT_STYLE="enriched"
 PROOF_GRAPH=false
+CHAIRMAN=""
 DRY_RUN=false
 NO_AGGREGATE=false
 EXTRA_ARGS=()
@@ -89,6 +92,7 @@ while [[ $# -gt 0 ]]; do
     --uncommitted) [[ ${#MODE_ARGS[@]} -gt 0 ]] && die "only one of --base/--commit/--files/--uncommitted allowed"
                    MODE_ARGS=("--uncommitted"); shift ;;
     --prompt)      PROMPT_STYLE="${2:?missing style}"; shift 2 ;;
+    --chairman)    CHAIRMAN="${2:?missing chairman tool (sonnet or opus)}"; shift 2 ;;
     --proof-graph) PROOF_GRAPH=true; shift ;;
     --dry-run)     DRY_RUN=true; shift ;;
     --no-aggregate) NO_AGGREGATE=true; shift ;;
@@ -100,6 +104,13 @@ done
 
 # Validate
 [[ -n "$STORY" ]] || die "STORY_ID is required"
+if [[ -n "$CHAIRMAN" ]]; then
+  case "$CHAIRMAN" in
+    sonnet|opus) ;;
+    *) die "--chairman must be sonnet or opus (got: $CHAIRMAN)" ;;
+  esac
+  [[ -x "$CHAIRMAN_SCRIPT" ]] || die "chairman_synthesis.sh not found at $CHAIRMAN_SCRIPT"
+fi
 [[ "$STORY" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || die "invalid STORY_ID: $STORY"
 [[ ${#MODE_ARGS[@]} -gt 0 ]] || die "one of --base, --commit, --files, or --uncommitted is required"
 REVIEW_SCRIPT="${REVIEW_SCRIPT_OVERRIDE:-${PARALLEL_REVIEW_REVIEW_SCRIPT:-$ROOT/plans/review_logged.sh}}"
@@ -133,6 +144,7 @@ echo "  tools: ${TOOL_LIST[*]}"
 echo "  mode:  ${MODE_ARGS[*]}"
 echo "  prompt: $PROMPT_STYLE"
 echo "  proof-graph: $PROOF_GRAPH"
+[[ -n "$CHAIRMAN" ]] && echo "  chairman: $CHAIRMAN"
 echo "═══════════════════════════════════════════════════════════════"
 echo
 
@@ -309,6 +321,31 @@ for tool in "${TOOL_LIST[@]}"; do
     echo "  $artifact_display  (not found — review may have failed)"
   fi
 done
+
+# ── Chairman synthesis ────────────────────────────────────────────────
+chairman_rc=0
+if [[ -n "$CHAIRMAN" && "$any_failed" -eq 0 ]]; then
+  echo
+  run_dir="$STORY_ARTIFACTS_DIR/$STORY"
+  if [[ -d "$run_dir" ]]; then
+    echo "Running chairman synthesis ($CHAIRMAN)..."
+    set +e
+    "$CHAIRMAN_SCRIPT" "$run_dir" --tool "$CHAIRMAN" --style "$PROMPT_STYLE"
+    chairman_rc=$?
+    set -e
+    if [[ $chairman_rc -eq 0 ]]; then
+      chairman_artifact="$run_dir/chairman/chairman.md"
+      echo "  Chairman: $(display_artifact_path "$chairman_artifact")"
+    else
+      echo "  Chairman: FAILED (exit $chairman_rc)"
+    fi
+  else
+    echo "WARN: run directory $run_dir not found — skipping chairman" >&2
+  fi
+elif [[ -n "$CHAIRMAN" && "$any_failed" -ne 0 ]]; then
+  echo
+  echo "Skipping chairman synthesis — one or more reviews failed."
+fi
 
 # ── Exit code ─────────────────────────────────────────────────────────
 # G-2 fix: on failure, copy logs to artifacts dir (not world-readable /tmp),

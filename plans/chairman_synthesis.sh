@@ -232,7 +232,7 @@ pattern = re.compile(
     r"###\s+\[(P[0-3])\]\s+(.+?)\s+\((\d+)/(\d+)\s+reviewers?\)",
     re.IGNORECASE
 )
-citation_pat = re.compile(r"`([A-Za-z0-9_./:-]+\.[A-Za-z0-9_]+:\d+)`")
+citation_pat = re.compile(r"`([A-Za-z0-9_./:-]+\.[A-Za-z0-9_]+:\d+(?:-\d+)?)`")
 
 lines = text.splitlines()
 for idx, line in enumerate(lines):
