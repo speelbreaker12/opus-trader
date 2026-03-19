@@ -1,77 +1,152 @@
-# Skills And Prompt Index
+# Skills Index
 
 Canonical catalog for prompt-backed workflow skills in this repository.
 
-Validation command:
-- `python3 scripts/check_skills_index.py`
+Validation command: `python3 scripts/check_skills_index.py`
 
-| Name | Path | Description |
-|---|---|---|
-| Reconciliation | `plans/prompts/reconcil.md` | Premortem + R1-R7 reconciliation workflow |
-| 7-Skill Review Stack | `plans/prompts/review-stack.md` | All 7 review skills in sequence |
-| Cutter | `plans/prompts/cutter.md` | Story slicing/cutting prompt used by `plans/cut_prd.sh` |
+## Workflow lifecycle
 
-## Skill wrappers
+The daily git-and-obsidian lifecycle. Each skill owns one boundary.
 
-| Skill | File |
-|---|---|
-| `/reconcil` | `SKILLS/reconcil.md` |
-| `/review-stack` | `SKILLS/review-stack.md` |
-| `/6` | `SKILLS/6.md` |
-| `/external-review-generic` | `SKILLS/external-review-generic.md` |
-| `/obsidian-workflow` | `SKILLS/obsidian-workflow.md` |
-| `/toc` | `SKILLS/toc.md` |
+```
+  session start
+       │
+       ▼
+  /obsidian-workflow ─── classify task, route to project + worktree
+       │
+       ▼
+  workspace-policy ──── preflight, lane rules, worktree hygiene
+       │
+       ▼
+  (implement)
+       │
+       ▼
+  /commit ───────────── stage, review gate, obsidian tracking, local commit
+       │
+       ▼
+  /push-pr ──────────── refresh branch, push, create or update PR
+       │
+       ▼
+  /pr-check ─────────── surface review comments, resolve conflicts, merge queue
+       │
+       ▼
+  /merge-cleanup ────── merge single PR, sync main, remove worktree + branch, update obsidian
+       │
+       ▼
+  session end
+```
 
-## Full skill inventory
+Supporting skills:
+- `/git` — branch, merge, worktree discipline, conflict resolution
+- `/hotfix` — shared baseline bug: dedicated branch from main, merge first
+- `/main-recovery` — recover diverged/dirty/stuck main branch
 
-| Skill | File | Summary |
-|---|---|---|
-| `/6` | `SKILLS/6.md` | Alias for `/review-stack`. |
-| `/acceptance-test` | `SKILLS/acceptance-test.md` | Generate acceptance tests from contract requirements. |
-| `/codebase-health` | `SKILLS/codebase-health.md` | Architecture friction audit — explore for shallow modules, coupling, facade drift, then propose deepening refactors as GH issue RFCs. |
-| `/commit` | `SKILLS/commit.md` | Create a clean local commit in the correct worktree. No push, no PR. |
-| `/push-pr` | `SKILLS/push-pr.md` | Refresh branch, push, and create or update PR. No code edits. |
-| `workspace-policy` | `SKILLS/workspace-policy.md` | Shared workspace safety rules — single source of truth for all mutating skills. |
-| `/contract-audit-full` | `SKILLS/contract-audit-full.md` | Exhaustive contract coverage and conflict audit. |
-| `contract-gap-detector` | `SKILLS/contract-gap-detector.md` | Automated contract gap finder — JSON output for autoresearch pipeline phase 1. |
-| `contract-patch` | `SKILLS/contract-patch.md` | Automated contract patch proposer — JSON output for autoresearch pipeline phase 2. |
-| `/contract-review` | `SKILLS/contract-review.md` | Fast fail-open safety filter for changes. |
-| `copilot-aftercare` | `SKILLS/copilot-aftercare.md` | Copilot review response loop workflow. |
-| `/design-interface` | `SKILLS/design-interface.md` | "Design It Twice" — parallel sub-agents generate radically different interface designs for comparison. |
-| `/devils-advocate` | `SKILLS/devils-advocate.md` | Mutation-style test-the-tests review. |
-| `diff-first-review` | `SKILLS/diff-first-review.md` | Diff-first review discipline. |
-| `/external-review-generic` | `SKILLS/external-review-generic.md` | Run four generic external reviewers in parallel for a PR, commit, file set, or tracked local diff. |
-| `/failure-mode-review` | `SKILLS/failure-mode-review.md` | Implementation-level failure path analysis. |
-| `flow-audit-loop` | `SKILLS/flow-audit-loop/SKILL.md` | ACF flow audit loop for contract flow bundles. |
-| `/git` | `SKILLS/git.md` | Branch, merge, and worktree discipline. |
-| `/glossary` | `SKILLS/glossary.md` | Extract and maintain domain terminology glossary from codebase. |
-| `/grill` | `SKILLS/grill.md` | Adversarial plan interview — stress-test decisions until every branch is resolved. |
-| `interview` | `SKILLS/interview.md` | Spec-building interview workflow. |
-| `/hotfix` | `SKILLS/hotfix.md` | Triage and fix shared baseline bugs — dedicated branch from main, merge first, refresh affected branches. |
-| `/main-recovery` | `SKILLS/main-recovery.md` | Diagnose and recover abnormal states on main — diverged, dirty, accidental commits, stuck rebase/merge. |
-| `/loss-risk-gate` | `SKILLS/loss-risk-gate.md` | Trading loss / profit-block economic safety review. |
-| `/obsidian-workflow` | `SKILLS/obsidian-workflow.md` | Control-plane skill — session classification, Obsidian routing, worktree assignment, handoff enforcement. |
-| `patch-only-edits` | `SKILLS/patch-only-edits.md` | Patch-only editing style and constraints. |
-| `/plan` | `SKILLS/plan.md` | Elevation to implementation plan workflow. |
-| `/plan-review` | `SKILLS/plan-review.md` | Implementation plan review checklist. |
-| `/premortem` | `SKILLS/premortem.md` | Pre-implementation safety analysis — 25 binary assertions, STOPLIGHT gate. |
-| `/post-impl-audit` | `SKILLS/post-impl-audit.md` | Post-implementation breaker audit. |
-| `post-pr-postmortem` | `SKILLS/post_pr_postmortem.md` | Human-readable post-PR postmortem workflow. |
-| `/pr-check` | `SKILLS/pr-check.md` | Review comments to merge-ready branch flow. |
-| `/pr-review` | `SKILLS/pr-review.md` | General PR review checklist. |
-| `/pre-commit` | `SKILLS/pre-commit.md` | Pre-commit safety gate checks. |
-| `/ralph-loop` | `SKILLS/ralph-loop.md` | Run Ralph harness iterations. |
-| `/recon-executor` | `SKILLS/recon-executor.md` | Reconciliation step executor — runs under operator supervision. |
-| `/recon-operator` | `SKILLS/recon_operator.md` | Reconciliation operator — supervises recon ceremony with relay pattern. |
-| `/reconcil` | `SKILLS/reconcil.md` | Premortem + reconciliation orchestration. |
-| `/review-stack` | `SKILLS/review-stack.md` | Run 7 review skills in sequence (subsumes archived `/self-review`). |
-| `/slice-execute` | `SKILLS/slice-execute.md` | Per-story implementation protocol. |
-| `spec-lint-checklist` | `SKILLS/spec_lint_checklist/SKILL.md` | Checklist for `specs/CONTRACT.md` patches. |
-| `spec-lint-implementation-plan` | `SKILLS/spec-lint-implementation-plan/SKILL.md` | Validate `IMPLEMENTATION_PLAN.md` against safety contracts. |
-| `/strategic-failure-review` | `SKILLS/strategic-failure-review.md` | Systemic/architectural risk review. |
-| `/super-pr-review` | `SKILLS/super-pr-review.md` | Maximum coverage review — 7 internal skills + 4 external tools in parallel with cross-validation. |
-| `tdd-reference` | `SKILLS/tdd/SKILL.md` | TDD companion docs — tests, mocking, deep modules, interface design, refactoring. |
-| `/toc` | `SKILLS/toc.md` | Theory of Constraints commit — commit + §0 what shipped, §1 constraint, §2 next story, §3 enforceable rules. |
-| `/triage` | `SKILLS/triage.md` | Investigate bug → root cause → file GH issue with TDD fix plan. |
-| `/validator-audit` | `SKILLS/validator-audit.md` | Validator completeness and gap audit. |
-| `/verify` | `SKILLS/verify.md` | Verification run and failure explanation workflow. |
+## Review skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/pr-review` | General PR review checklist |
+| `/failure-mode-review` | Implementation-level failure path analysis |
+| `/strategic-failure-review` | Systemic/architectural risk review |
+| `/contract-review` | Fast fail-open safety filter |
+| `/validator-audit` | Validator completeness and gap audit |
+| `/devils-advocate` | Mutation-style test-the-tests review |
+| `/loss-risk-gate` | Trading loss / profit-block economic safety review |
+| `/review-stack` (or `/6`) | All 7 review skills in sequence |
+| `/external-review-generic` | 4 external reviewers in parallel |
+| `/super-pr-review` | 7 internal + 4 external with cross-validation |
+
+## Implementation skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/plan` | Elevation to implementation plan |
+| `/plan-review` | Implementation plan review checklist |
+| `/premortem` | Pre-implementation safety analysis (25 assertions, STOPLIGHT gate) |
+| `/slice-execute` | Per-story implementation protocol |
+| `/post-impl-audit` | Post-implementation breaker audit |
+| `/reconcil` | Premortem + reconciliation orchestration |
+| `/toc` | Theory of Constraints commit format |
+| `/verify` | Verification run and failure explanation |
+
+## Contract skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/contract-audit-full` | Exhaustive contract coverage audit |
+| `/contract-review` | Fast fail-open safety filter |
+| `contract-gap-detector` | Automated gap finder (autoresearch phase 1) |
+| `contract-patch` | Automated patch proposer (autoresearch phase 2) |
+| `/acceptance-test` | Generate acceptance tests from contract requirements |
+
+## Design and exploration skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/design-interface` | "Design It Twice" — parallel interface designs |
+| `/grill` | Adversarial plan interview |
+| `/codebase-health` | Architecture friction audit |
+| `/glossary` | Domain terminology glossary |
+| `/triage` | Bug investigation → GH issue with TDD fix plan |
+| `interview` | Spec-building interview workflow |
+
+## Reference skills (non-invokable)
+
+| Skill | Purpose |
+|-------|---------|
+| `workspace-policy` | Shared workspace safety rules (referenced by /commit, /push-pr, /obsidian-workflow) |
+| `diff-first-review` | Diff-first review discipline |
+| `patch-only-edits` | Patch-only editing constraints |
+| `copilot-aftercare` | Copilot review response loop |
+| `post-pr-postmortem` | Post-PR postmortem workflow |
+
+## Full inventory
+
+| Skill | File | Invokable |
+|-------|------|-----------|
+| `/6` | `SKILLS/6.md` | yes (alias for `/review-stack`) |
+| `/acceptance-test` | `SKILLS/acceptance-test.md` | yes |
+| `/codebase-health` | `SKILLS/codebase-health.md` | yes |
+| `/commit` | `SKILLS/commit.md` | yes |
+| `/contract-audit-full` | `SKILLS/contract-audit-full.md` | yes |
+| `contract-gap-detector` | `SKILLS/contract-gap-detector.md` | no |
+| `contract-patch` | `SKILLS/contract-patch.md` | no |
+| `/contract-review` | `SKILLS/contract-review.md` | yes |
+| `copilot-aftercare` | `SKILLS/copilot-aftercare.md` | no |
+| `/design-interface` | `SKILLS/design-interface.md` | yes |
+| `/devils-advocate` | `SKILLS/devils-advocate.md` | yes |
+| `diff-first-review` | `SKILLS/diff-first-review.md` | no |
+| `/external-review-generic` | `SKILLS/external-review-generic.md` | yes |
+| `/failure-mode-review` | `SKILLS/failure-mode-review.md` | yes |
+| `/git` | `SKILLS/git.md` | yes |
+| `/glossary` | `SKILLS/glossary.md` | yes |
+| `/grill` | `SKILLS/grill.md` | yes |
+| `/hotfix` | `SKILLS/hotfix.md` | yes |
+| `interview` | `SKILLS/interview.md` | no |
+| `/loss-risk-gate` | `SKILLS/loss-risk-gate.md` | yes |
+| `/main-recovery` | `SKILLS/main-recovery.md` | yes |
+| `/merge-cleanup` | `SKILLS/merge-cleanup.md` | yes |
+| `/obsidian-workflow` | `SKILLS/obsidian-workflow.md` | yes |
+| `patch-only-edits` | `SKILLS/patch-only-edits.md` | no |
+| `/plan` | `SKILLS/plan.md` | yes |
+| `/plan-review` | `SKILLS/plan-review.md` | yes |
+| `/post-impl-audit` | `SKILLS/post-impl-audit.md` | yes |
+| `post-pr-postmortem` | `SKILLS/post_pr_postmortem.md` | no |
+| `/pr-check` | `SKILLS/pr-check.md` | yes |
+| `/pr-review` | `SKILLS/pr-review.md` | yes |
+| `/pre-commit` | `SKILLS/pre-commit.md` | yes |
+| `/premortem` | `SKILLS/premortem.md` | yes |
+| `/push-pr` | `SKILLS/push-pr.md` | yes |
+| `/ralph-loop` | `SKILLS/ralph-loop.md` | yes |
+| `/recon-executor` | `SKILLS/recon-executor.md` | yes |
+| `/recon-operator` | `SKILLS/recon_operator.md` | yes |
+| `/reconcil` | `SKILLS/reconcil.md` | yes |
+| `/review-stack` | `SKILLS/review-stack.md` | yes |
+| `/slice-execute` | `SKILLS/slice-execute.md` | yes |
+| `/strategic-failure-review` | `SKILLS/strategic-failure-review.md` | yes |
+| `/super-pr-review` | `SKILLS/super-pr-review.md` | yes |
+| `/toc` | `SKILLS/toc.md` | yes |
+| `/triage` | `SKILLS/triage.md` | yes |
+| `/validator-audit` | `SKILLS/validator-audit.md` | yes |
+| `/verify` | `SKILLS/verify.md` | yes |
+| `workspace-policy` | `SKILLS/workspace-policy.md` | no (referenced by other skills) |
