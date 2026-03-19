@@ -170,6 +170,7 @@ required=(
   plans/tests/test_slice_completion_enforce.sh
   plans/tests/test_slice_completion_review_guard.sh
   plans/tests/test_slice_review_gate.sh
+  plans/tests/test_ssot_lint.sh
   plans/tests/test_stoic_cli_invariant_check.sh
   plans/tests/test_story_review_gate.sh
   plans/tests/test_story_review_findings_guard.sh

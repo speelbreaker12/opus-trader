@@ -8,6 +8,8 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::telemetry::EventSink;
+
 use crate::execution::quantize::Side;
 
 // ─── Input ──────────────────────────────────────────────────────────────
@@ -36,6 +38,22 @@ pub enum PostOnlyResult {
     Allowed,
     /// Order would cross the book — reject before dispatch.
     Rejected,
+}
+
+/// Internal post-only guard events used for graybox testing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PostOnlyEvent {
+    Reject,
+}
+
+struct ProductionPostOnlyEvents;
+
+impl EventSink<PostOnlyEvent> for ProductionPostOnlyEvents {
+    fn emit(&mut self, event: PostOnlyEvent) {
+        match event {
+            PostOnlyEvent::Reject => bump_post_only_reject(),
+        }
+    }
 }
 
 // ─── Metrics ────────────────────────────────────────────────────────────
@@ -86,6 +104,15 @@ fn bump_post_only_reject() {
     tracing::debug!("PostOnlyReject");
 }
 
+fn reject_with_events<E: EventSink<PostOnlyEvent>>(
+    metrics: &mut PostOnlyMetrics,
+    events: &mut E,
+) -> PostOnlyResult {
+    metrics.record_reject();
+    events.emit(PostOnlyEvent::Reject);
+    PostOnlyResult::Rejected
+}
+
 // ─── Core function ──────────────────────────────────────────────────────
 
 /// Check whether a post-only order would cross the book.
@@ -100,7 +127,11 @@ fn bump_post_only_reject() {
 /// NOTE: `limit_price`, `best_ask`, and `best_bid` are assumed to be
 /// pre-quantized (tick-aligned) by the upstream quantizer, so f64
 /// equality comparisons (`>=`, `<=`) are exact for crossing detection.
-pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> PostOnlyResult {
+pub(crate) fn check_post_only_with_events<E: EventSink<PostOnlyEvent>>(
+    input: &PostOnlyInput,
+    metrics: &mut PostOnlyMetrics,
+    events: &mut E,
+) -> PostOnlyResult {
     // If not post_only, no check needed.
     if !input.post_only {
         return PostOnlyResult::Allowed;
@@ -114,9 +145,7 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
             limit_price = input.limit_price,
             "post_only: non-finite limit_price, rejecting (fail-closed)"
         );
-        metrics.record_reject();
-        bump_post_only_reject();
-        return PostOnlyResult::Rejected;
+        return reject_with_events(metrics, events);
     }
 
     let would_cross = match input.side {
@@ -128,9 +157,7 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
                         best_ask = ask,
                         "post_only: non-finite best_ask, rejecting (fail-closed)"
                     );
-                    metrics.record_reject();
-                    bump_post_only_reject();
-                    return PostOnlyResult::Rejected;
+                    return reject_with_events(metrics, events);
                 }
                 input.limit_price >= ask
             }
@@ -144,9 +171,7 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
                         best_bid = bid,
                         "post_only: non-finite best_bid, rejecting (fail-closed)"
                     );
-                    metrics.record_reject();
-                    bump_post_only_reject();
-                    return PostOnlyResult::Rejected;
+                    return reject_with_events(metrics, events);
                 }
                 input.limit_price <= bid
             }
@@ -155,12 +180,15 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
     };
 
     if would_cross {
-        metrics.record_reject();
-        bump_post_only_reject();
-        PostOnlyResult::Rejected
+        reject_with_events(metrics, events)
     } else {
         PostOnlyResult::Allowed
     }
+}
+
+pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> PostOnlyResult {
+    let mut events = ProductionPostOnlyEvents;
+    check_post_only_with_events(input, metrics, &mut events)
 }
 
 #[cfg(test)]

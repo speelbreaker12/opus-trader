@@ -373,7 +373,7 @@ mod tests {
             let (_, mut boot) = bootstrap_storage(&config)
                 .expect("first bootstrap")
                 .acknowledge();
-            use crate::store::ledger::{IntentRecord, TlsState};
+            use crate::store::{IntentRecord, TlsState};
             let record = IntentRecord {
                 intent_hash: "test-hash-001".to_string(),
                 group_id: "g1".to_string(),
@@ -494,7 +494,7 @@ mod tests {
             let (_, mut boot) = bootstrap_storage(&config)
                 .expect("first bootstrap")
                 .acknowledge();
-            use crate::store::ledger::{IntentRecord, TlsState};
+            use crate::store::{IntentRecord, TlsState};
             let record = IntentRecord {
                 intent_hash: "partial-test-001".to_string(),
                 group_id: "g1".to_string(),
@@ -568,7 +568,7 @@ mod tests {
             let (_, mut boot) = bootstrap_storage(&config)
                 .expect("first bootstrap")
                 .acknowledge();
-            use crate::store::ledger::{IntentRecord, TlsState};
+            use crate::store::{IntentRecord, TlsState};
             for i in 0..15 {
                 let record = IntentRecord {
                     intent_hash: format!("cap-reduce-{i:03}"),
@@ -619,7 +619,7 @@ mod tests {
             let (_, boot) = bootstrap_storage(&config)
                 .expect("first bootstrap")
                 .acknowledge();
-            use crate::store::trade_id_registry::TradeRecord;
+            use crate::store::TradeRecord;
             let metrics = &boot.trade_id_metrics;
             for i in 0..12 {
                 let record = TradeRecord {
@@ -665,7 +665,7 @@ mod tests {
             let (_, mut boot) = bootstrap_storage(&config)
                 .expect("first bootstrap")
                 .acknowledge();
-            use crate::store::ledger::{IntentRecord, TlsState};
+            use crate::store::{IntentRecord, TlsState};
             for i in 0..8 {
                 let record = IntentRecord {
                     intent_hash: format!("warn-test-{i:03}"),

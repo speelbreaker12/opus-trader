@@ -4,7 +4,7 @@
 //! AT-932: Missing fee_usd or expected_slippage_usd → Rejected(NetEdgeInputMissing).
 
 use super::*;
-use crate::execution::{take_execution_metric_lines, with_intent_trace_ids};
+use crate::execution::{begin_metrics_test, take_execution_metric_lines, with_intent_trace_ids};
 
 trait TestOptionExt<T> {
     fn must(self) -> T;
@@ -287,10 +287,69 @@ fn test_non_finite_min_edge_fails_closed() {
 }
 
 #[test]
-fn test_net_edge_emits_structured_reject_metric_line() {
+fn test_net_edge_graybox_emits_reject_event_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = net_edge_reject_total(NetEdgeRejectReason::NetEdgeInputMissing);
+
+    let mut events = Vec::new();
+    let input = NetEdgeInput {
+        gross_edge_usd: None,
+        fee_usd: Some(2.0),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(5.0),
+    };
+    let result = evaluate_net_edge_with_events(&input, &mut events);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+    assert_eq!(
+        events,
+        vec![NetEdgeEvent::Reject {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+        }]
+    );
+    assert_eq!(
+        net_edge_reject_total(NetEdgeRejectReason::NetEdgeInputMissing),
+        before
+    );
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_net_edge_graybox_emits_allowed_event_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+
+    let mut events = Vec::new();
+    let input = full_input(10.0, 2.0, 1.0, 5.0);
+    let result = evaluate_net_edge_with_events(&input, &mut events);
+
+    assert!(
+        matches!(result, NetEdgeResult::Allowed { net_edge_usd } if (net_edge_usd - 7.0).abs() < 1e-9)
+    );
+    assert_eq!(events, vec![NetEdgeEvent::Allowed]);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_net_edge_wrapper_emits_structured_reject_metric_line() {
+    let _guard = begin_metrics_test();
     let intent_id = "intent-netedge-001";
     let run_id = "run-netedge-001";
-    let _ = take_execution_metric_lines();
     let before = net_edge_reject_total(NetEdgeRejectReason::NetEdgeInputMissing);
 
     let mut metrics = NetEdgeMetrics::new();
@@ -312,10 +371,7 @@ fn test_net_edge_emits_structured_reject_metric_line() {
     ));
 
     let after = net_edge_reject_total(NetEdgeRejectReason::NetEdgeInputMissing);
-    assert!(
-        after > before,
-        "counter should increment: before={before}, after={after}"
-    );
+    assert_eq!(after, before + 1);
 
     let lines = take_execution_metric_lines();
     assert!(

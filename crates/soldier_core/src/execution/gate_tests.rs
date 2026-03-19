@@ -6,13 +6,7 @@
 //! AT-421: Cancel-only allowed even without L2; Close/Hedge rejected.
 
 use super::*;
-use crate::execution::{METRICS_TEST_LOCK, take_execution_metric_lines, with_intent_trace_ids};
-
-fn metrics_lock() -> std::sync::MutexGuard<'static, ()> {
-    METRICS_TEST_LOCK
-        .lock()
-        .unwrap_or_else(|err| err.into_inner())
-}
+use crate::execution::{begin_metrics_test, take_execution_metric_lines, with_intent_trace_ids};
 
 trait TestOptionExt<T> {
     fn must(self) -> T;
@@ -597,11 +591,102 @@ fn test_non_marketable_open_with_stale_l2_still_rejected_fail_closed() {
 }
 
 #[test]
-fn test_liquidity_gate_emits_structured_reject_and_slippage_metrics() {
-    let _lock = metrics_lock();
+fn test_liquidity_gate_graybox_emits_reject_and_sample_events_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before_reject =
+        liquidity_gate_reject_total(LiquidityGateRejectReason::InsufficientDepthWithinBudget);
+    let before_samples = expected_slippage_bps_samples();
+
+    let snap = book(vec![(100.0, 1.0), (110.0, 1.0)], vec![], 900);
+    let input = gate_input(2.0, true, GateIntentClass::Open, Some(snap));
+    let mut metrics = LiquidityGateMetrics::new();
+    let mut events = Vec::new();
+
+    let result = evaluate_liquidity_gate_with_events(&input, &mut metrics, &mut events);
+
+    assert!(matches!(
+        result.decision,
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget
+        }
+    ));
+    assert!(result.metadata.slippage_bps.must() > 10.0);
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, LiquidityGateEvent::ExpectedSlippageSample)),
+        "expected slippage sample event, got {events:?}"
+    );
+    assert!(
+        events.iter().any(|event| matches!(
+            event,
+            LiquidityGateEvent::Reject {
+                reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
+            }
+        )),
+        "expected reject event, got {events:?}"
+    );
+
+    let after_reject =
+        liquidity_gate_reject_total(LiquidityGateRejectReason::InsufficientDepthWithinBudget);
+    let after_samples = expected_slippage_bps_samples();
+
+    assert_eq!(after_reject, before_reject);
+    assert_eq!(after_samples, before_samples);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_cancel_only_graybox_emits_allowed_event_only() {
+    let input = gate_input(1.0, true, GateIntentClass::CancelOnly, None);
+    let mut metrics = LiquidityGateMetrics::new();
+    let mut events = Vec::new();
+
+    let result = evaluate_liquidity_gate_with_events(&input, &mut metrics, &mut events);
+
+    assert!(matches!(result.decision, LiquidityGateDecision::Allowed));
+    assert_eq!(events, vec![LiquidityGateEvent::Allowed]);
+}
+
+#[test]
+fn test_liquidity_gate_graybox_emits_allowed_and_sample_events_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before_samples = expected_slippage_bps_samples();
+
+    let snap = book(vec![(100.0, 10.0)], vec![], 900);
+    let input = gate_input(5.0, true, GateIntentClass::Open, Some(snap));
+    let mut metrics = LiquidityGateMetrics::new();
+    let mut events = Vec::new();
+
+    let result = evaluate_liquidity_gate_with_events(&input, &mut metrics, &mut events);
+
+    assert!(matches!(result.decision, LiquidityGateDecision::Allowed));
+    assert_eq!(
+        events,
+        vec![
+            LiquidityGateEvent::ExpectedSlippageSample,
+            LiquidityGateEvent::Allowed,
+        ]
+    );
+    assert_eq!(expected_slippage_bps_samples(), before_samples);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_liquidity_gate_wrapper_emits_structured_reject_and_slippage_metrics() {
+    let _guard = begin_metrics_test();
     let intent_id = "intent-liquidity-001";
     let run_id = "run-liquidity-001";
-    let _ = take_execution_metric_lines();
     let before_reject =
         liquidity_gate_reject_total(LiquidityGateRejectReason::InsufficientDepthWithinBudget);
     let before_samples = expected_slippage_bps_samples();

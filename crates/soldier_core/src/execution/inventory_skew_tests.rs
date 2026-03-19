@@ -19,6 +19,7 @@ impl<T> TestValueExt<T> for Option<T> {
 }
 
 use super::*;
+use crate::execution::{begin_metrics_test, take_execution_metric_lines, with_intent_trace_ids};
 
 fn metrics_lock() -> std::sync::MutexGuard<'static, ()> {
     crate::execution::METRICS_TEST_LOCK
@@ -417,5 +418,161 @@ fn test_static_counter_edge_below_adjusted_reject_increments() {
     assert!(
         after > before,
         "counter should increment: before={before}, after={after}"
+    );
+}
+
+#[test]
+fn test_inventory_skew_graybox_emits_reject_event_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before =
+        inventory_skew_reject_total(InventorySkewRejectReason::InventorySkewDeltaLimitMissing);
+    let mut metrics = InventorySkewMetrics::new();
+    let mut events = Vec::new();
+    let input = InventorySkewInput {
+        current_delta: 0.0,
+        pending_delta: 0.0,
+        delta_limit: None,
+        side: Side::Buy,
+        min_edge_usd: 1.0,
+        net_edge_usd: 2.0,
+        limit_price: 100.0,
+        tick_size: 0.01,
+        inventory_skew_k: 0.5,
+        inventory_skew_tick_penalty_max: 3,
+    };
+
+    let result = evaluate_inventory_skew_with_events(&input, &mut metrics, &mut events);
+
+    assert!(matches!(
+        result,
+        InventorySkewResult::Rejected {
+            reason: InventorySkewRejectReason::InventorySkewDeltaLimitMissing,
+            inventory_bias: None,
+            bias_ticks: None,
+            adjusted_min_edge_usd: None,
+            adjusted_limit_price: None,
+        }
+    ));
+    assert_eq!(metrics.reject_total(), 1);
+    assert_eq!(metrics.reject_delta_limit_missing(), 1);
+    assert_eq!(
+        events,
+        vec![InventorySkewEvent::Reject {
+            reason: InventorySkewRejectReason::InventorySkewDeltaLimitMissing
+        }]
+    );
+    assert_eq!(
+        inventory_skew_reject_total(InventorySkewRejectReason::InventorySkewDeltaLimitMissing),
+        before
+    );
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_inventory_skew_graybox_success_emits_no_events_or_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = inventory_skew_reject_total(InventorySkewRejectReason::InventorySkewReject);
+    let mut metrics = InventorySkewMetrics::new();
+    let mut events = Vec::new();
+    let input = InventorySkewInput {
+        current_delta: 0.0,
+        pending_delta: 0.0,
+        delta_limit: Some(100.0),
+        side: Side::Buy,
+        min_edge_usd: 2.0,
+        net_edge_usd: 2.0,
+        limit_price: 100.0,
+        tick_size: 0.5,
+        inventory_skew_k: 0.5,
+        inventory_skew_tick_penalty_max: 3,
+    };
+
+    let result = evaluate_inventory_skew_with_events(&input, &mut metrics, &mut events);
+
+    assert!(matches!(
+        result,
+        InventorySkewResult::Allowed {
+            inventory_bias,
+            bias_ticks,
+            adjusted_min_edge_usd,
+            adjusted_limit_price,
+        } if inventory_bias == 0.0
+            && bias_ticks == 0
+            && (adjusted_min_edge_usd - 2.0).abs() < 1e-9
+            && (adjusted_limit_price - 100.0).abs() < 1e-9
+    ));
+    assert_eq!(metrics.allowed_total(), 1);
+    assert!(
+        events.is_empty(),
+        "success path should not emit reject events"
+    );
+    assert_eq!(
+        inventory_skew_reject_total(InventorySkewRejectReason::InventorySkewReject),
+        before
+    );
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_inventory_skew_wrapper_emits_structured_reject_metric_line() {
+    let _guard = begin_metrics_test();
+    let before =
+        inventory_skew_reject_total(InventorySkewRejectReason::InventorySkewDeltaLimitMissing);
+    let mut metrics = InventorySkewMetrics::new();
+    let input = InventorySkewInput {
+        current_delta: 0.0,
+        pending_delta: 0.0,
+        delta_limit: None,
+        side: Side::Buy,
+        min_edge_usd: 1.0,
+        net_edge_usd: 2.0,
+        limit_price: 100.0,
+        tick_size: 0.01,
+        inventory_skew_k: 0.5,
+        inventory_skew_tick_penalty_max: 3,
+    };
+
+    let result = with_intent_trace_ids(
+        "intent-inventory-skew-001",
+        "run-inventory-skew-001",
+        || evaluate_inventory_skew(&input, &mut metrics),
+    );
+
+    assert!(matches!(
+        result,
+        InventorySkewResult::Rejected {
+            reason: InventorySkewRejectReason::InventorySkewDeltaLimitMissing,
+            inventory_bias: None,
+            bias_ticks: None,
+            adjusted_min_edge_usd: None,
+            adjusted_limit_price: None,
+        }
+    ));
+    assert_eq!(metrics.reject_total(), 1);
+    assert_eq!(metrics.reject_delta_limit_missing(), 1);
+    assert_eq!(
+        inventory_skew_reject_total(InventorySkewRejectReason::InventorySkewDeltaLimitMissing),
+        before + 1
+    );
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("inventory_skew_reject_total")
+                && line.contains("intent_id=intent-inventory-skew-001")
+                && line.contains("run_id=run-inventory-skew-001")
+                && line.contains("reason=InventorySkewDeltaLimitMissing")
+        }),
+        "expected structured inventory skew metric line, got {lines:?}"
     );
 }

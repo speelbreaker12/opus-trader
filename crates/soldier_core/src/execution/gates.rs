@@ -10,6 +10,8 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::telemetry::EventSink;
+
 // --- Gate input ----------------------------------------------------------
 
 /// Input to the Net Edge Gate.
@@ -54,6 +56,14 @@ pub enum NetEdgeResult {
         /// Computed net edge in USD, if all inputs were available.
         net_edge_usd: Option<f64>,
     },
+}
+
+/// Internal observability events for the net-edge gate.
+/// Keep crate-private; callers still consume `NetEdgeResult`.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum NetEdgeEvent {
+    Allowed,
+    Reject { reason: NetEdgeRejectReason },
 }
 
 // --- Metrics -------------------------------------------------------------
@@ -133,6 +143,20 @@ pub fn net_edge_reject_total(reason: NetEdgeRejectReason) -> u64 {
 }
 
 fn bump_net_edge_reject(reason: NetEdgeRejectReason, net_edge_usd: Option<f64>) {
+    #[cfg(test)]
+    {
+        crate::execution::with_metrics_update_lock(|| {
+            bump_net_edge_reject_inner(reason, net_edge_usd);
+        })
+    }
+
+    #[cfg(not(test))]
+    {
+        bump_net_edge_reject_inner(reason, net_edge_usd);
+    }
+}
+
+fn bump_net_edge_reject_inner(reason: NetEdgeRejectReason, net_edge_usd: Option<f64>) {
     match reason {
         NetEdgeRejectReason::NetEdgeTooLow => {
             NET_EDGE_REJECT_TOO_LOW_TOTAL.fetch_add(1, Ordering::Relaxed);
@@ -150,11 +174,43 @@ fn bump_net_edge_reject(reason: NetEdgeRejectReason, net_edge_usd: Option<f64>) 
     );
 }
 
-fn reject_missing(metrics: &mut NetEdgeMetrics) -> NetEdgeResult {
-    metrics.record_reject_input_missing();
-    bump_net_edge_reject(NetEdgeRejectReason::NetEdgeInputMissing, None);
+struct ProductionNetEdgeEvents<'a> {
+    metrics: &'a mut NetEdgeMetrics,
+}
+
+impl EventSink<NetEdgeEvent> for ProductionNetEdgeEvents<'_> {
+    fn emit(&mut self, event: NetEdgeEvent) {
+        match event {
+            NetEdgeEvent::Allowed => {
+                self.metrics.record_allowed();
+            }
+            NetEdgeEvent::Reject { reason } => match reason {
+                NetEdgeRejectReason::NetEdgeTooLow => self.metrics.record_reject_too_low(),
+                NetEdgeRejectReason::NetEdgeInputMissing => {
+                    self.metrics.record_reject_input_missing()
+                }
+            },
+        }
+    }
+}
+
+fn reject_with_events<E: EventSink<NetEdgeEvent>>(
+    events: &mut E,
+    reason: NetEdgeRejectReason,
+    net_edge_usd: Option<f64>,
+) -> NetEdgeResult {
+    events.emit(NetEdgeEvent::Reject { reason });
     NetEdgeResult::Rejected {
-        reason: NetEdgeRejectReason::NetEdgeInputMissing,
+        reason,
+        net_edge_usd,
+    }
+}
+
+fn reject_missing<E: EventSink<NetEdgeEvent>>(events: &mut E) -> NetEdgeResult {
+    let reason = NetEdgeRejectReason::NetEdgeInputMissing;
+    events.emit(NetEdgeEvent::Reject { reason });
+    NetEdgeResult::Rejected {
+        reason,
         net_edge_usd: None,
     }
 }
@@ -167,60 +223,80 @@ fn reject_missing(metrics: &mut NetEdgeMetrics) -> NetEdgeResult {
 /// - `net_edge_usd = gross_edge_usd - fee_usd - expected_slippage_usd`
 /// - Missing inputs -> Rejected(NetEdgeInputMissing) (fail-closed).
 /// - `net_edge_usd < min_edge_usd` -> Rejected(NetEdgeTooLow).
-pub(crate) fn evaluate_net_edge(
+pub(crate) fn evaluate_net_edge_with_events<E: EventSink<NetEdgeEvent>>(
     input: &NetEdgeInput,
-    metrics: &mut NetEdgeMetrics,
+    events: &mut E,
 ) -> NetEdgeResult {
     // Fail-closed: reject if any input is missing (AT-932)
     let gross = match input.gross_edge_usd {
         Some(v) => v,
-        None => return reject_missing(metrics),
+        None => return reject_missing(events),
     };
 
     let fee = match input.fee_usd {
         Some(v) => v,
-        None => return reject_missing(metrics),
+        None => return reject_missing(events),
     };
 
     let slippage = match input.expected_slippage_usd {
         Some(v) => v,
-        None => return reject_missing(metrics),
+        None => return reject_missing(events),
     };
 
     let min_edge = match input.min_edge_usd {
         Some(v) => v,
-        None => return reject_missing(metrics),
+        None => return reject_missing(events),
     };
 
     // Fail-closed on non-finite inputs (NaN/inf).
     if !gross.is_finite() || !fee.is_finite() || !slippage.is_finite() || !min_edge.is_finite() {
-        return reject_missing(metrics);
+        return reject_missing(events);
     }
 
     // Fail-closed on invalid negative costs/thresholds.
     if fee < 0.0 || slippage < 0.0 || min_edge < 0.0 {
-        return reject_missing(metrics);
+        return reject_missing(events);
     }
 
     // Compute net edge.
     let net_edge_usd = gross - fee - slippage;
 
     if !net_edge_usd.is_finite() {
-        return reject_missing(metrics);
+        return reject_missing(events);
     }
 
     // Reject if below minimum (AT-015).
     if net_edge_usd < min_edge {
-        metrics.record_reject_too_low();
-        bump_net_edge_reject(NetEdgeRejectReason::NetEdgeTooLow, Some(net_edge_usd));
-        return NetEdgeResult::Rejected {
-            reason: NetEdgeRejectReason::NetEdgeTooLow,
-            net_edge_usd: Some(net_edge_usd),
-        };
+        return reject_with_events(
+            events,
+            NetEdgeRejectReason::NetEdgeTooLow,
+            Some(net_edge_usd),
+        );
     }
 
-    metrics.record_allowed();
+    events.emit(NetEdgeEvent::Allowed);
     NetEdgeResult::Allowed { net_edge_usd }
+}
+
+pub(crate) fn evaluate_net_edge(
+    input: &NetEdgeInput,
+    metrics: &mut NetEdgeMetrics,
+) -> NetEdgeResult {
+    let mut events = ProductionNetEdgeEvents { metrics };
+    let result = evaluate_net_edge_with_events(input, &mut events);
+    if let NetEdgeResult::Rejected {
+        reason,
+        net_edge_usd,
+    } = result
+    {
+        bump_net_edge_reject(reason, net_edge_usd);
+        NetEdgeResult::Rejected {
+            reason,
+            net_edge_usd,
+        }
+    } else {
+        result
+    }
 }
 
 #[cfg(test)]

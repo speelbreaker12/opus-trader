@@ -1,3 +1,22 @@
+- 2026-03-17 — execution-facade-refactor preflight seam
+- Summary: converted `execution/preflight.rs` to a crate-private `preflight_intent_with_events(...)` pattern, added graybox + wrapper parity coverage in `preflight_tests.rs`, and flipped the Upgrade 2A checklist `preflight` row from `FAIL` to `PASS`.
+- Commands: `cargo test -p soldier_core --lib preflight`; `cargo fmt --all -- --check`; `git diff --check -- crates/soldier_core/src/execution/preflight.rs crates/soldier_core/src/execution/preflight_tests.rs docs/codebase/upgrade2_graybox_telemetry_checklist.md`.
+- Evidence: docs/codebase/upgrade2_graybox_telemetry_checklist.md
+- 2026-03-17 — execution-facade-refactor margin-gate seam
+- Summary: converted `risk/margin_gate.rs` to a crate-private `evaluate_margin_headroom_gate_with_events(...)` pattern with `MarginGateEvent`, added graybox isolation tests in `risk/margin_gate_tests.rs`, and flipped the Upgrade 2A checklist `margin` row from `FAIL` to `PASS`.
+- Commands: no verification commands rerun in this checkpoint; source edits are in the active worktree.
+- Evidence: `crates/soldier_core/src/risk/margin_gate.rs`, `crates/soldier_core/src/risk/margin_gate_tests.rs`, `docs/codebase/upgrade2_graybox_telemetry_checklist.md`.
+- Next: convert `risk/pending_exposure.rs` with the same event seam shape.
+- 2026-03-17 — execution-facade-refactor risk-seam completion checkpoint
+- Summary: converted `risk/pending_exposure.rs` to `bump_pending_exposure_with_events(...)` + `PendingExposureEvent` and `risk/exposure_budget.rs` to `evaluate_global_exposure_budget_with_events(...)` + `ExposureBudgetEvent`, added graybox isolation tests and wrapper parity coverage in both modules, and flipped the Upgrade 2A checklist `pending exposure` and `exposure budget` rows from `FAIL` to `PASS`.
+- Commands: `cargo test -p soldier_core --lib`
+- Evidence: `crates/soldier_core/src/risk/pending_exposure.rs`, `crates/soldier_core/src/risk/exposure_budget.rs`, `crates/soldier_core/src/risk/margin_gate_tests.rs`, `docs/codebase/upgrade2_graybox_telemetry_checklist.md`.
+- Next: continue with Upgrade 2B orchestration seams (`execution/group.rs`, `execution/build_order_intent.rs`) once 2A is complete and rerun full verify on clean checkout.
+
+- 2026-03-17 — quick verify attempted
+- Commands: `./plans/verify.sh quick`
+- Evidence: `artifacts/verify/20260317_134320/verify.meta.json` (failed at contract kernel hash mismatch: sources.contract_sha256 expected vs generated)
+- Next: convert `risk/margin_gate.rs` after this leaf seam.
 - Evidence: plans/prd.json.
 - Next: rerun ./ralph 5 for S2-000.
 - 2026-01-14 01:35:18 UTC S2-000: implemented quantization helpers with directional rounding, too-small rejection, and metrics; added quantize tests.
@@ -1265,3 +1284,17 @@ Commands: bash -n .claude/hooks/pr-review-gate-hook.sh plans/tests/test_pr_revie
 Evidence: .claude/hooks/pr-review-gate-hook.sh; plans/tests/test_pr_review_gate_hook.sh; .claude/commands/review-stack.md; .claude/commands/external-review.md; artifacts/verify/20260315_220104/verify.meta.json; artifacts/verify/20260315_220104.
 Notes: Follow-up review correctly identified a producer/consumer mismatch: the hook had been changed to read repo-root markers, but the documented marker writers still emitted cwd-relative `artifacts/pr-review-gate/*` paths. The hook now prefers repo-root markers but falls back to cwd-relative paths when present, and the regression test proves nested-directory compatibility for both path styles. `./plans/workflow_verify.sh` finished green again on artifact `20260315_220104` despite unrelated dirty workspace state.
 Next: Isolate the now-final PR review gate hardening slice, docs alignment, verify wiring, and progress notes into a dedicated commit/PR slice; leave unrelated local workspace noise untouched.
+Story: execution-facade-refactor
+Date: 2026-03-17
+Summary: Added crate-private event-sink seams for `execution/gate.rs` and `execution/gates.rs`, plus a shared execution metrics-test isolation helper so graybox event-path tests can assert no global side effects without racing wrapper-path metric updates.
+Commands: cargo test -p soldier_core --lib test_liquidity_gate_graybox_emits_reject_and_sample_events_without_global_side_effects; cargo test -p soldier_core --lib execution::gate::gate_tests; cargo test -p soldier_core --lib execution::gates::gates_tests; cargo test -p soldier_core --lib execution::gates::gates_prop_net_edge_tests; cargo test -p soldier_core --lib risk::fees::tests; cargo test -p soldier_core --test test_liquidity_gate; cargo test -p soldier_core --test prop_net_edge; ./plans/verify.sh quick.
+Evidence: crates/soldier_core/src/execution/gate.rs; crates/soldier_core/src/execution/gates.rs; crates/soldier_core/src/execution/mod.rs; crates/soldier_core/src/risk/fees.rs; artifacts/verify/20260317_082213.
+Notes: `./plans/verify.sh quick` still fails outside this slice in `02) contract kernel` because `docs/contract_kernel.json` is stale relative to `specs/CONTRACT.md`.
+Next: Regenerate `docs/contract_kernel.json` when that unrelated drift is in scope, then rerun quick/full verify from a clean checkout.
+Story: execution-facade-refactor
+Date: 2026-03-17
+Summary: Converted `execution/inventory_skew.rs` to the crate-private event-sink seam pattern, added graybox/wrapper parity tests, flipped the Upgrade 2A inventory-skew checklist row to `PASS`, and wrote the matching project debrief/handoff before pausing.
+Commands: cargo test -p soldier_core --lib inventory_skew; cargo fmt --all; cargo fmt --all -- --check; git diff --check -- crates/soldier_core/src/execution/inventory_skew.rs crates/soldier_core/src/execution/inventory_skew_tests.rs docs/codebase/upgrade2_graybox_telemetry_checklist.md.
+Evidence: crates/soldier_core/src/execution/inventory_skew.rs; crates/soldier_core/src/execution/inventory_skew_tests.rs; docs/codebase/upgrade2_graybox_telemetry_checklist.md.
+Notes: Focused verification is green for this slice. I did not rerun `./plans/verify.sh quick` because the branch still has the previously noted unrelated contract-kernel drift outside the inventory-skew seam.
+Next: Convert `crates/soldier_core/src/execution/preflight.rs` next, then move to the remaining red Upgrade 2A leaves in `risk/margin_gate.rs`, `risk/pending_exposure.rs`, and `risk/exposure_budget.rs`.

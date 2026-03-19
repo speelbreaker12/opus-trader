@@ -8,7 +8,7 @@
 //! - Every transition is appended to WAL immediately.
 //! - Pending exposure reservations are settled on terminal state (S6-008).
 //!
-//! **Cross-crate sync:** `soldier_infra::store::ledger::TlsState::is_valid_successor()`
+//! **Cross-crate sync:** `soldier_infra::store::TlsState::is_valid_successor()`
 //! maintains a state-level whitelist derived from this module's `apply()` transitions.
 //! When adding new transitions here, update that whitelist to stay in sync.
 //!

@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::risk::RiskState;
+use crate::telemetry::EventSink;
 
 static PENDING_EXPOSURE_REJECT_TOTAL: AtomicU64 = AtomicU64::new(0);
 
@@ -23,6 +24,20 @@ pub fn pending_exposure_reject_total() -> u64 {
 }
 
 fn bump_pending_exposure_reject(reason: PendingExposureRejectReason) {
+    #[cfg(test)]
+    {
+        crate::execution::with_metrics_update_lock(|| {
+            bump_pending_exposure_reject_inner(reason);
+        })
+    }
+
+    #[cfg(not(test))]
+    {
+        bump_pending_exposure_reject_inner(reason);
+    }
+}
+
+fn bump_pending_exposure_reject_inner(reason: PendingExposureRejectReason) {
     PENDING_EXPOSURE_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
     let tail = format!("reason={reason:?}");
     crate::execution::emit_execution_metric_line(
@@ -30,6 +45,24 @@ fn bump_pending_exposure_reject(reason: PendingExposureRejectReason) {
         &tail,
     );
     tracing::debug!("PendingExposureReject reason={:?}", reason);
+}
+
+/// Internal pending exposure events for graybox testing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PendingExposureEvent {
+    ReserveRejected { reason: PendingExposureRejectReason },
+}
+
+struct ProductionPendingExposureEvents;
+
+impl EventSink<PendingExposureEvent> for ProductionPendingExposureEvents {
+    fn emit(&mut self, event: PendingExposureEvent) {
+        match event {
+            PendingExposureEvent::ReserveRejected { reason } => {
+                bump_pending_exposure_reject(reason)
+            }
+        }
+    }
 }
 
 /// Stable idempotency key for pending exposure reservations.
@@ -414,16 +447,31 @@ impl PendingExposureBook {
         delta_impact_est: f64,
         metrics: &mut PendingExposureMetrics,
     ) -> PendingExposureResult {
+        let mut events = ProductionPendingExposureEvents;
+        self.reserve_with_events(
+            reservation_id,
+            instrument_id,
+            current_delta,
+            delta_impact_est,
+            metrics,
+            &mut events,
+        )
+    }
+
+    pub(crate) fn reserve_with_events<E: EventSink<PendingExposureEvent>>(
+        &self,
+        reservation_id: &ReservationId,
+        instrument_id: &str,
+        current_delta: f64,
+        delta_impact_est: f64,
+        metrics: &mut PendingExposureMetrics,
+        events: &mut E,
+    ) -> PendingExposureResult {
         let mut inner = self.inner.borrow_mut();
 
         // 1. Check instrument is registered.
         if !inner.instruments.contains_key(instrument_id) {
-            metrics.record_reserve_instrument_not_registered();
-            bump_pending_exposure_reject(PendingExposureRejectReason::InstrumentNotRegistered);
-            return PendingExposureResult::Rejected {
-                reason: PendingExposureRejectReason::InstrumentNotRegistered,
-                pending_total: f64::NAN,
-            };
+            return Self::reject_reserve_instrument_not_registered_with_events(metrics, events);
         }
 
         // 2. Cross-instrument ReservationId collision check.
@@ -439,30 +487,26 @@ impl PendingExposureBook {
                 .instruments
                 .get(instrument_id)
                 .map_or(0.0, |b| b.pending_total);
-            metrics.record_reserve_reject();
-            bump_pending_exposure_reject(
+            return Self::reject_reserve_budget_exceeded_with_events(
                 PendingExposureRejectReason::PendingExposureBudgetExceeded,
+                pending,
+                metrics,
+                events,
             );
-            return PendingExposureResult::Rejected {
-                reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
-                pending_total: pending,
-            };
         }
 
         // 3. Per-instrument limit check.
         let book = inner
             .instruments
             .get(instrument_id)
-            .expect("reserve: instrument verified present in contains_key check");
+            .expect("reserve_with_events: instrument verified present in contains_key check");
         let Some(limit) = normalized_limit(book.delta_limit) else {
-            metrics.record_reserve_reject();
-            bump_pending_exposure_reject(
+            return Self::reject_reserve_budget_exceeded_with_events(
                 PendingExposureRejectReason::PendingExposureBudgetExceeded,
+                book.pending_total,
+                metrics,
+                events,
             );
-            return PendingExposureResult::Rejected {
-                reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
-                pending_total: book.pending_total,
-            };
         };
 
         // 4. Non-finite input check.
@@ -472,14 +516,12 @@ impl PendingExposureBook {
             || !book.pending_positive.is_finite()
             || !book.pending_negative.is_finite()
         {
-            metrics.record_reserve_reject();
-            bump_pending_exposure_reject(
+            return Self::reject_reserve_budget_exceeded_with_events(
                 PendingExposureRejectReason::PendingExposureBudgetExceeded,
+                book.pending_total,
+                metrics,
+                events,
             );
-            return PendingExposureResult::Rejected {
-                reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
-                pending_total: book.pending_total,
-            };
         }
 
         // 5. Compute trial buckets with old delta subtracted (if idempotent re-reserve).
@@ -508,14 +550,12 @@ impl PendingExposureBook {
         let worst_case_long = current_delta + projected_positive;
         let worst_case_short = current_delta + projected_negative;
         if worst_case_long.abs() > limit || worst_case_short.abs() > limit {
-            metrics.record_reserve_reject();
-            bump_pending_exposure_reject(
+            return Self::reject_reserve_budget_exceeded_with_events(
                 PendingExposureRejectReason::PendingExposureBudgetExceeded,
+                book.pending_total,
+                metrics,
+                events,
             );
-            return PendingExposureResult::Rejected {
-                reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
-                pending_total: book.pending_total,
-            };
         }
 
         // 7. Global budget check (after per-instrument passes).
@@ -526,14 +566,12 @@ impl PendingExposureBook {
         if let Some(global_limit) = normalized_limit(self.global_delta_limit) {
             let trial_global = inner.global_total - old_global_delta + delta_impact_est;
             if trial_global.abs() > global_limit {
-                metrics.record_reserve_reject();
-                bump_pending_exposure_reject(
+                return Self::reject_reserve_budget_exceeded_with_events(
                     PendingExposureRejectReason::PendingExposureBudgetExceeded,
+                    book.pending_total,
+                    metrics,
+                    events,
                 );
-                return PendingExposureResult::Rejected {
-                    reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
-                    pending_total: book.pending_total,
-                };
             }
         }
 
@@ -590,6 +628,34 @@ impl PendingExposureBook {
         PendingExposureResult::Reserved {
             reservation_id: reservation_id.clone(),
             pending_total: new_total,
+        }
+    }
+
+    fn reject_reserve_budget_exceeded_with_events<E: EventSink<PendingExposureEvent>>(
+        reason: PendingExposureRejectReason,
+        pending_total: f64,
+        metrics: &mut PendingExposureMetrics,
+        events: &mut E,
+    ) -> PendingExposureResult {
+        metrics.record_reserve_reject();
+        events.emit(PendingExposureEvent::ReserveRejected { reason });
+        PendingExposureResult::Rejected {
+            reason,
+            pending_total,
+        }
+    }
+
+    fn reject_reserve_instrument_not_registered_with_events<E: EventSink<PendingExposureEvent>>(
+        metrics: &mut PendingExposureMetrics,
+        events: &mut E,
+    ) -> PendingExposureResult {
+        metrics.record_reserve_instrument_not_registered();
+        events.emit(PendingExposureEvent::ReserveRejected {
+            reason: PendingExposureRejectReason::InstrumentNotRegistered,
+        });
+        PendingExposureResult::Rejected {
+            reason: PendingExposureRejectReason::InstrumentNotRegistered,
+            pending_total: f64::NAN,
         }
     }
 
@@ -841,6 +907,9 @@ fn assert_global_consistency(inner: &BookInner) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::execution::{
+        begin_metrics_test, take_execution_metric_lines, with_intent_trace_ids,
+    };
 
     fn make_book(instrument: &str, limit: f64) -> PendingExposureBook {
         let book = PendingExposureBook::new(None);
@@ -877,5 +946,79 @@ mod tests {
             &mut metrics
         ));
         assert_eq!(book.pending_total("TEST"), -4.0);
+    }
+
+    #[test]
+    fn test_reserve_graybox_reject_emits_event_without_global_side_effects() {
+        let _guard = begin_metrics_test();
+        let before = pending_exposure_reject_total();
+        let mut metrics = PendingExposureMetrics::new();
+        let book = make_book("TEST", 10.0);
+        let mut events = Vec::new();
+
+        let result = book.reserve_with_events(
+            &ReservationId::new("too-big").unwrap(),
+            "TEST",
+            0.0,
+            11.0,
+            &mut metrics,
+            &mut events,
+        );
+
+        assert!(matches!(
+            result,
+            PendingExposureResult::Rejected {
+                reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
+                pending_total: 0.0
+            }
+        ));
+        assert_eq!(metrics.reserve_reject_total(), 1);
+        assert_eq!(
+            events,
+            vec![PendingExposureEvent::ReserveRejected {
+                reason: PendingExposureRejectReason::PendingExposureBudgetExceeded
+            }]
+        );
+        assert_eq!(pending_exposure_reject_total(), before);
+
+        let lines = take_execution_metric_lines();
+        assert!(
+            lines.is_empty(),
+            "graybox path must not emit global metric lines: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn test_reserve_wrapper_emits_structured_reject_metric_line() {
+        let _guard = begin_metrics_test();
+        let before = pending_exposure_reject_total();
+        let mut metrics = PendingExposureMetrics::new();
+        let book = make_book("TEST", 10.0);
+
+        let _ = with_intent_trace_ids(
+            "intent-pending-exposure-001",
+            "run-pending-exposure-001",
+            || {
+                book.reserve(
+                    &ReservationId::new("too-big").unwrap(),
+                    "TEST",
+                    0.0,
+                    11.0,
+                    &mut metrics,
+                )
+            },
+        );
+
+        let lines = take_execution_metric_lines();
+        assert_eq!(metrics.reserve_reject_total(), 1);
+        assert_eq!(pending_exposure_reject_total(), before + 1);
+        assert!(
+            lines.iter().any(|line| {
+                line.starts_with("pending_exposure_reject_total")
+                    && line.contains("intent_id=intent-pending-exposure-001")
+                    && line.contains("run_id=run-pending-exposure-001")
+            }),
+            "expected structured reject metric line, got {lines:?}"
+        );
     }
 }
