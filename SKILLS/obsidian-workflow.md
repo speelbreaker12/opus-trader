@@ -215,10 +215,9 @@ After a PR merges, the merged branch and worktree are disposable. Do not keep th
 
 **Flow:**
 
-1. Sync local main (from the main worktree `wt-main`):
+1. Sync local main (from the repo root, which stays on main):
 
 ```bash
-cd .worktrees/wt-main
 git fetch origin --prune
 git pull --ff-only origin main
 ```

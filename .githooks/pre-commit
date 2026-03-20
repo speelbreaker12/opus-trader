@@ -76,6 +76,22 @@ while IFS= read -r path; do
   esac
 done <<< "$staged_files"
 
+# Detect formatting-only changes: if the class is non_critical or critical but
+# ALL staged diffs are whitespace-only, downgrade to formatting_only.
+if [[ "$change_class" != "docs_only" && "$change_class" != "obsidian_only" ]]; then
+  all_whitespace=1
+  while IFS= read -r path; do
+    [[ -n "$path" ]] || continue
+    if git diff --cached --ignore-all-space --ignore-blank-lines "$path" | grep -qE '^[+-].*[a-zA-Z]'; then
+      all_whitespace=0
+      break
+    fi
+  done <<< "$staged_files"
+  if [[ "$all_whitespace" -eq 1 ]]; then
+    change_class="formatting_only"
+  fi
+fi
+
 export OBSIDIAN_CHANGE_CLASS="$change_class"
 echo "Change class: $change_class"
 

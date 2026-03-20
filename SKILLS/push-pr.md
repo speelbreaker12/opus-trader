@@ -23,6 +23,7 @@ Follow `SKILLS/workspace-policy.md` before any mutating action.
 - never auto-resolve conflicts blindly with ours/theirs
 - never open a duplicate PR for the same branch
 - never run this skill on uncommitted work
+- never expect push to succeed without understanding which gates will fire — see step 4b
 
 ## Required input
 At minimum, know:
@@ -116,6 +117,19 @@ After rebase/merge or conflict resolution, record:
 - tests/checks rerun
 - remaining known risk
 - whether branch is ready for review
+
+### 4b) Gate inventory
+
+Before pushing, be aware of the gates that will fire. The pre-push hook runs these automatically — this step documents them so there are no surprise blockers:
+
+| Gate | Script | What it checks | Failure action |
+|------|--------|----------------|----------------|
+| Project scope | `project_scope_guard.sh push` | Full branch diff vs scope_paths | Fix scope or update project note |
+| Frontmatter integrity | `post_rebase_frontmatter_check.sh` | branch/base/scope_paths not clobbered by rebase | Edit project note frontmatter |
+| Verify (cargo) | `verify.sh quick` | Rust compilation + tests + clippy | Fix code; skipped if no crates/ changes on branch |
+| Verify cache | `.verify-cache` | Tree SHA match | Auto-skip if already verified |
+
+If creating a new PR (not updating an existing one), the `pr-review-gate-hook.sh` will additionally check for a review-stack marker under `artifacts/pr-review-gate/<branch>.json`. If missing, run `/review-stack` first.
 
 ### 5) Push branch
 #### New PR case

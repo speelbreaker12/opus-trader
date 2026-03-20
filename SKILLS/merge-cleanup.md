@@ -52,6 +52,35 @@ PR Status
 - If CI is failing: stop — fix CI first.
 - If mergeable is CONFLICTING: stop — resolve conflicts first (use `/push-pr` to refresh).
 
+### 1b) Verify review currency
+
+Before merging, confirm the current PR head has been reviewed. A branch can create a PR with reviewed head A, push new commits to head B, and merge B without fresh review proof. That is a real hole for a trading system.
+
+Check if the PR head matches the last review attestation:
+
+```bash
+pr_head=$(gh pr view <number> --json headRefOid --jq '.headRefOid')
+attest_file="$(git rev-parse --git-dir)/code_review_expert.attest"
+attest_head=""
+if [[ -f "$attest_file" ]]; then
+  attest_head=$(grep '^head=' "$attest_file" | cut -d= -f2-)
+fi
+```
+
+Print:
+
+```
+Review currency check
+- PR head: <pr_head>
+- Last attested head: <attest_head>
+- Match: yes/no
+```
+
+**Stop conditions:**
+- If no attestation exists: stop — run code-review-expert on the current head before merging.
+- If PR head != attested head: stop — new commits were pushed after the last review. Run code-review-expert on the current head.
+- If PR head == attested head: proceed to merge.
+
 ### 2) Confirm merge with user
 
 Print:
@@ -88,18 +117,10 @@ If merge failed, report the error and stop.
 git fetch origin --prune
 ```
 
-Then sync main. If running from repo root or wt-main:
+Then sync main in the repo root (control lane on main):
 
 ```bash
-git switch main
-git pull --ff-only origin main
-```
-
-If running from a different worktree, sync main in the repo root or wt-main:
-
-```bash
-git -C <repo-root-or-wt-main> switch main
-git -C <repo-root-or-wt-main> pull --ff-only origin main
+git -C <repo-root> pull --ff-only origin main
 ```
 
 Verify:

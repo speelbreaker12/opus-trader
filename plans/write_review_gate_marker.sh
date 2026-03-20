@@ -1,14 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Write the code-review-expert attestation marker.
+# Write review gate markers.
 # Called after review-stack completes or manually after code review.
 #
-# Usage: ./plans/write_review_gate_marker.sh
-#        ./plans/write_review_gate_marker.sh --check  (verify marker is current)
+# Usage: ./plans/write_review_gate_marker.sh            (write commit-time attestation)
+#        ./plans/write_review_gate_marker.sh --check     (verify commit-time marker is current)
+#        ./plans/write_review_gate_marker.sh --pr-gate   (write PR gate marker for pr-review-gate-hook.sh)
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT"
+
+# PR gate marker — required by pr-review-gate-hook.sh before gh pr create
+if [[ "${1:-}" == "--pr-gate" ]]; then
+  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+  head_commit="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+  marker_dir="artifacts/pr-review-gate"
+  mkdir -p "$marker_dir"
+  cat > "$marker_dir/${branch}.json" <<PREOF
+{
+  "verdict": "PASS",
+  "head_commit": "$head_commit",
+  "review_tool": "code-review-expert",
+  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+PREOF
+  echo "OK: PR gate marker written for $branch at $head_commit"
+  echo "  file: $marker_dir/${branch}.json"
+  exit 0
+fi
 
 git_dir="$(git rev-parse --git-dir 2>/dev/null || echo .git)"
 attest_file="$git_dir/code_review_expert.attest"

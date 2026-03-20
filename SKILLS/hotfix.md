@@ -93,7 +93,7 @@ Examples:
 ### 1) Create the dedicated hot-fix lane
 
 ```bash
-cd .worktrees/wt-main
+# From the repo root (control lane on main):
 git fetch origin --prune
 git pull --ff-only origin main
 git worktree add .worktrees/wt-hotfix-<slug> -b hotfix/<slug> main
@@ -102,7 +102,7 @@ git worktree add .worktrees/wt-hotfix-<slug> -b hotfix/<slug> main
 ### 2) After the hot-fix PR merges
 
 ```bash
-cd .worktrees/wt-main
+# From the repo root (control lane on main):
 git fetch origin --prune
 git pull --ff-only origin main
 ```

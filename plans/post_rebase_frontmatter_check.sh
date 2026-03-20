@@ -30,8 +30,13 @@ fi
 # Find the project note that declares this branch
 project_file=""
 while IFS= read -r path; do
-  branch_value="$(sed -n 's/^branch:[[:space:]]*//p' "$path" | head -1 | tr -d '"'"'"' ')"
-  if [[ "$branch_value" == "$branch_name" ]]; then
+  pf_branch="$(python3 -c "
+import sys; sys.path.insert(0, '$ROOT/plans/lib')
+from obsidian_frontmatter import parse_frontmatter, frontmatter_scalar
+fm = parse_frontmatter(open('$path').read())
+print(frontmatter_scalar(fm, 'branch'))
+" 2>/dev/null || true)"
+  if [[ "$pf_branch" == "$branch_name" ]]; then
     project_file="$path"
     break
   fi
@@ -44,10 +49,28 @@ fi
 
 echo "Checking post-rebase frontmatter in $project_file..."
 
+# Extract all needed fields via the shared Python parser in one call
+eval "$(python3 -c "
+import sys, shlex
+sys.path.insert(0, '$ROOT/plans/lib')
+from obsidian_frontmatter import parse_frontmatter, frontmatter_scalar, frontmatter_list
+
+fm = parse_frontmatter(open('$project_file').read())
+
+branch = frontmatter_scalar(fm, 'branch')
+base = frontmatter_scalar(fm, 'base')
+status = frontmatter_scalar(fm, 'status')
+scope_paths = frontmatter_list(fm, 'scope_paths')
+
+print(f'fm_branch={shlex.quote(branch)}')
+print(f'fm_base={shlex.quote(base)}')
+print(f'fm_status={shlex.quote(status)}')
+print(f'fm_scope_count={len(scope_paths)}')
+")"
+
 errors=0
 
 # Check branch: field matches current branch
-fm_branch="$(sed -n 's/^branch:[[:space:]]*//p' "$project_file" | head -1 | tr -d '"'"'"' ')"
 if [[ "$fm_branch" != "$branch_name" ]]; then
   echo "ERROR: branch: is '$fm_branch' but current branch is '$branch_name'" >&2
   echo "  This was likely clobbered by rebase conflict resolution." >&2
@@ -55,21 +78,18 @@ if [[ "$fm_branch" != "$branch_name" ]]; then
 fi
 
 # Check base: field is non-empty
-fm_base="$(sed -n 's/^base:[[:space:]]*//p' "$project_file" | head -1 | tr -d '"'"'"' ')"
 if [[ -z "$fm_base" ]]; then
   echo "WARNING: base: is empty in $project_file" >&2
   echo "  Verify this is intentional after rebase." >&2
 fi
 
 # Check scope_paths: has at least one entry
-scope_count="$(awk '/^scope_paths:/{found=1;next} found && /^  - /{count++} found && /^[^ ]/{exit} END{print count+0}' "$project_file")"
-if [[ "$scope_count" -eq 0 ]]; then
+if [[ "$fm_scope_count" -eq 0 ]]; then
   echo "WARNING: scope_paths is empty in $project_file" >&2
   echo "  The project scope guard will fail on commit and PR-create." >&2
 fi
 
 # Check status: isn't "done" (rebase may have pulled main's version)
-fm_status="$(sed -n 's/^status:[[:space:]]*//p' "$project_file" | head -1 | tr -d '"'"'"' ')"
 if [[ "$fm_status" == "done" ]]; then
   echo "WARNING: status: is 'done' in $project_file" >&2
   echo "  If this branch is still active, the status was likely clobbered by rebase." >&2
