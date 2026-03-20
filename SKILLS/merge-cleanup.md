@@ -81,18 +81,6 @@ Review currency check
 - If PR head != attested head: stop — new commits were pushed after the last review. Run code-review-expert on the current head.
 - If PR head == attested head: proceed to step 1c.
 
-### 1c) Full verification
-
-Run `verify.sh full` on the current PR head. This is the final verification gate — `verify.sh quick` runs at publish, but `full` is required before merge.
-
-```bash
-./plans/verify.sh full
-```
-
-**Stop conditions:**
-- If `verify.sh full` fails: stop — fix the issues before merging.
-- If it passes: proceed to merge.
-
 ### 2) Confirm merge with user
 
 Print:

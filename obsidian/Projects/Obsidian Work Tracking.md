@@ -52,6 +52,7 @@ In progress. Obsidian debrief now acts as the default session handoff for normal
 - `c3819187` — 2026-03-20 — unset GIT_DIR in all test fixtures to prevent env leakage
 - `9d69e2ac` — 2026-03-20 — update project note with push result and commit refs
 - `d7ed70d7` — 2026-03-20 — shell lint, slim commit skill, SKIP_VERIFY_ONLY fast push, fix skill wrappers
+- `754ca95a` — 2026-03-20 — harden command blocker, obsidian gate in pre-commit, update docs
 
 ## Key Files
 - .codex/commands/commit.md
@@ -94,3 +95,4 @@ In progress. Obsidian debrief now acts as the default session handoff for normal
 - Found and fixed GIT_DIR environment leak: pre-push hook's verify.sh inherits GIT_DIR from the parent git process, causing test repos to operate on the parent repo instead of their temp repos. Fixed by adding `core.hooksPath=/dev/null` and `unset GIT_DIR` in all 32 test fixtures.
 - Pushed 3 new commits to PR #222 (branch workflow/obsidian-fixes, now at c3819187).
 - Pushed 2 more commits to PR #222: 9d69e2ac (project note update), d7ed70d7 (shell lint, slim commit skill, SKIP_VERIFY_ONLY fast push, fix skill wrappers). Branch now at d7ed70d7.
+- Pushed 754ca95a to PR #222 (merge not needed — branch already up to date with origin/main). Branch now at 754ca95a. Note: `.githooks/pre-push` overlaps with PR #225.
