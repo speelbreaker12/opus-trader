@@ -51,5 +51,25 @@
     "accepted_count": 0,
     "file_path": "autoresearch/contract/phase2/proposals/CONTRACT_PROPOSALS_phase2-p4-lg3-20260319_034811-85f8f65e.md",
     "review_package_path": "autoresearch/contract/phase2/review/CONTRACT_REVIEW_phase2-p4-lg3-20260319_034811-85f8f65e.md"
+  },
+  {
+    "run_id": "phase2-mar20-20260320_193507-66196f79",
+    "timestamp": "2026-03-20T19:37:52.590536Z",
+    "contract_file_hash": "09b3885d5af5f1d3ede265940ff2441e8964042cbfb8abe1d9b2af183c76ff55",
+    "status": "pending",
+    "proposal_count": 2,
+    "accepted_count": 0,
+    "file_path": "autoresearch/contract/phase2/proposals/CONTRACT_PROPOSALS_phase2-mar20-20260320_193507-66196f79.md",
+    "review_package_path": "autoresearch/contract/phase2/review/CONTRACT_REVIEW_phase2-mar20-20260320_193507-66196f79.md"
+  },
+  {
+    "run_id": "phase2-mar20codex-20260320_194341-e183cb6b",
+    "timestamp": "2026-03-20T19:50:28.203924Z",
+    "contract_file_hash": "09b3885d5af5f1d3ede265940ff2441e8964042cbfb8abe1d9b2af183c76ff55",
+    "status": "pending",
+    "proposal_count": 3,
+    "accepted_count": 0,
+    "file_path": "autoresearch/contract/phase2/proposals/CONTRACT_PROPOSALS_phase2-mar20codex-20260320_194341-e183cb6b.md",
+    "review_package_path": "autoresearch/contract/phase2/review/CONTRACT_REVIEW_phase2-mar20codex-20260320_194341-e183cb6b.md"
   }
 ]

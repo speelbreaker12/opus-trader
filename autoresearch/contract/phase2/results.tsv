@@ -3,3 +3,5 @@ commit	score	passed	total	status	description
 b1393d87	1.000	20	20	keep	phase2 run phase2-mar17-20260317_141745-bb818649 (execution checks)
 aa34c952	1.000	8	8	keep	phase2 run phase2-p4-opl-20260319_032304-1aa3453e (execution checks)
 aa34c952	1.000	8	8	keep	phase2 run phase2-p4-lg3-20260319_034811-85f8f65e (execution checks)
+2e8f180c	1.000	8	8	keep	phase2 run phase2-mar20-20260320_193507-66196f79 (execution checks)
+2e8f180c	1.000	8	8	keep	phase2 run phase2-mar20codex-20260320_194341-e183cb6b (execution checks)

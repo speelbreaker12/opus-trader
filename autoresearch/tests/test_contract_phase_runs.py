@@ -25,6 +25,11 @@ def _write_json(path: Path, payload: object) -> None:
     _write_text(path, json.dumps(payload, indent=2))
 
 
+def _write_executable(path: Path, text: str) -> None:
+    _write_text(path, text)
+    os.chmod(path, 0o755)
+
+
 class _TempContractRepo:
     def __init__(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -110,7 +115,7 @@ class _TempContractRepo:
         self.refresh_context("all")
         self.bin_dir = self.root / "bin"
         self.bin_dir.mkdir(parents=True, exist_ok=True)
-        _write_text(
+        _write_executable(
             self.bin_dir / "claude",
             "\n".join(
                 [
@@ -193,8 +198,6 @@ class _TempContractRepo:
             )
             + "\n",
         )
-        os.chmod(self.bin_dir / "claude", 0o755)
-
     def _reset_runtime_artifacts(self) -> None:
         for phase in ("phase1", "phase2"):
             outputs_dir = self.root / "autoresearch" / "contract" / phase / "outputs"
@@ -455,10 +458,17 @@ class _TempContractRepo:
             },
         )
 
-    def run(self, *args: str, mode: str = "phase2_ok") -> subprocess.CompletedProcess[str]:
+    def run(
+        self,
+        *args: str,
+        mode: str = "phase2_ok",
+        extra_env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         env["PATH"] = f"{self.bin_dir}{os.pathsep}{env.get('PATH', '')}"
         env["FAKE_CLAUDE_MODE"] = mode
+        if extra_env:
+            env.update(extra_env)
         return subprocess.run(
             ["bash", str(self.root / "autoresearch" / "skills" / "harness.sh"), *args],
             cwd=self.root,
@@ -600,6 +610,110 @@ class ContractPhaseRunTests(unittest.TestCase):
         review_dir = self.repo.root / "autoresearch" / "contract" / "phase2" / "review"
         review_files = sorted(path.name for path in review_dir.iterdir() if path.is_file())
         self.assertTrue(any(name.startswith("CONTRACT_REVIEW_") for name in review_files))
+
+    def test_contract_phase2_run_supports_codex_backend_with_short_prompt_wrapper(self) -> None:
+        self.repo.write_phase2_fixture(
+            "fixture-1.md",
+            "# Fixture\n\nAT-999 is referenced here\n",
+        )
+        self.repo.set_phase2_eval(["fixtures/static/fixture-1.md"])
+        (self.repo.bin_dir / "claude").unlink()
+        fake_auth = self.repo.root / "fake-auth.json"
+        _write_text(fake_auth, '{"provider":"test"}\n')
+        _write_executable(
+            self.repo.bin_dir / "codex",
+            "\n".join(
+                [
+                    "#!/usr/bin/env python3",
+                    "import json",
+                    "import sys",
+                    "from pathlib import Path",
+                    "",
+                    "args = sys.argv[1:]",
+                    "if not args or args[0] != 'exec':",
+                    "    print(f'unexpected codex args: {args}', file=sys.stderr)",
+                    "    raise SystemExit(2)",
+                    "prompt = sys.stdin.read()",
+                    "if 'Read exactly one file and nothing else:' not in prompt:",
+                    "    print('missing short prompt file-read instruction', file=sys.stderr)",
+                    "    raise SystemExit(3)",
+                    "if 'Fixture contents:' in prompt or 'Required schema:' in prompt:",
+                    "    print('wrapper leaked large inline prompt content', file=sys.stderr)",
+                    "    raise SystemExit(4)",
+                    "if '--output-last-message' not in args:",
+                    "    print('missing --output-last-message', file=sys.stderr)",
+                    "    raise SystemExit(5)",
+                    "last_path = Path(args[args.index('--output-last-message') + 1])",
+                    "if 'Detector findings JSON:' in prompt:",
+                    "    payload = {",
+                    "        'generated_at': '2026-03-20T19:40:00Z',",
+                    "        'validator_version': 'fake-codex',",
+                    "        'proposals': [",
+                    "            {",
+                    "                'proposal_id': 'P-001',",
+                    "                'source_finding': 'F-001',",
+                    "                'source_finding_category': 'cross_ref_broken',",
+                    "                'section': '§1',",
+                    "                'change_type': 'mechanical',",
+                    "                'rationale': 'Repair the AT reference.',",
+                    "                'status': 'proposed',",
+                    "                'dedupe_key': 'fixture-1/p-001',",
+                    "                'mechanical_ok': True,",
+                    "                'mechanical_details': 'Exact token substitution.',",
+                    "                'replace_span': {",
+                    "                    'start_line': 3,",
+                    "                    'end_line': 3,",
+                    "                    'old_text': 'AT-999 is referenced here',",
+                    "                    'new_text': 'AT-101 is referenced here'",
+                    "                },",
+                    "                'diff_preview': '\\n'.join([",
+                    "                    'diff --git a/specs/CONTRACT.md b/specs/CONTRACT.md',",
+                    "                    '--- a/specs/CONTRACT.md',",
+                    "                    '+++ b/specs/CONTRACT.md',",
+                    "                    '@@ -3,1 +3,1 @@',",
+                    "                    '-AT-999 is referenced here',",
+                    "                    '+AT-101 is referenced here',",
+                    "                ]),",
+                    "            }",
+                    "        ]",
+                    "    }",
+                    "else:",
+                    "    payload = {",
+                    "        'generated_at': '2026-03-20T19:39:00Z',",
+                    "        'validator_version': 'fake-codex',",
+                    "        'findings': [",
+                    "            {",
+                    "                'finding_id': 'F-001',",
+                    "                'section': '§1',",
+                    "                'category': 'cross_ref_broken',",
+                    "                'severity': 'P1',",
+                    "                'description': 'Broken AT reference.',",
+                    "                'evidence': {'line': 3, 'quote': 'AT-999 is referenced here'},",
+                    "                'proposed_fix_type': 'mechanical',",
+                    "                'proposed_fix': 'Replace AT-999 with AT-101.'",
+                    "            }",
+                    "        ]",
+                    "    }",
+                    "last_path.write_text(json.dumps(payload), encoding='utf-8')",
+                    "print(json.dumps(payload))",
+                    "",
+                ]
+            )
+            + "\n",
+        )
+
+        result = self.repo.run(
+            "contract",
+            "phase2",
+            "run",
+            "--backend",
+            "codex",
+            "--model",
+            "gpt-5.4",
+            extra_env={"CONTRACT_CODEX_AUTH_JSON": str(fake_auth)},
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("phase2 run complete", result.stdout)
 
     def test_contract_phase1_baseline_and_eval_score_outputs(self) -> None:
         result = self.repo.run("contract", "phase1", "baseline")

@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "contract-gap-detector-v1",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "2.2.4 Open Permission Latch (Reconcile-Required, Sticky Until Cleared) \u2014 CP-001",
+      "category": "stale_input_unspecified",
+      "severity": "P1",
+      "description": "The missing-trades criterion uses a fixed lookback window, but the contract does not require that window to cover the full untrusted interval after restart or a long outage, so reconciliation can clear the latch without proving older trades are complete.",
+      "evidence": {
+        "line": 28,
+        "quote": "No missing trades over the last `reconcile_trade_lookback_sec` (default: 300s) as determined by REST `/get_user_trades` query."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Require trade-history coverage to span the full untrusted interval since the last trusted watermark/reconciliation, or keep the latch set."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "2.2.4 Open Permission Latch (Reconcile-Required, Sticky Until Cleared) \u2014 CP-001",
+      "category": "weak_normative",
+      "severity": "P2",
+      "description": "The stall observability rule depends on \"the failing criterion\" changing, but the contract does not define how to represent or compare multiple simultaneous failing criteria, which makes the deterministic cadence requirement ambiguous.",
+      "evidence": {
+        "line": 35,
+        "quote": "Emission cadence MUST be deterministic: for a continuous stall episode, emit once when the threshold is first exceeded; re-emit only if the failing criterion changes during that same episode."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Define a deterministic payload and comparison rule for one or more active failing criteria during a stall episode."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "2.2.4 Open Permission Latch (Reconcile-Required, Sticky Until Cleared) \u2014 CP-001",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "The startup behavior for missing or nonpositive `reconcile_stall_max_delay_s` is normative, but this fixture does not include an explicit acceptance test for defaulting to 30s and emitting the startup warning.",
+      "evidence": {
+        "line": 33,
+        "quote": "If `reconcile_stall_max_delay_s` is missing or \u2264 0 at startup, runtime MUST treat it as the default (30s) and emit a startup warning log."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an acceptance test for missing/<=0 `reconcile_stall_max_delay_s`, defaulting to 30s, and emitting the startup warning."
+    }
+  ]
+}

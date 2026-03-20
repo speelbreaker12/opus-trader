@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "1.0",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "\u00a71.3 Algorithm",
+      "category": "missing_fail_closed",
+      "severity": "P1",
+      "description": "The algorithm never defines the fail-closed outcome when the visible book cannot produce a full-size WAP on the correct side, or when `BestPrice` is unusable. That leaves oversized or empty-book cases open to divergent dispatch behavior.",
+      "evidence": {
+        "line": 17,
+        "quote": "2. Compute the Weighted Avg Price (WAP) for `OrderQty`."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add a deterministic no-dispatch rule for empty/insufficient-depth/nonpositive-best-price books and cover it with an acceptance test."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "\u00a71.3 Algorithm",
+      "category": "gate_interaction_gap",
+      "severity": "P2",
+      "description": "Step 5 requires computed WAP and slippage on every rejection, but Step 0 rejects missing/unparseable/stale L2 before any book walk. The contract does not define the rejection log payload for those pre-check exits.",
+      "evidence": {
+        "line": 20,
+        "quote": "5. If rejected, log `LiquidityGateReject` with computed WAP \\+ slippage."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Limit WAP/slippage logging to slippage-based rejects or define a separate deterministic log payload for stale/missing-L2 exits."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "\u00a71.3 Scope",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "The fixture makes `TradingMode::ReduceOnly` a normative consequence of the no-fallback path, but no acceptance test in this file asserts the mode resolver result or OPEN blocking after the degrade transition.",
+      "evidence": {
+        "line": 26,
+        "quote": "producing `TradingMode::ReduceOnly` via the axis resolver."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an acceptance test that verifies `EmergencyCloseNoPrice` drives `TradingMode::ReduceOnly` and keeps OPEN intents blocked."
+    }
+  ]
+}

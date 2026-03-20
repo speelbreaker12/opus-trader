@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "contract-gap-detector/1.0",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "2.2.3.0 Axis Model / 2.2.3.2 Axis Computation",
+      "category": "gate_interaction_gap",
+      "severity": "P1",
+      "description": "The axis model says each PolicyGuard input has exactly one primary axis, but later this fixture uses `risk_state` in both CapitalRiskAxis and SystemIntegrityAxis. That leaves the dual-impact path ambiguous for a trading-permission input and can produce divergent implementations.",
+      "evidence": {
+        "line": 18,
+        "quote": "- **Primary assignment rule:** Every PolicyGuard input signal MUST have exactly one primary axis."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Explicitly allowlist `risk_state` as dual-impact or split it into axis-specific predicates so each input has one primary axis."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "2.2.3.2 Axis Computation",
+      "category": "missing_at_pair",
+      "severity": "P1",
+      "description": "The fixture makes missing/unparseable/stale critical inputs fail closed, but the listed ATs do not prove that behavior across the broader critical-input set. That leaves fail-closed TradingMode behavior under-specified for untested critical inputs.",
+      "evidence": {
+        "line": 101,
+        "quote": "- Any critical PolicyGuard input missing/unparseable/stale per \u00a72.2.1.2"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add ATs for representative non-session critical inputs proving ReduceOnly plus `REDUCEONLY_INPUT_MISSING_OR_STALE`."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "2.2.3.5 ModeReasonCode Registry",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "Reason completeness is normative for the winning tier, but the acceptance tests only prove multi-reason completeness for ReduceOnly. No listed AT forces simultaneous Kill predicates and checks that all kill-tier reasons are emitted in canonical order.",
+      "evidence": {
+        "line": 287,
+        "quote": "- `mode_reasons` MUST include **all** active reasons from the **computed TradingMode tier** for that tick."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add a Kill-tier multi-predicate AT that asserts full kill-reason completeness and canonical ordering."
+    }
+  ]
+}

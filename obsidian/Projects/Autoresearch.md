@@ -1,12 +1,24 @@
 ---
 status: in-progress
 priority: P1
-branch: project/contract-autoresearch
-pr: 218
+branch: project/contract-autoresearch-harness-fix
+base: main
+pr:
 started: 2026-03-16
+aliases: []
+keywords:
+  - contract autoresearch
+  - codex backend
+scope_paths:
+  - autoresearch/contract/**
+  - autoresearch/skills/harness.sh
+  - autoresearch/tests/test_contract_phase_runs.py
+  - obsidian/Projects/Autoresearch.md
+  - obsidian/Debriefs/Autoresearch *.md
 ---
 
 ## Commits
+- `pending` — 2026-03-20 — Tracked Codex backend support for contract autoresearch; reran Phase 1 and Phase 2 through Codex-backed paths.
 - `54b97205` — 2026-03-19 — Phase 4 remaining sections: 10 new ATs (AT-1272..AT-1281) + 3 mechanical fixes
 - `049b85dd` — 2026-03-19 — Phase 4 LG+OPL patch: 7 new ATs (AT-1265..AT-1271)
 - `120759bc` — 2026-03-18 — Phase 4 section-compatibility fix + gitignore lock
@@ -15,9 +27,12 @@ started: 2026-03-16
 
 ## Current State
 
-Phase 4 COMPLETE (2026-03-19). All 5 sections patched. 17 new ATs total (AT-1265..AT-1281), plus mechanical fixes (AT-222 criteria, AT-918 reason code, SHALL→MUST, cause enum, EG cooldown default, EC partial fill, §2.2.4 cross-ref, reconcile_stall default). 23 findings triaged: 19 accepted, 4 rejected.
+Follow-up branch `project/contract-autoresearch-harness-fix` is active for contract-autoresearch transport/backend work after the original lane merged. Phase 1 reruns completed as `phase1-mar20-20260320_191211-5ccf6c48` and tracked-backend `phase1-mar20codex-20260320_195735-903f0acd`, both with `checks=12/12` and `score=1.000`. Phase 2 rerun completed as `phase2-mar20-20260320_193507-66196f79` with `fixtures=1`, `proposals=2`, `checks=8/8`, and `score=1.000`. The tracked repo-owned Codex backend path now exists via `--backend codex`, and a live smoke run through that path completed as `phase2-mar20codex-20260320_194341-e183cb6b` with `proposals=3`, `checks=8/8`, and `score=1.000`. Pending: commit the tracked backend support, README note, and today’s run artifacts.
 
 ## Key Files
+- `autoresearch/contract/README.md`
+- `autoresearch/contract/codex_wrapper.py`
+- `autoresearch/tests/test_contract_phase_runs.py`
 - `autoresearch/contract/render_review.py`
 - `autoresearch/skills/harness.sh`
 - `autoresearch/tests/test_contract_render_review.py`
@@ -26,6 +41,7 @@ Phase 4 COMPLETE (2026-03-19). All 5 sections patched. 17 new ATs total (AT-1265
 - `autoresearch/contract/phase2/`
 
 ## Debriefs
+- [[Autoresearch 2026-03-20 Codex Backend Support]]
 - [[Autoresearch 2026-03-17 Phase3 Gap Detection Run]]
 - [[Autoresearch 2026-03-17 Phase3 Review Decisions]]
 - [[Autoresearch 2026-03-17 Phase3 Patch Applied]]
@@ -94,3 +110,11 @@ Phase 4 COMPLETE (2026-03-19). All 5 sections patched. 17 new ATs total (AT-1265
 - Refreshed context (at_registry, context_manifest, section_index, fixtures, contract_kernel) after CONTRACT.md edits
 - Rebuilt contract_kernel.json (hash mismatch blocked push)
 - Fix: section-compatibility now uses longest common prefix (>= 3 levels for siblings, or exact match). §2.2.3.7 vs §2.2.3.1.1 → True; §1.3 vs §1.4 → False.
+### 2026-03-20
+- Repaired the Codex transport path for contract autoresearch by turning the one-off `/tmp` shim behavior into tracked repo support via `autoresearch/contract/codex_wrapper.py` and `harness.sh contract ... --backend codex`.
+- Documented the tracked backend path and auth expectations in `autoresearch/contract/README.md`.
+- Added a contract phase-run regression that requires the Codex backend to rewrite prompts into the short file-reading form instead of shipping giant inline fixture payloads to `codex exec`.
+- Reran Phase 1 live contract gap detection under Codex `gpt-5.4` + `xhigh`: `phase1-mar20-20260320_191211-5ccf6c48`, 6 fixtures, `checks=12/12`, `score=1.000`.
+- Reran full Phase 1 through the tracked repo-owned backend: `phase1-mar20codex-20260320_195735-903f0acd`, 6 fixtures, `checks=12/12`, `score=1.000`.
+- Reran Phase 2 live proposals under the temporary Codex path: `phase2-mar20-20260320_193507-66196f79`, 1 fixture, 2 proposals, `checks=8/8`, `score=1.000`.
+- Verified the tracked repo-owned backend directly with `--backend codex`: `phase2-mar20codex-20260320_194341-e183cb6b`, 1 fixture, 3 proposals, `checks=8/8`, `score=1.000`.
