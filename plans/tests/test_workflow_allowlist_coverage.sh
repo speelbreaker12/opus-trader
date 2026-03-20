@@ -63,6 +63,7 @@ required=(
   plans/fork_attestation_remediation_verify.sh
   plans/init.sh
   plans/legacy_layout_guard.sh
+  plans/lint_facade_public_modules.sh
   plans/lint_execution_facade.sh
   plans/lint_risk_facade.sh
   plans/lint_venue_facade.sh
@@ -129,6 +130,7 @@ required=(
   plans/tests/test_guard_no_command_substitution.sh
   plans/tests/test_fork_attestation_mirror.sh
   plans/tests/test_fork_attestation_remediation_verify.sh
+  plans/tests/test_lint_facade_public_modules.sh
   plans/tests/test_lint_execution_facade.sh
   plans/tests/test_lint_risk_facade.sh
   plans/tests/test_lint_venue_facade.sh

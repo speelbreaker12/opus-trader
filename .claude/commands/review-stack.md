@@ -1,9 +1,11 @@
-# SKILL: /review-stack (6-Skill Review Stack)
+# SKILL: /review-stack (Review Stack)
 
 Purpose
-- Run the full 6-skill review stack in sequence, collecting findings into a single artifact
+- Run the full review stack in sequence, collecting findings into a single artifact
 - Most thorough single-pass review available — subsumes `/self-review` (5-skill)
 - Produces a structured aggregate report with per-skill verdicts and a final decision
+
+Use the Skill tool with skill name "review-stack".
 
 The 6 skills, in order:
 1. **PR Review** — correctness, conventions, performance, testing
@@ -155,7 +157,7 @@ After fixes, update the artifact with the final verdicts.
 Write to `artifacts/story/${STORY_ID}/self_review/`:
 
 ```markdown
-# 6-Skill Review Stack — ${STORY_ID}
+# Review Stack — ${STORY_ID}
 
 Story: ${STORY_ID}
 HEAD: ${HEAD}

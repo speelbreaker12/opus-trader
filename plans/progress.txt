@@ -1298,3 +1298,9 @@ Commands: cargo test -p soldier_core --lib inventory_skew; cargo fmt --all; carg
 Evidence: crates/soldier_core/src/execution/inventory_skew.rs; crates/soldier_core/src/execution/inventory_skew_tests.rs; docs/codebase/upgrade2_graybox_telemetry_checklist.md.
 Notes: Focused verification is green for this slice. I did not rerun `./plans/verify.sh quick` because the branch still has the previously noted unrelated contract-kernel drift outside the inventory-skew seam.
 Next: Convert `crates/soldier_core/src/execution/preflight.rs` next, then move to the remaining red Upgrade 2A leaves in `risk/margin_gate.rs`, `risk/pending_exposure.rs`, and `risk/exposure_budget.rs`.
+- Story: workflow-facade-leak-guard
+  Date: 2026-03-20 18:32:01 UTC
+  Summary: Added repo-wide facade public-module lint, wired it into live rust gates, expanded regression coverage for attribute-prefixed/multiline/inline `pub mod` forms, fixed stale workflow verification references uncovered during validation, and restored runtime snapshot metadata after verify.
+  Commands: bash plans/tests/test_lint_facade_public_modules.sh; bash plans/tests/test_rust_gates_smoke_targets.sh; ./plans/workflow_verify.sh; ./plans/verify.sh quick.
+  Evidence: plans/lint_facade_public_modules.sh; plans/tests/test_lint_facade_public_modules.sh; plans/lib/rust_gates.sh; plans/tests/test_preflight_fixture_profiles.sh; plans/tests/test_rust_gates_smoke_targets.sh; plans/tests/test_workflow_allowlist_coverage.sh; plans/verify_fork.sh; plans/workflow_files_allowlist.txt; .claude/commands/review-stack.md; artifacts/verify/20260319_222216.
+  Notes: Restored var/runtime/runtime_state.json to checked-in metadata after verification to keep commit scope deterministic. Full verify still pending.

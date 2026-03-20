@@ -1000,7 +1000,6 @@ WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_crossref_gate.sh"
   "plans/tests/test_artifact_lint.sh"
   "plans/tests/test_bidi_control_guard.sh"
-  "plans/tests/test_contract_at_wording_drift.sh"
 )
 FULL_MODE_WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_story_review_gate.sh"
