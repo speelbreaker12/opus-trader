@@ -1,9 +1,9 @@
 ---
-status: in-progress
+status: review-ready
 priority: P1
 branch: project/workflow-facade-leak-guard-v2
 base: main
-pr:
+pr: https://github.com/speelbreaker12/opus-trader/pull/225
 started: "2026-03-20"
 aliases:
   - Facade Leak Guard
@@ -32,12 +32,13 @@ scope_paths:
 
 ## Current State
 
-In progress on branch `project/workflow-facade-leak-guard-v2`. Added a repo-wide facade leak guard, wired it into live rust/workflow verification, then uncovered a pre-push hook environment leak that redirected fixture-repo git commands into the active branch during push. A targeted pre-push env-isolation regression test now passes along with the related preflight/allowlist fixtures; the next clean-tree push retry will be the authoritative end-to-end check.
+Review-ready on branch `project/workflow-facade-leak-guard-v2` with PR #225 open against `main`. The slice now includes the original facade leak guard plus a follow-up fix that isolates `.githooks/pre-push` from hook-scoped `GIT_*` variables before verify, preventing fixture-repo git commands from mutating the active review branch. Targeted regression checks passed, the branch was refreshed via `git fetch origin --prune` + `git rebase origin/main` (no-op), and the successful `git push -u origin project/workflow-facade-leak-guard-v2` served as the clean-tree quick-verify proof.
 
 ## Commits
 - `0c944689` — 2026-03-20 — add and harden the workflow facade leak guard, wire it into live verification, repair stale workflow verification references, and restore runtime snapshot metadata before commit.
 - `a89f7c6e` — 2026-03-20 — rebind the project to a dedicated feature branch/worktree for push/PR flow and record full verification readiness.
-- `pending` — 2026-03-20 — isolate pre-push hook git env, add regression coverage, and retry push/PR from a clean v2 branch.
+- `e5e906df` — 2026-03-20 — isolate pre-push hook git env, add regression coverage, and recover clean push/PR flow on the v2 branch.
+- `pending` — 2026-03-20 — record PR boundary metadata after opening PR #225.
 
 ## Key Files
 - plans/lint_facade_public_modules.sh
@@ -67,3 +68,4 @@ In progress on branch `project/workflow-facade-leak-guard-v2`. Added a repo-wide
 - Re-cut the work onto `project/workflow-facade-leak-guard-v2` after the first push attempt polluted the previous feature branch with fixture commits.
 - Identified the root cause as pre-push hook git environment leakage into verify fixture repos, added `plans/tests/test_pre_push_hook_env_isolation.sh`, and patched `.githooks/pre-push` to clear hook-scoped `GIT_*` variables before invoking `plans/verify.sh`.
 - Verified the new env-isolation regression and the updated preflight/allowlist coverage; repo-wide quick verify still hit an existing `test_lint_execution_facade.sh` timeout while the tree was dirty.
+- Refreshed `project/workflow-facade-leak-guard-v2` against `origin/main` with a no-op rebase, pushed the clean branch successfully, and opened PR #225: https://github.com/speelbreaker12/opus-trader/pull/225.
