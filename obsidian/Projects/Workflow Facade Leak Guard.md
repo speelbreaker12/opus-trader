@@ -1,7 +1,7 @@
 ---
-status: in-progress
+status: review-ready
 priority: P1
-branch: upgrade1
+branch: project/workflow-facade-leak-guard
 base: main
 pr:
 started: "2026-03-20"
@@ -30,10 +30,11 @@ scope_paths:
 
 ## Current State
 
-In progress on branch `upgrade1`. Added a repo-wide facade leak guard, wired it into live rust/workflow verification, closed several stale workflow verification drifts uncovered during validation, and verified the branch with `./plans/verify.sh quick`. Full verify is still pending.
+Review-ready on branch `project/workflow-facade-leak-guard`. Added a repo-wide facade leak guard, wired it into live rust/workflow verification, closed several stale workflow verification drifts uncovered during validation, and verified the branch with both `./plans/verify.sh quick` and `./plans/verify.sh full`. Push/PR preparation is in progress from a dedicated feature worktree after recovering from an invalid `main`-attached worktree.
 
 ## Commits
-- `pending` — 2026-03-20 — add and harden the workflow facade leak guard, wire it into live verification, repair stale workflow verification references, and restore runtime snapshot metadata before commit.
+- `0c944689` — 2026-03-20 — add and harden the workflow facade leak guard, wire it into live verification, repair stale workflow verification references, and restore runtime snapshot metadata before commit.
+- `pending` — 2026-03-20 — rebind the project to a dedicated feature branch/worktree for push/PR flow and record full verification readiness.
 
 ## Key Files
 - plans/lint_facade_public_modules.sh
@@ -57,5 +58,6 @@ In progress on branch `upgrade1`. Added a repo-wide facade leak guard, wired it 
 - Added regression fixtures proving fail-closed behavior for missing libs and all known public-module leak shapes.
 - Fixed stale workflow verification drift uncovered during validation: neutralized outdated review-stack wrapper wording and removed a dead workflow integration test reference from `verify_fork.sh`.
 - Re-ran workflow verification and `./plans/verify.sh quick`; both passed after the workflow fixes.
+- Re-ran `./plans/verify.sh full`; it passed before PR preparation.
 - Restored `var/runtime/runtime_state.json` to checked-in metadata after verification so the commit scope stays deterministic.
-
+- Rebound the project from generic branch `upgrade1` to dedicated branch `project/workflow-facade-leak-guard` after push/PR preflight showed the original worktree was still attached to `main`.

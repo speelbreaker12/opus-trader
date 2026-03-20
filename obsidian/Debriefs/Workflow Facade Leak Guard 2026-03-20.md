@@ -4,7 +4,8 @@ date: "2026-03-20"
 ---
 
 ## Commits
-- pending
+- `0c944689` — workflow: add facade leak guard
+- pending — project-note refresh for dedicated branch/worktree and PR-boundary readiness
 
 ## 0) What shipped
 - Feature/behavior: Added a repo-wide facade public-module leak guard, wired it into live verification, and covered semicolon, attribute-prefixed, multiline-attribute, and inline-block `pub mod` forms with regression fixtures.
@@ -20,7 +21,7 @@ date: "2026-03-20"
 - Validation (proof it got better): `bash plans/tests/test_lint_facade_public_modules.sh`, `bash plans/tests/test_rust_gates_smoke_targets.sh`, and `./plans/verify.sh quick` all passed after the hardening and live-wire fixes.
 
 ## 2) Best follow-up
-- Single best next step: Run `./plans/verify.sh full` on this branch and keep `var/runtime/runtime_state.json` restored before commit.
+- Single best next step: Push the dedicated branch `project/workflow-facade-leak-guard` and open the PR now that `./plans/verify.sh full` has passed and the workspace is correctly attached.
 - 1-3 upgrades worth considering:
   - Add a fixture that fails if a workflow integration test listed in `verify_fork.sh` does not exist on disk.
   - Add a fixture that compares new lint scripts under `plans/` against the live rust/workflow gate wiring.
@@ -31,4 +32,3 @@ date: "2026-03-20"
 - When adding a workflow lint, add a direct fixture for the lint and a second fixture that proves a live verify gate executes it.
 - If `./plans/verify.sh quick` rewrites tracked runtime snapshots, restore checked-in metadata before committing.
 - Treat parser edge cases as required regressions for syntax-based guards: same-line attributes, multiline attributes, and inline block bodies must all have explicit tests.
-
