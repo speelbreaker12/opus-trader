@@ -39,7 +39,7 @@ Upgrade 2 is complete on branch `upgrade2` and PR #223 is open against `main`. T
 
 ## Commits
 - `240baeaf` — 2026-03-20 — complete Upgrade 2 graybox telemetry migration, preserve wrapper parity and diagnostic context, add graybox telemetry lint plus regression coverage.
-- `pending` — 2026-03-20 — close PR #223 review gaps in graybox lint coverage, smoke fixture accounting, event payload typing, and wrapper/graybox telemetry tests.
+- `1b33802d` — 2026-03-20 — close PR #223 review gaps in graybox lint coverage, smoke fixture accounting, event payload typing, and wrapper/graybox telemetry tests.
 
 ## Key Files
 - `crates/soldier_core/src/execution/build_order_intent.rs`

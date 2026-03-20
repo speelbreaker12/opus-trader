@@ -5,7 +5,7 @@ date: "2026-03-20"
 
 ## Commits
 - `240baeaf` — shipped code for Upgrade 2 graybox telemetry completion
-- `pending` — PR #223 review-closure fixes for graybox lint coverage, smoke fixture accounting, event payload typing, and wrapper/graybox telemetry gaps
+- `1b33802d` — PR #223 review-closure fixes for graybox lint coverage, smoke fixture accounting, event payload typing, and wrapper/graybox telemetry gaps
 
 ## 0) What shipped
 - Feature/behavior: Completed Upgrade 2 graybox telemetry seams across the remaining execution/risk paths, then closed the PR #223 review gaps in the graybox lint, smoke fixture accounting, and missing seam-specific parity/graybox tests.
