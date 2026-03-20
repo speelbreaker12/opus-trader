@@ -1,0 +1,29 @@
+{
+  "run_id": "phase2-mar20codexhardened-eg-20260320_211637-c80be6bb",
+  "reviewed_at": "2026-03-20T22:55:59Z",
+  "contract_file_hash": "09b3885d5af5f1d3ede265940ff2441e8964042cbfb8abe1d9b2af183c76ff55",
+  "proposals_file_hash": "bb1ef700c7ef4fdb2ce4453cb050f037c153ffa33e6eb62b86d5a7af378091d8",
+  "decisions": [
+    {
+      "proposal_id": "P-001",
+      "decision": "pending_scope_review",
+      "reviewer": "human+codex",
+      "reason_code": "joinability_enforcement_scope",
+      "notes": "The joinability concern is valid, but 'continuously provable' joinability needs explicit observability inputs before it is safe to accept as normative contract text."
+    },
+    {
+      "proposal_id": "P-002",
+      "decision": "accepted",
+      "reviewer": "human+codex",
+      "reason_code": "missing_at_coverage",
+      "notes": "The non-zero global cooldown path is real contract behavior with no direct AT; this adds narrow, high-value coverage."
+    },
+    {
+      "proposal_id": "P-003",
+      "decision": "pending_scope_review",
+      "reviewer": "human+codex",
+      "reason_code": "permission_wording_scope",
+      "notes": "This clarifies a real ambiguity, but it rewrites dispatch-permission semantics across CLOSE/HEDGE/CANCEL and should batch with a broader authorization wording pass."
+    }
+  ]
+}

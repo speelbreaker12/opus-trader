@@ -1,0 +1,22 @@
+{
+  "run_id": "phase2-mar20codexhardened-opl-20260320_210643-d8538cc4",
+  "reviewed_at": "2026-03-20T22:55:59Z",
+  "contract_file_hash": "09b3885d5af5f1d3ede265940ff2441e8964042cbfb8abe1d9b2af183c76ff55",
+  "proposals_file_hash": "fde1018477a9d622022b621aaa9ecf2ecca9d3113c99903bf96595d6a6034fb9",
+  "decisions": [
+    {
+      "proposal_id": "P-001",
+      "decision": "pending_scope_review",
+      "reviewer": "human+codex",
+      "reason_code": "duplicate_at_id_conflict",
+      "notes": "A local indirect-path AT is reasonable, but `AT-1272` is already assigned in §3.1 and this patch needs renumbering plus cross-section coordination."
+    },
+    {
+      "proposal_id": "P-002",
+      "decision": "pending_scope_review",
+      "reviewer": "human+codex",
+      "reason_code": "duplicate_at_id_conflict",
+      "notes": "The startup-default AT is useful, but `AT-1273` is already assigned in §3.1 and the proposal needs renumbering before it is safe to accept."
+    }
+  ]
+}
