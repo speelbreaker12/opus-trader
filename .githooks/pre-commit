@@ -95,26 +95,30 @@ fi
 export OBSIDIAN_CHANGE_CLASS="$change_class"
 echo "Change class: $change_class"
 
-# --- Fast path: docs/obsidian/formatting commits skip heavy gates ---
-# Per WORKFLOW_V2: commit is a cheap local checkpoint, not a launch.
-# Heavy validation (SSOT lint, scope guard, contract checks) runs at push.
-case "$change_class" in
-  docs_only|obsidian_only|formatting_only)
-    echo "Fast path: $change_class — skipping heavy gates (enforced at push)"
-    # Still run obsidian guard for tracking
-    plans/obsidian_commit_guard.sh
-    ;;
-  *)
-    # 1. Obsidian tracking guard
-    plans/obsidian_commit_guard.sh
+# --- Two commit tiers ---
+#
+# Tier 1 (fast): docs, obsidian, formatting, non_critical (workflow/scripts/hooks)
+#   Bare repo guard + main guard only. Everything else deferred to push.
+#   Target: <5 seconds.
+#
+# Tier 2 (full): critical (crates/, trading system code)
+#   Scope guard + SSOT lint + contract crossref + unwrap check.
+#   Target: 30-60 seconds. Heavy verify deferred to push/merge.
 
-    # 2. Project scope guard — staged files vs scope_paths
+case "$change_class" in
+  docs_only|obsidian_only|formatting_only|non_critical)
+    echo "Tier 1 (fast): $change_class — heavy gates deferred to push"
+    ;;
+  critical)
+    echo "Tier 2 (full): $change_class — running trading system gates"
+
+    # 1. Project scope guard — staged files vs scope_paths
     plans/project_scope_guard.sh commit
 
-    # 3. SSOT lint
+    # 2. SSOT lint
     plans/ssot_lint.sh
 
-    # 4. Contract cross-reference check (if CONTRACT.md is staged)
+    # 3. Contract cross-reference check (if CONTRACT.md is staged)
     if git diff --cached --name-only | grep -q "specs/CONTRACT.md"; then
       echo "CONTRACT.md staged - running cross-reference check..."
       if ! python3 scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --strict --check-at; then
@@ -125,7 +129,7 @@ case "$change_class" in
       fi
     fi
 
-    # 5. PRD schema check (if prd.json is staged)
+    # 4. PRD schema check (if prd.json is staged)
     if git diff --cached --name-only | grep -q "plans/prd.json"; then
       echo "prd.json staged - running schema check..."
       if ! plans/prd_schema_check.sh plans/prd.json; then
@@ -136,7 +140,7 @@ case "$change_class" in
       fi
     fi
 
-    # 6. Check for unwrap() in staged Rust files (safety-critical paths only)
+    # 5. Check for unwrap() in staged Rust files (safety-critical paths only)
     STAGED_RS=$(git diff --cached --name-only --diff-filter=ACM | grep -E "^crates/soldier_core/.*\.rs$" || true)
     if [[ -n "$STAGED_RS" ]]; then
       echo "Checking staged soldier_core files for unwrap()..."
