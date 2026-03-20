@@ -4,7 +4,7 @@ date: "2026-03-20"
 ---
 
 ## Commits
-- pending
+- `52cf1b15`
 
 ## 0) What shipped
 - Feature/behavior: Added tracked repo support for Codex-backed contract autoresearch via `harness.sh contract ... --backend codex` and `autoresearch/contract/codex_wrapper.py`, documented it in `autoresearch/contract/README.md`, and reran live Phase 1 and Phase 2 on Codex `gpt-5.4` with `xhigh`.
@@ -31,9 +31,10 @@ date: "2026-03-20"
   - `python3 -m unittest autoresearch.tests.test_contract_harness_cli` passed.
   - `bash -n autoresearch/skills/harness.sh` passed.
   - Live runs passed: `phase1-mar20-20260320_191211-5ccf6c48` (`12/12`, `1.000`), tracked-backend `phase1-mar20codex-20260320_195735-903f0acd` (`12/12`, `1.000`), `phase2-mar20-20260320_193507-66196f79` (`8/8`, `1.000`), and tracked-backend smoke `phase2-mar20codex-20260320_194341-e183cb6b` (`8/8`, `1.000`).
+  - PR #224 is open against `main`; subsequent full live Phase 2 attempts on `eval_live.json` were blocked by upstream Codex service errors rather than repo-side validation or wrapper failures.
 
 ## 2) Best follow-up
-- Single best next step: Commit the tracked Codex backend support plus today’s phase artifacts, then use `--backend codex` for the next live contract-autoresearch batch by default on this lane.
+- Single best next step: Re-run the full live Phase 2 `eval_live.json` batch on PR #224 when Codex service availability recovers, using the committed `--backend codex` path already proven by the smaller live runs.
 - 1-3 upgrades worth considering:
   - Add a short contract-autoresearch README note for `--backend codex`, auth sourcing, and the `gpt-5.4`/`xhigh` default.
   - Add one phase1 live-codex smoke to complement the phase2 regression if runtime cost stays acceptable.

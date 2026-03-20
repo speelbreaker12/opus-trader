@@ -3,7 +3,7 @@ status: in-progress
 priority: P1
 branch: project/contract-autoresearch-harness-fix
 base: main
-pr:
+pr: 224
 started: 2026-03-16
 aliases: []
 keywords:
@@ -18,7 +18,7 @@ scope_paths:
 ---
 
 ## Commits
-- `pending` — 2026-03-20 — Tracked Codex backend support for contract autoresearch; reran Phase 1 and Phase 2 through Codex-backed paths.
+- `52cf1b15` — 2026-03-20 — Tracked Codex backend support for contract autoresearch; reran Phase 1 and Phase 2 through Codex-backed paths.
 - `54b97205` — 2026-03-19 — Phase 4 remaining sections: 10 new ATs (AT-1272..AT-1281) + 3 mechanical fixes
 - `049b85dd` — 2026-03-19 — Phase 4 LG+OPL patch: 7 new ATs (AT-1265..AT-1271)
 - `120759bc` — 2026-03-18 — Phase 4 section-compatibility fix + gitignore lock
@@ -27,7 +27,7 @@ scope_paths:
 
 ## Current State
 
-Follow-up branch `project/contract-autoresearch-harness-fix` is active for contract-autoresearch transport/backend work after the original lane merged. Phase 1 reruns completed as `phase1-mar20-20260320_191211-5ccf6c48` and tracked-backend `phase1-mar20codex-20260320_195735-903f0acd`, both with `checks=12/12` and `score=1.000`. Phase 2 rerun completed as `phase2-mar20-20260320_193507-66196f79` with `fixtures=1`, `proposals=2`, `checks=8/8`, and `score=1.000`. The tracked repo-owned Codex backend path now exists via `--backend codex`, and a live smoke run through that path completed as `phase2-mar20codex-20260320_194341-e183cb6b` with `proposals=3`, `checks=8/8`, and `score=1.000`. Pending: commit the tracked backend support, README note, and today’s run artifacts.
+Follow-up branch `project/contract-autoresearch-harness-fix` is active with PR #224 open. Phase 1 reruns completed as `phase1-mar20-20260320_191211-5ccf6c48` and tracked-backend `phase1-mar20codex-20260320_195735-903f0acd`, both with `checks=12/12` and `score=1.000`. Phase 2 rerun completed as `phase2-mar20-20260320_193507-66196f79` with `fixtures=1`, `proposals=2`, `checks=8/8`, and `score=1.000`. The tracked repo-owned Codex backend path now exists via `--backend codex`, and a live smoke run through that path completed as `phase2-mar20codex-20260320_194341-e183cb6b` with `proposals=3`, `checks=8/8`, and `score=1.000`. Full live Phase 2 on `eval_live.json` was attempted twice through the committed backend but blocked by Codex service-side `500`/`503` high-demand failures before proposal generation could complete.
 
 ## Key Files
 - `autoresearch/contract/README.md`
@@ -118,3 +118,5 @@ Follow-up branch `project/contract-autoresearch-harness-fix` is active for contr
 - Reran full Phase 1 through the tracked repo-owned backend: `phase1-mar20codex-20260320_195735-903f0acd`, 6 fixtures, `checks=12/12`, `score=1.000`.
 - Reran Phase 2 live proposals under the temporary Codex path: `phase2-mar20-20260320_193507-66196f79`, 1 fixture, 2 proposals, `checks=8/8`, `score=1.000`.
 - Verified the tracked repo-owned backend directly with `--backend codex`: `phase2-mar20codex-20260320_194341-e183cb6b`, 1 fixture, 3 proposals, `checks=8/8`, `score=1.000`.
+- Pushed branch `project/contract-autoresearch-harness-fix` and opened PR #224 against `main`.
+- Attempted full live Phase 2 (`eval_live.json`) twice through the committed backend (`phase2-mar20codexlive-*` and `phase2-mar20codexlive-retry-*`), but both runs failed on Codex upstream `500`/`503` high-demand errors before the first proposal payload completed.
