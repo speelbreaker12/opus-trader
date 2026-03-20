@@ -47,6 +47,9 @@ In progress. Obsidian debrief now acts as the default session handoff for normal
 - `6d235f31` — 2026-03-19 — add /merge-cleanup skill, restructure skills index, add workflow index
 - `b007c317` — 2026-03-19 — debrief template upgrade, workspace policy expansion, test fixture alignment
 - `821fabe3` — 2026-03-19 — risk-class commit gates, shared frontmatter parser, context hook warnings
+- `c1207cb2` — 2026-03-20 — publish-boundary guards and push safety fixes
+- `051d9fb8` — 2026-03-20 — disable hook leakage in temp repo fixtures (core.hooksPath=/dev/null)
+- `c3819187` — 2026-03-20 — unset GIT_DIR in all test fixtures to prevent env leakage
 
 ## Key Files
 - .codex/commands/commit.md
@@ -85,3 +88,6 @@ In progress. Obsidian debrief now acts as the default session handoff for normal
 ### 2026-03-19
 - Mirrored `/commit` and `/push-pr` into `.codex/commands/` so Codex can invoke the same repo-backed skills as Claude.
 - Extended `plans/tests/test_review_command_wrappers.sh` to prove both Claude and Codex command wrappers point at the same `SKILLS/` source files.
+### 2026-03-20
+- Found and fixed GIT_DIR environment leak: pre-push hook's verify.sh inherits GIT_DIR from the parent git process, causing test repos to operate on the parent repo instead of their temp repos. Fixed by adding `core.hooksPath=/dev/null` and `unset GIT_DIR` in all 32 test fixtures.
+- Pushed 3 new commits to PR #222 (branch workflow/obsidian-fixes, now at c3819187).
