@@ -1,6 +1,0 @@
-commit	score	passed	total	status	description
-d211f008	0.960	24	25	baseline	initial skill state: AT-XXX placeholder breaks T4-A1 (needs AT-\d+)
-77f72172	1.000	25	25	keep	replace AT-XXX/AT-XXY with AT-001/AT-002 digit examples; fixes T4-A1
-01fe14da	1.000	25	25	keep	stability-1: remove redundant step-6 bash cmd; score unchanged
-873c6121	1.000	25	25	keep	stability-2: remove When-to-use section (docs only); score unchanged
-40e3982a	1.000	25	25	keep	stability-3: remove Output section (docs only); score unchanged - STABLE

@@ -1,3 +1,0 @@
-# Canonical evidence sources for crossref CI gating.
-docs/PHASE0_CHECKLIST_BLOCK.md
-docs/PHASE1_CHECKLIST_BLOCK.md
