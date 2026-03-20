@@ -4,7 +4,7 @@ date: "2026-03-20"
 ---
 
 ## Commits
-- pending
+- `17404bca` — contract: apply accepted hardened phase2 patch batch
 
 ## 0) What shipped
 - Feature/behavior: Applied the accepted LG, EG, TMC, and EC contract deltas from the hardened Phase 2 autoresearch review batch, renumbered the placeholder ATs to `AT-1283` and `AT-1284`, and refreshed the derived contract/autoresearch artifacts.

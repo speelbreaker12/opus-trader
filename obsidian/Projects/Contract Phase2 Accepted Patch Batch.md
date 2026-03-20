@@ -25,7 +25,7 @@ scope_paths:
 Stacked branch `project/contract-phase2-accepted-patch-batch` is cut from `project/contract-autoresearch-harness-fix` to apply the accepted hardened Phase 2 contract patches without widening PR #224. The accepted LG/EG/TMC/EC deltas are now applied to `specs/CONTRACT.md` with permanent IDs `AT-1282`, `AT-1283`, and `AT-1284`, plus ledger row `CCL-2026-03-20-01`. `docs/contract_kernel.json`, autoresearch common context, and the affected Phase 1/Phase 2 fixtures/snapshots were refreshed. Targeted contract checks are green. Repo quick verify run `20260320_171755` finished with an unrelated workflow-test failure in `wf_test_review_command_wrappers`, expecting `Use the Skill tool with skill name "review-stack"` in `.claude/commands/review-stack.md`; this branch does not touch that file.
 
 ## Commits
-- `pending` — 2026-03-20 — Apply accepted LG/EG/TMC/EC Phase 2 contract patches and refresh dependent artifacts.
+- `17404bca` — 2026-03-20 — Apply accepted LG/EG/TMC/EC Phase 2 contract patches and refresh dependent artifacts.
 
 ## Key Files
 - `specs/CONTRACT.md`
