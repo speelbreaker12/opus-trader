@@ -5,7 +5,8 @@ type: debrief
 ---
 
 ## Commits
-- pending
+- `098edb3e` — guard improvements and skill scope refinements (prior session)
+- (pending) — workflow gate rebalancing: advisory PR gate, commit fast path, push-time code review
 
 # Session Handoff
 
@@ -20,12 +21,12 @@ type: debrief
 ## State
 - Task: Guard improvements and skill scope refinements
 - Goal: Add formatting-only detection, review currency check, shared frontmatter parser, PR gate marker, and tighten skill boundaries
-- Stop point: Changes committed, ready for push + PR
-- Validation: Code review performed on staged changes, no tests affected (workflow/docs only)
+- Stop point: Second commit staged — gate rebalancing across commit/push/merge boundaries
+- Validation: No tests affected (workflow/docs changes only). Shell scripts reviewed for correctness.
 
 ## Shipped
-- Feature/behavior: pre-commit formatting-only detection, merge-cleanup review currency check, post_rebase_frontmatter_check.sh shared Python parser, write_review_gate_marker.sh --pr-gate mode, pr-check narrowed to triage (merge to /merge-cleanup), push-pr gate inventory docs, wt-main references fixed across skills
-- Value: Reduces false-positive code-review gates on whitespace-only changes, prevents merging unreviewed commits, eliminates fragile sed-based frontmatter parsing, documents push gates to prevent surprise failures
+- Feature/behavior: (commit 1) pre-commit formatting-only detection, merge-cleanup review currency check, post_rebase_frontmatter_check.sh shared Python parser, write_review_gate_marker.sh --pr-gate mode, pr-check narrowed to triage (merge to /merge-cleanup), push-pr gate inventory docs, wt-main references fixed across skills. (commit 2) PR review-stack gate advisory at creation (blocking at merge), commit fast path for docs/obsidian/formatting, code-review-expert moved to pre-push, merge-cleanup verify.sh full gate, push-pr deterministic PR detection and conflict delegation.
+- Value: Rebalances validation gates: commit is a cheap local checkpoint, push is the publish boundary, merge is the final gate. Eliminates blocking gates that prevent draft PR creation.
 
 ## Constraint (ONE)
 - Constraint: Scope_paths was missing from project note frontmatter

@@ -1,15 +1,15 @@
 ---
-status: in-progress
+status: archived
 priority: P2
-branch: workflow/obsidian-fixes
-worktree: .worktrees/obsidian-workflow-fixes
-lifecycle: rewrite_ok
+branch:
+worktree:
+lifecycle: archived
 pr:
 started: "2026-03-19"
 ---
 
 ## Current State
-Branch with workflow improvements: bare-repo commit guard, cargo-verify skip for non-crate branches, worktree collision check in main-recovery, codex commit/push-pr wrappers, skills index validation fixes, context hook and precommit hook enhancements.
+Archived — duplicate of [[Obsidian Work Tracking]]. Branch `workflow/obsidian-fixes` is owned by that project note.
 
 ## Key Files
 - .claude/hooks/obsidian-precommit-hook.sh
