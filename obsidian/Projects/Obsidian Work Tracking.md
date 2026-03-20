@@ -3,7 +3,7 @@ status: in-progress
 priority: P1
 branch: workflow/obsidian-fixes
 base: main
-pr:
+pr: 222
 started: "2026-03-16"
 scope_paths:
   - .codex/commands/**
@@ -37,9 +37,9 @@ scope_paths:
 In progress. Obsidian debrief now acts as the default session handoff for normal project work, and the repo is adding Codex mirrors for `/commit` and `/push-pr` so the same workflow skills are available outside Claude-specific wrappers.
 
 ## Commits
-- `pending` — 2026-03-19 — fix obsidian hook tests: align with branch-ownership routing, add frontmatter module to test fixtures, fix precommit no-op test
-- `pending` — 2026-03-19 — guard improvements: formatting-only detection, review currency, shared parser, PR gate marker, skill scope refinements
-- `pending` — 2026-03-19 — disable redundant Claude Code hooks, context-aware dangerous-command-blocker
+- `7dbc7742` — 2026-03-19 — fix obsidian hook tests: align with branch-ownership routing, add frontmatter module to test fixtures, fix precommit no-op test
+- `098edb3e` — 2026-03-19 — guard improvements: formatting-only detection, review currency, shared parser, PR gate marker, skill scope refinements
+- `ad96c4bf` — 2026-03-19 — disable redundant Claude Code hooks, context-aware dangerous-command-blocker
 - `c1ec15f0` — 2026-03-19 — block git commit from bare repo root
 - `6875b4f6` — 2026-03-19 — skip cargo verify for non-crate branches, worktree collision check in main-recovery
 - `pending` — 2026-03-19 — add codex commit and push-pr wrappers
