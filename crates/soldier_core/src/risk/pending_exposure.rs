@@ -1041,6 +1041,47 @@ mod tests {
     }
 
     #[test]
+    fn test_reserve_graybox_instrument_not_registered_preserves_context_without_global_side_effects()
+     {
+        let _guard = begin_metrics_test();
+        let before = pending_exposure_reject_total();
+        let mut metrics = PendingExposureMetrics::new();
+        let book = PendingExposureBook::new(None);
+        let mut events = Vec::new();
+
+        let result = book.reserve_with_events(
+            &ReservationId::new("missing-book").unwrap(),
+            "MISSING",
+            0.0,
+            1.0,
+            &mut metrics,
+            &mut events,
+        );
+
+        assert!(matches!(
+            result,
+            PendingExposureResult::Rejected {
+                reason: PendingExposureRejectReason::InstrumentNotRegistered,
+                pending_total,
+            } if pending_total.is_nan()
+        ));
+        assert_eq!(metrics.reserve_instrument_not_registered_total(), 1);
+        assert_eq!(
+            events,
+            vec![PendingExposureEvent::ReserveRejected {
+                reason: PendingExposureRejectReason::InstrumentNotRegistered
+            }]
+        );
+        assert_eq!(pending_exposure_reject_total(), before);
+
+        let lines = take_execution_metric_lines();
+        assert!(
+            lines.is_empty(),
+            "graybox path must not emit global metric lines: {lines:?}"
+        );
+    }
+
+    #[test]
     fn test_cross_instrument_collision_graybox_preserves_event_context() {
         let _guard = begin_metrics_test();
         let before = pending_exposure_reject_total();

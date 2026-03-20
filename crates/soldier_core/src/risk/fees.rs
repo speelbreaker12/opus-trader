@@ -82,10 +82,13 @@ pub struct FeeEvaluation {
 
 /// Internal fee staleness events used for graybox testing.
 /// Not part of the public risk façade.
-#[derive(Debug, Clone, Copy, PartialEq)]
+///
+/// Diagnostic payloads are stored as strings so non-finite values remain
+/// comparable in tests without reintroducing float semantics into the event API.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum FeeEvent {
-    InvalidFailClosedFeeRateDefaulted { rate: f64 },
-    InvalidFeeStaleBufferClamped { buffer: f64 },
+    InvalidFailClosedFeeRateDefaulted { rate: String },
+    InvalidFeeStaleBufferClamped { buffer: String },
     HardStale,
 }
 
@@ -95,12 +98,12 @@ impl EventSink<FeeEvent> for ProductionFeeEvents {
     fn emit(&mut self, event: FeeEvent) {
         match event {
             FeeEvent::InvalidFailClosedFeeRateDefaulted { rate } => tracing::warn!(
-                rate,
+                rate = %rate,
                 fallback = DEFAULT_FAIL_CLOSED_FEE_RATE,
                 "fee staleness: non-finite/non-positive fail-closed fee rate, using default"
             ),
             FeeEvent::InvalidFeeStaleBufferClamped { buffer } => tracing::warn!(
-                buffer,
+                buffer = %buffer,
                 "fee staleness: non-finite/negative buffer, clamping to 0.0 (conservative)"
             ),
             FeeEvent::HardStale => bump_fee_staleness_hard_stale(),
@@ -176,7 +179,7 @@ fn bump_fee_staleness_hard_stale_inner() {
     tracing::debug!("FeeStalenessHardStale");
 }
 
-fn safe_fail_closed_fee_rate(config: &FeeStalenessConfig) -> (f64, bool) {
+fn fail_closed_fee_rate_and_defaulted(config: &FeeStalenessConfig) -> (f64, bool) {
     if !config.fee_rate_fail_closed.is_finite() || config.fee_rate_fail_closed <= 0.0 {
         (DEFAULT_FAIL_CLOSED_FEE_RATE, true)
     } else {
@@ -202,10 +205,11 @@ pub(crate) fn evaluate_fee_staleness_with_events<E: EventSink<FeeEvent>>(
     // Guard: non-finite or negative fee_rate → HardStale + Degraded (fail-closed)
     // Preserve a conservative fee estimate instead of making execution look free.
     if !snapshot.fee_rate.is_finite() || snapshot.fee_rate < 0.0 {
-        let (fee_rate_effective, defaulted_fail_closed_rate) = safe_fail_closed_fee_rate(config);
+        let (fee_rate_effective, defaulted_fail_closed_rate) =
+            fail_closed_fee_rate_and_defaulted(config);
         if defaulted_fail_closed_rate {
             events.emit(FeeEvent::InvalidFailClosedFeeRateDefaulted {
-                rate: config.fee_rate_fail_closed,
+                rate: config.fee_rate_fail_closed.to_string(),
             });
         }
         events.emit(FeeEvent::HardStale);
@@ -220,7 +224,7 @@ pub(crate) fn evaluate_fee_staleness_with_events<E: EventSink<FeeEvent>>(
     // Guard: non-finite or negative buffer → treat as zero buffer (conservative)
     let safe_buffer = if !config.fee_stale_buffer.is_finite() || config.fee_stale_buffer < 0.0 {
         events.emit(FeeEvent::InvalidFeeStaleBufferClamped {
-            buffer: config.fee_stale_buffer,
+            buffer: config.fee_stale_buffer.to_string(),
         });
         0.0
     } else {
@@ -354,6 +358,35 @@ mod tests {
     }
 
     #[test]
+    fn fee_graybox_negative_rate_uses_conservative_fallback_without_global_side_effects() {
+        let _guard = begin_metrics_test();
+        let before = fee_staleness_hard_stale_total();
+
+        let snapshot = FeeCacheSnapshot {
+            fee_rate: -0.001,
+            fee_model_cached_at_ts_ms: Some(1_000),
+            now_ms: 1_500,
+        };
+        let config = FeeStalenessConfig::default();
+        let mut events = Vec::new();
+
+        let result = evaluate_fee_staleness_with_events(&snapshot, &config, &mut events);
+
+        assert_eq!(result.staleness, FeeStaleness::HardStale);
+        assert!((result.fee_rate_effective - 0.01).abs() < 1e-12);
+        assert_eq!(result.cache_age_s, None);
+        assert_eq!(result.risk_state, RiskState::Degraded);
+        assert_eq!(events, vec![FeeEvent::HardStale]);
+        assert_eq!(fee_staleness_hard_stale_total(), before);
+
+        let lines = take_execution_metric_lines();
+        assert!(
+            lines.is_empty(),
+            "graybox path must not emit global metric lines: {lines:?}"
+        );
+    }
+
+    #[test]
     fn fee_graybox_invalid_config_preserves_context_without_global_side_effects() {
         let _guard = begin_metrics_test();
         let before = fee_staleness_hard_stale_total();
@@ -380,7 +413,7 @@ mod tests {
             events,
             vec![
                 FeeEvent::InvalidFailClosedFeeRateDefaulted {
-                    rate: f64::INFINITY,
+                    rate: "inf".to_string(),
                 },
                 FeeEvent::HardStale,
             ]
@@ -405,7 +438,9 @@ mod tests {
         assert_eq!(buffer_result.staleness, FeeStaleness::SoftStale);
         assert_eq!(
             buffer_events,
-            vec![FeeEvent::InvalidFeeStaleBufferClamped { buffer: -0.25 }]
+            vec![FeeEvent::InvalidFeeStaleBufferClamped {
+                buffer: "-0.25".to_string(),
+            }]
         );
         assert_eq!(fee_staleness_hard_stale_total(), before);
 
@@ -414,6 +449,13 @@ mod tests {
             lines.is_empty(),
             "graybox path must not emit global metric lines: {lines:?}"
         );
+    }
+
+    #[test]
+    fn assert_fee_event_is_eq() {
+        fn assert_eq_impl<T: Eq>() {}
+
+        assert_eq_impl::<FeeEvent>();
     }
 
     #[test]

@@ -317,6 +317,43 @@ fn wal_nonblocking_wrapper_preserves_metric_contract() {
     );
 }
 
+#[test]
+fn wal_gate_error_wrapper_preserves_metric_contract() {
+    let _guard = begin_metrics_test();
+    let before = wal_nonblocking_allowed_total();
+    let mut metrics = ChokeMetrics::new();
+    let gates = gate_results_all_passing();
+    let mut wal_gate = ErrWalGate("disk_full");
+
+    let result = with_intent_trace_ids(
+        "intent-wal-nonblocking-err-001",
+        "run-wal-nonblocking-err-001",
+        || {
+            super::build_order_intent_with_wal_gate(
+                ChokeIntentClass::Close,
+                RiskState::Healthy,
+                &mut metrics,
+                &gates,
+                &mut wal_gate,
+            )
+        },
+    );
+
+    assert!(matches!(result, ChokeResult::Approved { .. }));
+    assert_eq!(wal_nonblocking_allowed_total(), before + 1);
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("wal_nonblocking_allowed_total")
+                && line.contains("intent_class=Close")
+                && line.contains("source=wal_gate_error")
+                && line.contains("intent_id=intent-wal-nonblocking-err-001")
+                && line.contains("run_id=run-wal-nonblocking-err-001")
+        }),
+        "expected WAL nonblocking wal_gate_error metric line, got {lines:?}"
+    );
+}
+
 // ─── AT-502: OPEN intents require all 10 gates ───────────────────────────
 
 #[test]

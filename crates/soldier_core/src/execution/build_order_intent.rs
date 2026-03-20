@@ -256,16 +256,29 @@ impl EventSink<ChokeEvent> for ProductionChokeEvents {
                 wal_error,
             } => {
                 record_wal_nonblocking_allowed(intent_class, source);
-                let wal_error = wal_error.as_deref().unwrap_or(match source {
-                    WalNonblockingSource::WalGateError => "wal_gate_error",
-                    WalNonblockingSource::PrecomputedFalse => "precomputed false",
-                    WalNonblockingSource::NoGateConfigured => "no_gate_configured",
-                });
-                tracing::warn!(
-                    intent_class = ?intent_class,
-                    wal_error,
-                    "WAL recording failed for non-OPEN intent — allowing per CSP.3.2"
-                );
+                let source_label = wal_nonblocking_source_label(source);
+                let wal_error = match source {
+                    WalNonblockingSource::WalGateError => {
+                        Some(wal_error.as_deref().unwrap_or("wal_gate_error"))
+                    }
+                    WalNonblockingSource::PrecomputedFalse
+                    | WalNonblockingSource::NoGateConfigured => None,
+                };
+
+                if let Some(wal_error) = wal_error {
+                    tracing::warn!(
+                        intent_class = ?intent_class,
+                        source = source_label,
+                        wal_error,
+                        "WAL nonblocking path for non-OPEN intent — allowing per CSP.3.2"
+                    );
+                } else {
+                    tracing::warn!(
+                        intent_class = ?intent_class,
+                        source = source_label,
+                        "WAL nonblocking path for non-OPEN intent — allowing per CSP.3.2"
+                    );
+                }
             }
         }
     }
@@ -366,15 +379,19 @@ fn record_wal_nonblocking_allowed_inner(
     source: WalNonblockingSource,
 ) {
     WAL_NONBLOCKING_ALLOWED_TOTAL.fetch_add(1, Ordering::Relaxed);
-    let source_label = match source {
-        WalNonblockingSource::WalGateError => "wal_gate_error",
-        WalNonblockingSource::PrecomputedFalse => "precomputed_false",
-        WalNonblockingSource::NoGateConfigured => "no_gate_configured",
-    };
+    let source_label = wal_nonblocking_source_label(source);
     super::emit_execution_metric_line(
         super::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL,
         &format!("intent_class={intent_class:?} source={source_label}"),
     );
+}
+
+fn wal_nonblocking_source_label(source: WalNonblockingSource) -> &'static str {
+    match source {
+        WalNonblockingSource::WalGateError => "wal_gate_error",
+        WalNonblockingSource::PrecomputedFalse => "precomputed_false",
+        WalNonblockingSource::NoGateConfigured => "no_gate_configured",
+    }
 }
 
 // --- Chokepoint evaluator ------------------------------------------------

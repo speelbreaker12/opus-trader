@@ -118,7 +118,8 @@ pub(crate) fn route_pipeline<'input, 'runtime>(
         super::build_order_intent::bump_wal_nonblocking_allowed_total(intent_class);
         tracing::warn!(
             intent_class = ?intent_class,
-            "WAL gate absent for non-OPEN intent - allowing per CSP.3.2 (no_gate_configured)"
+            source = "no_gate_configured",
+            "WAL nonblocking path for non-OPEN intent — allowing per CSP.3.2"
         );
     }
 

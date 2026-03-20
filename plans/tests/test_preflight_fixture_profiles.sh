@@ -292,7 +292,7 @@ serial_overlap="$(
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_serial_count="$(printf '%s\n' "$full_only_serial_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "12" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 12)"
+[[ "$smoke_count" == "13" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 13)"
 [[ "$full_only_count" == "9" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 9)"
 [[ "$full_only_serial_count" == "0" ]] || fail "unexpected full-only serial fixture count: $full_only_serial_count (expected 0)"
 

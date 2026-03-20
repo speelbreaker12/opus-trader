@@ -28,16 +28,18 @@ scope_paths:
   - plans/workflow_verify.sh
   - plans/lint_graybox_telemetry.sh
   - plans/tests/test_lint_graybox_telemetry.sh
+  - plans/tests/test_preflight_fixture_profiles.sh
+  - plans/tests/test_rust_gates_smoke_targets.sh
   - obsidian/Projects/Upgrade 2 Telemetry Completion.md
   - obsidian/Debriefs/Upgrade 2 Telemetry Completion 2026-03-20.md
 ---
 
 ## Current State
-Upgrade 2 is complete on branch `upgrade2` and PR #223 is open against `main`. The remaining orchestration telemetry paths were moved behind internal event sinks, the wrapper layer still preserves the existing metrics contract, and the graybox telemetry boundary is now mechanically enforced by a dedicated lint wired into workflow verification. The branch was refreshed via a no-op rebase onto `origin/main` before push. Current validation after refresh: `bash plans/lint_graybox_telemetry.sh`, `bash plans/tests/test_lint_graybox_telemetry.sh`, and `env CARGO_TARGET_DIR=/tmp/wt_upgrade2-target cargo test -p soldier_core --locked` passed; `env CARGO_TARGET_DIR=/tmp/wt_upgrade2-target ./plans/workflow_verify.sh` still stops at `wf_test_preflight_fixture_profiles` with `unexpected smoke fixture count: 13 (expected 12)`.
+Upgrade 2 is complete on branch `upgrade2` and PR #223 is open against `main`. The remaining orchestration telemetry paths were moved behind internal event sinks, the wrapper layer still preserves the existing metrics contract, and the graybox telemetry boundary is now mechanically enforced by a dedicated lint wired into workflow verification. The branch was refreshed via a no-op rebase onto `origin/main` before push. PR #223 review feedback has now been folded back into the branch: smoke fixture expectations match the 13-test profile, the graybox lint handles whitespace-trimmed multiline roots plus brace/bracket tracing macros and declaration-only signatures, event payloads no longer carry `f64`, and missing graybox/parity tests were added for the flagged seams. Current validation after the review-fix batch: `bash plans/tests/test_lint_graybox_telemetry.sh`, `bash plans/tests/test_preflight_fixture_profiles.sh`, `bash plans/tests/test_rust_gates_smoke_targets.sh`, `cargo fmt --all -- --check`, and `cargo test -p soldier_core --lib --locked` passed. `./plans/workflow_verify.sh` now clears the preflight fixture gate and later hangs in `plans/tests/test_pr_review_gate_hook.sh`, which reproduced independently as a timeout and appears unrelated to PR #223.
 
 ## Commits
 - `240baeaf` — 2026-03-20 — complete Upgrade 2 graybox telemetry migration, preserve wrapper parity and diagnostic context, add graybox telemetry lint plus regression coverage.
-- `pending` — 2026-03-20 — record PR #223, refresh method, review-stack marker, and post-refresh validation/handoff state.
+- `pending` — 2026-03-20 — close PR #223 review gaps in graybox lint coverage, smoke fixture accounting, event payload typing, and wrapper/graybox telemetry tests.
 
 ## Key Files
 - `crates/soldier_core/src/execution/build_order_intent.rs`
@@ -63,3 +65,6 @@ Upgrade 2 is complete on branch `upgrade2` and PR #223 is open against `main`. T
 - Preserved production diagnostic context by carrying WAL errors, reservation collision identifiers, post-only bad price inputs, and invalid fee config values through internal event payloads instead of logging directly from graybox seams.
 - Verified with `bash plans/tests/test_lint_graybox_telemetry.sh`, `bash plans/lint_graybox_telemetry.sh`, and `env CARGO_TARGET_DIR=/tmp/wt_upgrade2-target cargo test -p soldier_core --locked`.
 - Refreshed `upgrade2` against `origin/main` with a no-op rebase, pushed the branch, opened PR #223, wrote the review-stack gate marker for HEAD `240baeaf`, and recorded that `./plans/workflow_verify.sh` is still blocked by the smoke fixture count expecting 12 instead of 13.
+- Addressed the PR #223 review comments by updating the smoke fixture profile test to 13, hardening `plans/lint_graybox_telemetry.sh` for whitespace-trimmed root overrides, brace/bracket tracing macros, declaration-only `*_with_events` signatures, and `bump_*` false positives, and extending the lint regression suite for the previously untested forbidden patterns.
+- Converted graybox-only post-only and fee diagnostic payloads from `f64` to `String` so the event enums regain `Eq`, added explicit `InvalidBestAsk`, `InvalidBestBid`, `InstrumentNotRegistered`, and `WalGateError` parity coverage, and aligned no-gate/precomputed WAL warning labels with the metric tags.
+- Re-ran targeted validation (`bash plans/tests/test_lint_graybox_telemetry.sh`, `bash plans/tests/test_preflight_fixture_profiles.sh`, `bash plans/tests/test_rust_gates_smoke_targets.sh`, `cargo fmt --all -- --check`, `cargo test -p soldier_core --lib --locked`) and confirmed the old workflow fixture mismatch is gone; the remaining `plans/tests/test_pr_review_gate_hook.sh` timeout looks pre-existing and outside this branch scope.

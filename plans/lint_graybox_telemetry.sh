@@ -147,22 +147,22 @@ FORBIDDEN = {
     r"\bwith_intent_trace_ids\s*\(": "trace-id dependency",
     r"\btake_execution_metric_lines\s*\(": "metric-buffer inspection",
     r"\bMETRICS_TEST_LOCK\b": "shared metrics lock dependency",
-    r"\btracing::(?:trace|debug|info|warn|error)!\s*\(": "direct tracing macro",
-    r"\bbump_[A-Za-z0-9_]*\s*\(": "wrapper-only bump helper call",
+    r"\btracing::(?:trace|debug|info|warn|error)!\s*[\(\{\[]": "direct tracing macro",
+    r"(?<!\.)\bbump_[A-Za-z0-9_]*\s*\(": "wrapper-only bump helper call",
     r"(?<!\.)\brecord_(?:[A-Za-z0-9_]*metric[A-Za-z0-9_]*|expected_slippage_sample|gate_sequence_result|wal_nonblocking_allowed)\s*\(": "wrapper-only record helper call",
 }
 
 raw_roots = sys.argv[1]
 root_parts = []
 if "\n" in raw_roots:
-    root_parts = [part for part in raw_roots.splitlines() if part.strip()]
+    root_parts = [part.strip() for part in raw_roots.splitlines() if part.strip()]
 elif raw_roots.strip():
     exact_path = pathlib.Path(raw_roots)
     if exact_path.exists():
         root_parts = [raw_roots]
     else:
         # Backward compatibility for the original space-delimited override.
-        root_parts = [part for part in raw_roots.split() if part.strip()]
+        root_parts = [part.strip() for part in raw_roots.split() if part.strip()]
 
 roots = [pathlib.Path(part) for part in root_parts]
 if not roots:
@@ -179,7 +179,12 @@ for root in roots:
         code = sanitize(text)
         for match in FUNCTION_RE.finditer(code):
             name = match.group(1)
-            brace_index = code.find("{", match.end())
+            search_start = match.end()
+            next_brace = code.find("{", search_start)
+            next_semi = code.find(";", search_start)
+            if next_semi != -1 and (next_brace == -1 or next_semi < next_brace):
+                continue
+            brace_index = next_brace
             if brace_index == -1:
                 violations.append(f"{path}: unable to find body for {name}")
                 continue

@@ -41,11 +41,14 @@ pub enum PostOnlyResult {
 }
 
 /// Internal post-only guard events used for graybox testing.
-#[derive(Debug, Clone, Copy, PartialEq)]
+///
+/// Diagnostic payloads are stored as strings so non-finite values remain
+/// comparable in tests without reintroducing float semantics into the event API.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PostOnlyEvent {
-    InvalidLimitPrice { limit_price: f64 },
-    InvalidBestAsk { best_ask: f64 },
-    InvalidBestBid { best_bid: f64 },
+    InvalidLimitPrice { limit_price: String },
+    InvalidBestAsk { best_ask: String },
+    InvalidBestBid { best_bid: String },
     Reject,
 }
 
@@ -55,15 +58,15 @@ impl EventSink<PostOnlyEvent> for ProductionPostOnlyEvents {
     fn emit(&mut self, event: PostOnlyEvent) {
         match event {
             PostOnlyEvent::InvalidLimitPrice { limit_price } => tracing::warn!(
-                limit_price,
+                limit_price = %limit_price,
                 "post_only: non-finite limit_price, rejecting (fail-closed)"
             ),
             PostOnlyEvent::InvalidBestAsk { best_ask } => tracing::warn!(
-                best_ask,
+                best_ask = %best_ask,
                 "post_only: non-finite best_ask, rejecting (fail-closed)"
             ),
             PostOnlyEvent::InvalidBestBid { best_bid } => tracing::warn!(
-                best_bid,
+                best_bid = %best_bid,
                 "post_only: non-finite best_bid, rejecting (fail-closed)"
             ),
             PostOnlyEvent::Reject => bump_post_only_reject(),
@@ -114,6 +117,20 @@ pub fn post_only_reject_total() -> u64 {
 }
 
 fn bump_post_only_reject() {
+    #[cfg(test)]
+    {
+        crate::execution::with_metrics_update_lock(|| {
+            bump_post_only_reject_inner();
+        })
+    }
+
+    #[cfg(not(test))]
+    {
+        bump_post_only_reject_inner();
+    }
+}
+
+fn bump_post_only_reject_inner() {
     POST_ONLY_CROSS_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
     super::emit_execution_metric_line(super::METRIC_POST_ONLY_REJECT, "");
     tracing::debug!("PostOnlyReject");
@@ -157,7 +174,7 @@ pub(crate) fn check_post_only_with_events<E: EventSink<PostOnlyEvent>>(
     // silently pass the crossing check. is_finite() catches both NaN and Inf.
     if !input.limit_price.is_finite() {
         events.emit(PostOnlyEvent::InvalidLimitPrice {
-            limit_price: input.limit_price,
+            limit_price: input.limit_price.to_string(),
         });
         return reject_with_events(metrics, events);
     }
@@ -167,7 +184,9 @@ pub(crate) fn check_post_only_with_events<E: EventSink<PostOnlyEvent>>(
         Side::Buy => match input.best_ask {
             Some(ask) => {
                 if !ask.is_finite() {
-                    events.emit(PostOnlyEvent::InvalidBestAsk { best_ask: ask });
+                    events.emit(PostOnlyEvent::InvalidBestAsk {
+                        best_ask: ask.to_string(),
+                    });
                     return reject_with_events(metrics, events);
                 }
                 input.limit_price >= ask
@@ -178,7 +197,9 @@ pub(crate) fn check_post_only_with_events<E: EventSink<PostOnlyEvent>>(
         Side::Sell => match input.best_bid {
             Some(bid) => {
                 if !bid.is_finite() {
-                    events.emit(PostOnlyEvent::InvalidBestBid { best_bid: bid });
+                    events.emit(PostOnlyEvent::InvalidBestBid {
+                        best_bid: bid.to_string(),
+                    });
                     return reject_with_events(metrics, events);
                 }
                 input.limit_price <= bid
