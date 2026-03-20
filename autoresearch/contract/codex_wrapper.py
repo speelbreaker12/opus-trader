@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -130,6 +131,57 @@ def map_model(model: str) -> str:
     return model
 
 
+def resolve_codex_home(cwd: Path) -> Path:
+    explicit = os.environ.get("CONTRACT_CODEX_HOME")
+    if explicit:
+        path = Path(explicit).expanduser()
+        if not path.is_absolute():
+            path = (cwd / path).resolve()
+        return path
+    return (Path.home() / ".cache" / "contract-codex-wrapper" / "home").resolve()
+
+
+def parse_nonnegative_int_env(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise SystemExit(fail(f"{name} must be an integer: {raw}")) from exc
+    if value < 0:
+        raise SystemExit(fail(f"{name} must be >= 0: {raw}"))
+    return value
+
+
+def parse_nonnegative_float_env(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise SystemExit(fail(f"{name} must be a number: {raw}")) from exc
+    if value < 0:
+        raise SystemExit(fail(f"{name} must be >= 0: {raw}"))
+    return value
+
+
+def is_transient_codex_failure(message: str) -> bool:
+    lowered = message.lower()
+    markers = (
+        "we're currently experiencing high demand",
+        "high demand",
+        "500 internal server error",
+        "503 service unavailable",
+        "backend-api/codex/responses",
+        "websocket",
+        "connection reset",
+        "temporarily unavailable",
+    )
+    return any(marker in lowered for marker in markers)
+
+
 def write_config(home_dir: Path, model: str, reasoning_effort: str) -> None:
     codex_dir = home_dir / ".codex"
     codex_dir.mkdir(parents=True, exist_ok=True)
@@ -161,60 +213,81 @@ def run_codex(prompt: str, model: str, cwd: Path) -> str:
     codex_bin = os.environ.get("CONTRACT_CODEX_BIN", "codex")
     reasoning_effort = os.environ.get("CONTRACT_CODEX_REASONING_EFFORT", "xhigh")
     workdir = resolve_workdir(cwd)
+    clean_home = resolve_codex_home(cwd)
+    clean_codex_dir = clean_home / ".codex"
+    scratch_root = clean_home / ".contract-codex-wrapper"
+    scratch_root.mkdir(parents=True, exist_ok=True)
+    clean_codex_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(auth_source, clean_codex_dir / "auth.json")
+    write_config(clean_home, model, reasoning_effort)
 
-    with tempfile.TemporaryDirectory(prefix="contract-codex-wrapper.") as temp_dir_str:
-        temp_dir = Path(temp_dir_str)
-        last_file = temp_dir / "last.txt"
-        stdout_file = temp_dir / "stdout.txt"
-        stderr_file = temp_dir / "stderr.txt"
-        clean_home = temp_dir / "home"
-        clean_codex_dir = clean_home / ".codex"
-        clean_codex_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(auth_source, clean_codex_dir / "auth.json")
-        write_config(clean_home, model, reasoning_effort)
+    retry_attempts = parse_nonnegative_int_env("CONTRACT_CODEX_RETRY_ATTEMPTS", 2)
+    retry_base_seconds = parse_nonnegative_float_env("CONTRACT_CODEX_RETRY_BASE_SECONDS", 2.0)
 
-        cmd = [
-            codex_bin,
-            "exec",
-            "--color",
-            "never",
-            "--disable",
-            "apps",
-            "--disable",
-            "default_mode_request_user_input",
-            "--ephemeral",
-            "--skip-git-repo-check",
-            "-C",
-            str(workdir),
-            "-s",
-            "read-only",
-            "-m",
-            model,
-            "-c",
-            f'model_reasoning_effort="{reasoning_effort}"',
-            "--output-last-message",
-            str(last_file),
-            "-",
-        ]
-        env = os.environ.copy()
-        env["HOME"] = str(clean_home)
-        result = subprocess.run(
-            cmd,
-            input=prompt,
-            capture_output=True,
-            text=True,
-            check=False,
-            env=env,
-        )
-        stdout_file.write_text(result.stdout, encoding="utf-8")
-        stderr_file.write_text(result.stderr, encoding="utf-8")
+    cmd_base = [
+        codex_bin,
+        "exec",
+        "--color",
+        "never",
+        "--disable",
+        "apps",
+        "--disable",
+        "default_mode_request_user_input",
+        "--ephemeral",
+        "--skip-git-repo-check",
+        "-C",
+        str(workdir),
+        "-s",
+        "read-only",
+        "-m",
+        model,
+        "-c",
+        f'model_reasoning_effort="{reasoning_effort}"',
+    ]
+    env = os.environ.copy()
+    env["HOME"] = str(clean_home)
+    env["XDG_CACHE_HOME"] = str(clean_home / ".cache")
+    env["XDG_STATE_HOME"] = str(clean_home / ".local" / "state")
 
-        if result.returncode != 0:
+    last_message = ""
+    attempts_total = retry_attempts + 1
+    for attempt_index in range(attempts_total):
+        with tempfile.TemporaryDirectory(prefix="run.", dir=scratch_root) as temp_dir_str:
+            temp_dir = Path(temp_dir_str)
+            last_file = temp_dir / "last.txt"
+            stdout_file = temp_dir / "stdout.txt"
+            stderr_file = temp_dir / "stderr.txt"
+            result = subprocess.run(
+                [*cmd_base, "--output-last-message", str(last_file), "-"],
+                input=prompt,
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+            stdout_file.write_text(result.stdout, encoding="utf-8")
+            stderr_file.write_text(result.stderr, encoding="utf-8")
+
             message = result.stderr.strip() or result.stdout.strip() or "codex exec failed"
+            if result.returncode == 0 and last_file.is_file():
+                last_message = last_file.read_text(encoding="utf-8")
+                if last_message.strip():
+                    return last_message
+                message = "codex exec produced empty --output-last-message output"
+            elif result.returncode == 0 and not last_file.is_file():
+                message = "codex exec did not produce --output-last-message output"
+
+            combined_message = "\n".join(
+                chunk for chunk in (message, result.stderr.strip(), result.stdout.strip()) if chunk
+            )
+            if attempt_index < retry_attempts and is_transient_codex_failure(combined_message):
+                sleep_seconds = retry_base_seconds * (2**attempt_index)
+                if sleep_seconds > 0:
+                    time.sleep(sleep_seconds)
+                continue
             raise SystemExit(fail(message))
-        if not last_file.is_file():
-            raise SystemExit(fail("codex exec did not produce --output-last-message output"))
-        return last_file.read_text(encoding="utf-8")
+
+    raise SystemExit(fail("codex exec retry loop exhausted without returning output"))
 
 
 def main(argv: list[str]) -> int:

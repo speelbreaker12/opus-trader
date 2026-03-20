@@ -1,0 +1,30 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "contract-gap-detector/1.0",
+  "proposals": [
+    {
+      "proposal_id": "P-001",
+      "source_finding": "F-001",
+      "source_finding_category": "missing_fail_closed",
+      "section": "\u00a71.3 Pre-Trade Liquidity Gate",
+      "change_type": "new_requirement",
+      "rationale": "Step 2 requires a WAP for the full `OrderQty`, but the section does not define the deterministic outcome when the walked book has zero or insufficient executable depth. A fail-closed rule is needed so implementations do not partially price or partially size the order.",
+      "status": "rejected",
+      "dedupe_key": "liquidity-gate-insufficient-depth-fail-closed",
+      "proposed_text": "After walking the L2 book, if cumulative executable depth on the walked side is zero or remains less than `OrderQty`, Liquidity Gate MUST deterministically reject before dispatch and MUST NOT partially price, partially size, or infer a synthetic WAP for any unfilled remainder. This condition MUST use `Rejected(ExpectedSlippageTooHigh)`.",
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ -16,2 +16,3 @@\n 1. Walk the L2 book on the correct side (asks for buy, bids for sell).\n+1a. If cumulative executable depth on the walked side is zero or remains less than `OrderQty`, Liquidity Gate MUST deterministically reject before dispatch and MUST NOT partially price, partially size, or infer a synthetic WAP for any unfilled remainder. This condition MUST use `Rejected(ExpectedSlippageTooHigh)`.\n 2. Compute the Weighted Avg Price (WAP) for `OrderQty`.\n"
+    },
+    {
+      "proposal_id": "P-002",
+      "source_finding": "F-002",
+      "source_finding_category": "gate_interaction_gap",
+      "section": "\u00a71.3 Pre-Trade Liquidity Gate",
+      "change_type": "new_requirement",
+      "rationale": "The normative prose above the algorithm already covers replace order placement, but the deterministic staleness pre-check only enumerates OPEN and CLOSE/HEDGE. The algorithm should mirror the same replace handling so stale-L2 behavior is deterministic before any book walk begins.",
+      "status": "proposed",
+      "dedupe_key": "liquidity-gate-staleness-precheck-replace-placement",
+      "proposed_text": "In the staleness pre-check, replace order placement MUST follow the same deterministic handling as CLOSE/HEDGE order placement: it MUST NOT be rejected solely for missing, unparseable, or stale L2; it MUST use the \u00a73.1 fallback price ladder and may dispatch only a strictly positive, monotonic risk-reducing quantity. If no valid \u00a73.1 fallback price source exists, it MUST fail closed with `Rejected(EmergencyCloseNoPrice)` and `RiskState::Degraded`.",
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ -15,1 +15,1 @@\n-0. **Staleness pre-check:** If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`, reject per the rules above (OPEN \u2192 `Rejected(LiquidityGateNoL2)`; CLOSE/HEDGE \u2192 \u00a73.1 fallback). Do not proceed to book walk.\n+0. **Staleness pre-check:** If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`, reject per the rules above (OPEN \u2192 `Rejected(LiquidityGateNoL2)`; CLOSE/HEDGE/replace order placement \u2192 \u00a73.1 fallback, with `Rejected(EmergencyCloseNoPrice)` and `RiskState::Degraded` if no valid fallback price source exists). Do not proceed to book walk.\n"
+    }
+  ]
+}

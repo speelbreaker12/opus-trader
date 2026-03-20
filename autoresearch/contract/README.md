@@ -33,6 +33,8 @@ Notes:
 - `--backend codex` routes `run_phase.py` through `autoresearch/contract/codex_wrapper.py` while preserving the existing `CLAUDE_BIN --model ... -p ...` subprocess contract.
 - The wrapper rewrites contract prompts into short file-reading prompts before calling `codex exec`; this avoids the large inline-fixture payloads that previously caused stalled runs.
 - Auth defaults to `~/.codex/auth.json`. Override with `CONTRACT_CODEX_AUTH_JSON=/path/to/auth.json` if the session should use a different Codex profile or token source.
+- Wrapper state now defaults to a persistent isolated home at `~/.cache/contract-codex-wrapper/home` so Codex no longer runs out of `/tmp`. Override with `CONTRACT_CODEX_HOME=/path/to/home` if this lane should use a different isolated Codex home.
+- Transient Codex transport failures (`500`, `503`, websocket resets, high-demand responses) now retry with exponential backoff. Tune with `CONTRACT_CODEX_RETRY_ATTEMPTS` and `CONTRACT_CODEX_RETRY_BASE_SECONDS` if a session needs different retry behavior.
 - Model defaults still map `sonnet` to `gpt-5.4` inside the wrapper; pass `--model` explicitly if you want a different Codex model.
 
 Deferred automation remains deferred:

@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "contract-gap-detector/1.0",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "\u00a71.3 Pre-Trade Liquidity Gate",
+      "category": "missing_fail_closed",
+      "severity": "P1",
+      "description": "The algorithm does not define the fail-closed outcome when the visible book is empty or has insufficient depth to compute WAP for the full `OrderQty`, so implementations can diverge on whether to reject or partially price the order.",
+      "evidence": {
+        "line": 17,
+        "quote": "2. Compute the Weighted Avg Price (WAP) for `OrderQty`."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Specify that if cumulative executable depth is zero or less than `OrderQty`, Liquidity Gate must deterministically reject before dispatch."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "\u00a71.3 Pre-Trade Liquidity Gate",
+      "category": "gate_interaction_gap",
+      "severity": "P1",
+      "description": "The deterministic staleness pre-check enumerates OPEN and CLOSE/HEDGE only, but the section also requires replace order placement to use the same fallback or fail-closed path under stale or missing L2. The algorithm therefore leaves replace handling non-deterministic.",
+      "evidence": {
+        "line": 15,
+        "quote": "reject per the rules above (OPEN \u2192 `Rejected(LiquidityGateNoL2)`; CLOSE/HEDGE \u2192 \u00a73.1 fallback)."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Amend the staleness pre-check to include replace order placement in the \u00a73.1 fallback and `EmergencyCloseNoPrice` branches."
+    }
+  ]
+}

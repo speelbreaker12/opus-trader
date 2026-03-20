@@ -1,0 +1,58 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "contract-gap-detector-v1",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "3.1 Deterministic Emergency Close",
+      "category": "missing_fail_closed",
+      "severity": "P1",
+      "description": "The residual-exposure path stops at logging. If the hedge fails or only partially fills, this section never requires tightening trading permissions or blocking further opens while exposure remains.",
+      "evidence": {
+        "line": 21,
+        "quote": "If hedge dispatch fails (rejected, timeout, or venue error), log the failure and proceed to step 4 with exposure unchanged;"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Require a fail-closed state transition or open-permission block whenever residual exposure remains after step 3/4."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "3.1 Deterministic Emergency Close / AT-236",
+      "category": "gate_interaction_gap",
+      "severity": "P1",
+      "description": "Only Liquidity Gate interaction is defined. The contract does not normatively state whether other execution gates or latches may block the emergency close or hedge path.",
+      "evidence": {
+        "line": 85,
+        "quote": "- Then: emergency close still submits IOC close attempts (Liquidity Gate does NOT block it)."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an explicit emergency-close gate interaction rule covering each blocking gate or latch and back it with ATs."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "3.1 Deterministic Emergency Close",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "The exact retry ceiling and 5/10/20-tick buffer escalation are normative, but no acceptance test verifies the three-attempt cap or per-attempt buffer values.",
+      "evidence": {
+        "line": 20,
+        "quote": "2. If partial fill: repeat for remaining qty (max 3 total attempts including the initial; buffer doubles each retry: attempt 2 = 10 ticks, attempt 3 = 20 ticks)."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an AT that asserts exactly three IOC attempts maximum and the `close_buffer_ticks`, `2x`, `4x` buffer schedule."
+    },
+    {
+      "finding_id": "F-004",
+      "section": "3.1 Deterministic Emergency Close / AT-235",
+      "category": "weak_normative",
+      "severity": "P2",
+      "description": "AT-235 uses an imprecise success condition for residual exposure, so implementations can disagree on what counts as a successful neutralization.",
+      "evidence": {
+        "line": 64,
+        "quote": "- Then: close attempts run and fallback hedge executes if still exposed; exposure goes to ~0."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Replace `~0` with a precise residual exposure tolerance or an exact zero requirement."
+    }
+  ]
+}

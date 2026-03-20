@@ -715,6 +715,138 @@ class ContractPhaseRunTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn("phase2 run complete", result.stdout)
 
+    def test_contract_phase2_run_retries_transient_codex_failure_with_persistent_home(self) -> None:
+        self.repo.write_phase2_fixture(
+            "fixture-1.md",
+            "# Fixture\n\nAT-999 is referenced here\n",
+        )
+        self.repo.set_phase2_eval(["fixtures/static/fixture-1.md"])
+        (self.repo.bin_dir / "claude").unlink()
+        fake_auth = self.repo.root / "fake-auth.json"
+        _write_text(fake_auth, '{"provider":"test"}\n')
+        state_dir = self.repo.root / "codex-state"
+        attempts_file = self.repo.root / "codex-attempts.txt"
+        _write_executable(
+            self.repo.bin_dir / "codex",
+            "\n".join(
+                [
+                    "#!/usr/bin/env python3",
+                    "import json",
+                    "import os",
+                    "import sys",
+                    "from pathlib import Path",
+                    "",
+                    "args = sys.argv[1:]",
+                    "if not args or args[0] != 'exec':",
+                    "    print(f'unexpected codex args: {args}', file=sys.stderr)",
+                    "    raise SystemExit(2)",
+                    "prompt = sys.stdin.read()",
+                    "home = Path(os.environ.get('HOME', ''))",
+                    "expected_home = Path(os.environ['FAKE_CODEX_EXPECTED_HOME'])",
+                    "if home != expected_home:",
+                    "    print(f'unexpected HOME: {home}', file=sys.stderr)",
+                    "    raise SystemExit(3)",
+                    "if '.tmp' in str(home) or home.name == 'tmp':",
+                    "    print(f'wrapper kept temp HOME: {home}', file=sys.stderr)",
+                    "    raise SystemExit(4)",
+                    "if not (home / '.codex' / 'auth.json').is_file():",
+                    "    print('missing copied auth.json in persistent HOME', file=sys.stderr)",
+                    "    raise SystemExit(5)",
+                    "if not (home / '.codex' / 'config.toml').is_file():",
+                    "    print('missing config.toml in persistent HOME', file=sys.stderr)",
+                    "    raise SystemExit(6)",
+                    "attempts_path = Path(os.environ['FAKE_CODEX_ATTEMPTS_FILE'])",
+                    "attempt = int(attempts_path.read_text(encoding='utf-8')) + 1 if attempts_path.exists() else 1",
+                    "attempts_path.write_text(str(attempt), encoding='utf-8')",
+                    "if attempt == 1:",
+                    "    print(\"We're currently experiencing high demand\", file=sys.stderr)",
+                    "    raise SystemExit(75)",
+                    "if 'Read exactly one file and nothing else:' not in prompt:",
+                    "    print('missing short prompt file-read instruction', file=sys.stderr)",
+                    "    raise SystemExit(7)",
+                    "if '--output-last-message' not in args:",
+                    "    print('missing --output-last-message', file=sys.stderr)",
+                    "    raise SystemExit(8)",
+                    "last_path = Path(args[args.index('--output-last-message') + 1])",
+                    "if 'Detector findings JSON:' in prompt:",
+                    "    payload = {",
+                    "        'generated_at': '2026-03-20T20:55:00Z',",
+                    "        'validator_version': 'fake-codex',",
+                    "        'proposals': [",
+                    "            {",
+                    "                'proposal_id': 'P-001',",
+                    "                'source_finding': 'F-001',",
+                    "                'source_finding_category': 'cross_ref_broken',",
+                    "                'section': '§1',",
+                    "                'change_type': 'mechanical',",
+                    "                'rationale': 'Repair the AT reference.',",
+                    "                'status': 'proposed',",
+                    "                'dedupe_key': 'fixture-1/p-001',",
+                    "                'mechanical_ok': True,",
+                    "                'mechanical_details': 'Exact token substitution.',",
+                    "                'replace_span': {",
+                    "                    'start_line': 3,",
+                    "                    'end_line': 3,",
+                    "                    'old_text': 'AT-999 is referenced here',",
+                    "                    'new_text': 'AT-101 is referenced here'",
+                    "                },",
+                    "                'diff_preview': '\\n'.join([",
+                    "                    'diff --git a/specs/CONTRACT.md b/specs/CONTRACT.md',",
+                    "                    '--- a/specs/CONTRACT.md',",
+                    "                    '+++ b/specs/CONTRACT.md',",
+                    "                    '@@ -3,1 +3,1 @@',",
+                    "                    '-AT-999 is referenced here',",
+                    "                    '+AT-101 is referenced here',",
+                    "                ]),",
+                    "            }",
+                    "        ]",
+                    "    }",
+                    "else:",
+                    "    payload = {",
+                    "        'generated_at': '2026-03-20T20:54:00Z',",
+                    "        'validator_version': 'fake-codex',",
+                    "        'findings': [",
+                    "            {",
+                    "                'finding_id': 'F-001',",
+                    "                'section': '§1',",
+                    "                'category': 'cross_ref_broken',",
+                    "                'severity': 'P1',",
+                    "                'description': 'Broken AT reference.',",
+                    "                'evidence': {'line': 3, 'quote': 'AT-999 is referenced here'},",
+                    "                'proposed_fix_type': 'mechanical',",
+                    "                'proposed_fix': 'Replace AT-999 with AT-101.'",
+                    "            }",
+                    "        ]",
+                    "    }",
+                    "last_path.write_text(json.dumps(payload), encoding='utf-8')",
+                    "print(json.dumps(payload))",
+                    "",
+                ]
+            )
+            + "\n",
+        )
+
+        result = self.repo.run(
+            "contract",
+            "phase2",
+            "run",
+            "--backend",
+            "codex",
+            "--model",
+            "gpt-5.4",
+            extra_env={
+                "CONTRACT_CODEX_AUTH_JSON": str(fake_auth),
+                "CONTRACT_CODEX_HOME": str(state_dir / "home"),
+                "CONTRACT_CODEX_RETRY_ATTEMPTS": "2",
+                "CONTRACT_CODEX_RETRY_BASE_SECONDS": "0",
+                "FAKE_CODEX_EXPECTED_HOME": str(state_dir / "home"),
+                "FAKE_CODEX_ATTEMPTS_FILE": str(attempts_file),
+            },
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("phase2 run complete", result.stdout)
+        self.assertEqual(attempts_file.read_text(encoding="utf-8").strip(), "3")
+
     def test_contract_phase1_baseline_and_eval_score_outputs(self) -> None:
         result = self.repo.run("contract", "phase1", "baseline")
         self.assertEqual(result.returncode, 0, msg=result.stderr)
