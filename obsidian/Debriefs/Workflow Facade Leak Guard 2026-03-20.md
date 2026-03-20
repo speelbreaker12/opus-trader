@@ -7,7 +7,7 @@ date: "2026-03-20"
 - `0c944689` — workflow: add facade leak guard
 - `a89f7c6e` — obsidian: bind facade guard project to dedicated branch
 - `e5e906df` — workflow: isolate pre-push hook git env
-- pending — record PR #225 boundary metadata
+- `551dc1e8` — obsidian: record facade guard PR boundary
 
 ## 0) What shipped
 - Feature/behavior: Added a repo-wide facade public-module leak guard, wired it into live verification, and covered semicolon, attribute-prefixed, multiline-attribute, and inline-block `pub mod` forms with regression fixtures.

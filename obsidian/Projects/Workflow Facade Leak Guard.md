@@ -38,7 +38,7 @@ Review-ready on branch `project/workflow-facade-leak-guard-v2` with PR #225 open
 - `0c944689` — 2026-03-20 — add and harden the workflow facade leak guard, wire it into live verification, repair stale workflow verification references, and restore runtime snapshot metadata before commit.
 - `a89f7c6e` — 2026-03-20 — rebind the project to a dedicated feature branch/worktree for push/PR flow and record full verification readiness.
 - `e5e906df` — 2026-03-20 — isolate pre-push hook git env, add regression coverage, and recover clean push/PR flow on the v2 branch.
-- `pending` — 2026-03-20 — record PR boundary metadata after opening PR #225.
+- `551dc1e8` — 2026-03-20 — record PR boundary metadata after opening PR #225.
 
 ## Key Files
 - plans/lint_facade_public_modules.sh
