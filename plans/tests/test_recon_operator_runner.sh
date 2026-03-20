@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUNNER="$ROOT/plans/recon_operator_run.sh"
@@ -82,6 +84,8 @@ EOF
 cat > "$repo/plans/premortem_ready.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 story="${1:-}"
 if [[ "$story" == "S2-002" ]]; then
   echo "ready"
@@ -95,6 +99,8 @@ chmod +x "$repo/plans/premortem_ready.sh"
 cat > "$repo/plans/wf_step.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 story="${1:-}"
 step="${2:-}"
 if [[ "$story" == "S2-002" && "$step" == "preflight" ]]; then
@@ -137,6 +143,8 @@ chmod +x "$repo/plans/wf_step.sh"
 cat > "$repo/plans/recon_scoreboard.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 slice="${1:-}"
 mkdir -p "reviews/reconciliations/S${slice#S}"
 echo "# Scoreboard" > "reviews/reconciliations/S${slice#S}/SCOREBOARD.md"

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 set -e
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
 lint_script="$repo_root/plans/prd_lint.sh"

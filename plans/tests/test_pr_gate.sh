@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 # Note: expect_fail subshells use `bash -c` (not `bash -lc`) intentionally.
 # Login shells load user profiles that may set unexpected PATH/env, making
 # tests non-hermetic across machines.
@@ -46,6 +48,8 @@ chmod +x "$repo_dir/plans/pr_gate.sh"
 cat > "$repo_dir/plans/pre_pr_review_gate.sh" <<'EOF_PRE_PR'
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 if [[ "${PRE_PR_MODE:-pass}" == "fail" ]]; then
   echo "pre-pr gate forced failure" >&2
@@ -65,6 +69,8 @@ chmod +x "$repo_dir/plans/pre_pr_review_gate.sh"
 cat > "$fake_bin/gh" <<'EOF_GH'
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 mode="${GH_MODE:-clean}"
 head_sha="${GH_HEAD_SHA:-abc123}"
