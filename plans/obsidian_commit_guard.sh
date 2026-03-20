@@ -68,12 +68,12 @@ branch_has_obsidian_update() {
     return 1
   fi
 
-  # Check if ANY commit on this branch (since divergence) touched obsidian files
-  if git log --format='%H' "${base_ref}..HEAD" 2>/dev/null | while IFS= read -r sha; do
-    if git diff-tree --no-commit-id --name-only -r "$sha" -- "obsidian/${kind}" 2>/dev/null | grep -q "\.md$"; then
-      exit 0  # found — exit the pipeline with success
-    fi
-  done; then
+  # Check if ANY commit on this branch (since divergence) touched obsidian files.
+  # Pipe through cat to avoid SIGPIPE from grep -q closing the pipe early,
+  # which kills the pipeline under set -o pipefail.
+  local matches
+  matches="$(git log --name-only --format='' "${base_ref}..HEAD" -- "obsidian/${kind}" 2>/dev/null | cat)"
+  if printf '%s\n' "$matches" | grep -q '\.md$'; then
     return 0
   fi
 

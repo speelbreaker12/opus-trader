@@ -54,7 +54,7 @@ while IFS= read -r path; do
       change_class="critical"
       break
       ;;
-    plans/*.sh|plans/lib/*.sh|scripts/*|python/*|.githooks/*|.claude/hooks/*|.claude/scripts/*)
+    plans/*.sh|plans/lib/*.sh|plans/*.json|plans/*.py|scripts/*|python/*|.githooks/*|.claude/hooks/*|.claude/scripts/*)
       # Non-critical code — only upgrade if not already critical
       if [[ "$change_class" != "critical" ]]; then
         change_class="non_critical"

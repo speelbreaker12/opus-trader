@@ -20,6 +20,34 @@ if [[ -z "$git_dir" ]]; then
   exit 2
 fi
 
+# Publish mode: when called from pre-push, there are no staged files.
+# Instead, check if the current HEAD tree has been attested.
+if [[ "${CODE_REVIEW_PUBLISH_MODE:-0}" == "1" ]]; then
+  attest_file="$git_dir/code_review_expert.attest"
+  current_tree="$(git rev-parse HEAD^{tree} 2>/dev/null || true)"
+  attest_tree=""
+  if [[ -f "$attest_file" ]]; then
+    attest_tree="$(grep '^tree=' "$attest_file" | head -n 1 | cut -d= -f2- || true)"
+  fi
+
+  if [[ "${SKIP_CODE_REVIEW_EXPERT_HOOK:-0}" == "1" ]]; then
+    echo "WARN: SKIP_CODE_REVIEW_EXPERT_HOOK=1, bypassing code-review-expert guard" >&2
+    exit 0
+  fi
+
+  if [[ -z "$attest_tree" || "$attest_tree" != "$current_tree" ]]; then
+    echo "ERROR: missing or stale code-review-expert attestation at publish boundary." >&2
+    echo "  Current HEAD tree: $current_tree" >&2
+    echo "  Attested tree:     ${attest_tree:-none}" >&2
+    echo "Required: run code-review-expert review, then attest:" >&2
+    echo "  ./plans/code_review_expert_attest.sh" >&2
+    echo "Emergency bypass:" >&2
+    echo "  SKIP_CODE_REVIEW_EXPERT_HOOK=1 git push ..." >&2
+    exit 1
+  fi
+  exit 0
+fi
+
 staged_files="$(git diff --cached --name-only --diff-filter=ACMRTUXB)"
 if [[ -z "$staged_files" ]]; then
   exit 0

@@ -14,10 +14,12 @@ cd "$ROOT"
 # PR gate marker — required by pr-review-gate-hook.sh before gh pr create
 if [[ "${1:-}" == "--pr-gate" ]]; then
   branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+  # Sanitize branch name: replace / with _ to match pr-review-gate-hook.sh lookup
+  safe_branch="${branch//\//_}"
   head_commit="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
   marker_dir="artifacts/pr-review-gate"
   mkdir -p "$marker_dir"
-  cat > "$marker_dir/${branch}.json" <<PREOF
+  cat > "$marker_dir/${safe_branch}.json" <<PREOF
 {
   "verdict": "PASS",
   "head_commit": "$head_commit",
@@ -26,7 +28,7 @@ if [[ "${1:-}" == "--pr-gate" ]]; then
 }
 PREOF
   echo "OK: PR gate marker written for $branch at $head_commit"
-  echo "  file: $marker_dir/${branch}.json"
+  echo "  file: $marker_dir/${safe_branch}.json"
   exit 0
 fi
 

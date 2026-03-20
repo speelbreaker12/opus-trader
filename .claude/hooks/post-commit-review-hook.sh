@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PostToolUse hook: advisory reminder to run code-review-expert after commit.
-# This is a REMINDER, not a gate. The real enforcement is in the pre-commit hook
-# (code_review_expert_guard.sh) which checks attestation before allowing commit.
+# This is a REMINDER, not a gate. Review attestation is enforced at the
+# PUBLISH boundary (pre-push hook), not at commit time.
 #
 # Never exit 2 — that blocks the agent from proceeding, which causes more
 # friction than value for docs/formatting/follow-up commits.

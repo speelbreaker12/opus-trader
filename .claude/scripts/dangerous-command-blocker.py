@@ -13,12 +13,23 @@ import re
 data = json.load(sys.stdin)
 cmd = data.get("tool_input", {}).get("command", "")
 
+def _targets_main(command: str) -> bool:
+    """Check if a git push targets main/master, including refspec forms like HEAD:main."""
+    # Direct branch name: git push origin main
+    if re.search(r"\bgit\s+push\s+(\S+\s+)?(main|master)\b", command, re.IGNORECASE):
+        return True
+    # Refspec form: git push origin HEAD:main, +HEAD:refs/heads/main
+    if re.search(r"\bgit\s+push\b.*:(main|master|refs/heads/main|refs/heads/master)\b", command, re.IGNORECASE):
+        return True
+    return False
+
+
 # === LEVEL 0: CONTEXT-AWARE ALLOWLISTS ===
 
 # Allow --force-with-lease on non-main branches (normal post-rebase workflow).
 # Still block bare --force (without -with-lease) and any force to main/master.
 if re.search(r"\bgit\s+push\s+.*--force-with-lease", cmd, re.IGNORECASE):
-    if re.search(r"\bgit\s+push\s+(\S+\s+)?(main|master)\b", cmd, re.IGNORECASE):
+    if _targets_main(cmd):
         print("BLOCKED: --force-with-lease to main/master is never allowed", file=sys.stderr)
         sys.exit(2)
     # Allow on feature branches
@@ -43,7 +54,9 @@ catastrophic_patterns = [
     (r"\bchmod\s+(-R\s+)?777\s+/", "chmod 777 on root"),
     (r"\bchown\s+(-R\s+)?.*\s+/(\s|$)", "chown on root directory"),
     (r"\bgit\s+push\s+.*--force(?!-with-lease)(\s|$)", "git force push (use --force-with-lease)"),
-    (r"\bgit\s+push\s+(\S+\s+)?(main|master)\b", "git push to main/master (use a feature branch)"),
+    # main/master push detection is handled by _targets_main() in Level 0 for --force-with-lease.
+    # This pattern catches non-force pushes to main/master (both direct and refspec forms).
+    (r"\bgit\s+push\b.*\b(main|master)\b", "git push to main/master (use a feature branch)"),
     (r"\bgit\s+reset\s+--hard(\s|$)", "git reset --hard (set MAIN_RECOVERY=1 for recovery)"),
 ]
 

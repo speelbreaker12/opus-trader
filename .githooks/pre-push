@@ -65,7 +65,7 @@ while read -r _local_ref _local_sha remote_ref _remote_sha; do
 
   if [[ "$has_significant_changes" -eq 1 ]]; then
     if [[ -x ./plans/code_review_expert_guard.sh ]]; then
-      ./plans/code_review_expert_guard.sh
+      CODE_REVIEW_PUBLISH_MODE=1 ./plans/code_review_expert_guard.sh
     fi
   else
     echo "Skipping code-review-expert guard (no significant changes on branch)"
