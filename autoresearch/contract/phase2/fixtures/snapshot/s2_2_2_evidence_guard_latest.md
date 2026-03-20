@@ -114,6 +114,13 @@ AT-422
 - Pass criteria: trip/clear behavior follows overridden config values, not defaults.
 - Fail criteria: no trip, no clear, or behavior matches hard-coded defaults instead of config.
 
+AT-1283
+- Given: `parquet_queue_trip_pct = 0.80`, `parquet_queue_trip_window_s = 5`, `parquet_queue_clear_pct = 0.75`, `queue_clear_window_s = 10`, `evidenceguard_global_cooldown = 120`, and all other EvidenceGuard criteria are satisfied.
+- When: `parquet_queue_depth_pct` is 0.85 for 6s, then 0.72 for 10s, and remains 0.72 through 120s.
+- Then: after 10s EvidenceChainState remains not GREEN because the global cooldown has not expired; only after 120s may EvidenceChainState become GREEN if all criteria remain satisfied.
+- Pass criteria: GREEN stays blocked until `max(queue_clear_window_s, evidenceguard_global_cooldown)` expires.
+- Fail criteria: GREEN clears after only the 10s clear window or otherwise ignores the non-zero cooldown.
+
 AT-404
 - Given: `EvidenceChainState != GREEN`, a cancel/replace that increases exposure, and no Kill-tier triggers are active.
 - When: EvidenceGuard evaluates permissions.

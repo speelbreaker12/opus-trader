@@ -822,1713 +822,1731 @@
     "description": "Given: config overrides are set to `parquet_queue_trip_pct = 0.80`, `parquet_queue_trip_window_s = 5`, `parquet_queue_clear_pct = 0.75`, `queue_clear_window_s = 10`, and `evidenceguard_global_cooldown = 0`, and all other EvidenceGuard criteria are satisfied."
   },
   {
-    "at_id": "AT-404",
+    "at_id": "AT-1283",
     "section_anchor": "2.2.2",
     "line": 2508,
+    "description": "Given: `parquet_queue_trip_pct = 0.80`, `parquet_queue_trip_window_s = 5`, `parquet_queue_clear_pct = 0.75`, `queue_clear_window_s = 10`, `evidenceguard_global_cooldown = 120`, and all other EvidenceGuard criteria are satisfied."
+  },
+  {
+    "at_id": "AT-404",
+    "section_anchor": "2.2.2",
+    "line": 2515,
     "description": "Given: `EvidenceChainState != GREEN`, a cancel/replace that increases exposure, and no Kill-tier triggers are active."
   },
   {
     "at_id": "AT-214",
     "section_anchor": "2.2.2",
-    "line": 2515,
+    "line": 2522,
     "description": "Given: `wal_write_errors` is missing or unparseable while EvidenceGuard evaluates EvidenceChainState."
   },
   {
     "at_id": "AT-215",
     "section_anchor": "2.2.2",
-    "line": 2522,
+    "line": 2529,
     "description": "Given: `decision_snapshot_write_errors` is missing or unparseable while EvidenceGuard evaluates EvidenceChainState."
   },
   {
     "at_id": "AT-415",
     "section_anchor": "2.2.2",
-    "line": 2529,
+    "line": 2536,
     "description": "Given: `truth_capsule_write_errors` is missing/unparseable OR `parquet_queue_overflow_count` is missing/unparseable."
   },
   {
     "at_id": "AT-923",
     "section_anchor": "2.2.2",
-    "line": 2536,
+    "line": 2543,
     "description": "Given: `evidenceguard_counters_last_update_ts_ms` is older than `evidenceguard_counters_max_age_ms`."
   },
   {
     "at_id": "AT-1276",
     "section_anchor": "2.2.2",
-    "line": 2543,
+    "line": 2550,
     "description": "Given: `enforced_profile == CSP` and `EvidenceChainState != GREEN` (e.g., `wal_write_errors` incremented); an OPEN intent arrives."
   },
   {
     "at_id": "AT-1261",
     "section_anchor": "2.2.3.2",
-    "line": 2657,
+    "line": 2674,
     "description": "Given: `fee_model_cache_age_s > fee_model_hard_stale_s`; all other SystemIntegrityAxis inputs nominal."
   },
   {
     "at_id": "AT-1277",
     "section_anchor": "2.2.3.2",
-    "line": 2663,
+    "line": 2680,
     "description": "Given: `cortex_override == ForceKill`; all other Kill triggers inactive (mm_util nominal, risk_state Healthy, no watchdog/disk/session kill)."
   },
   {
     "at_id": "AT-1278",
     "section_anchor": "2.2.3.2",
-    "line": 2670,
+    "line": 2687,
     "description": "Given: `cortex_override == ForceReduceOnly`; all Kill triggers inactive; all other ReduceOnly predicates pass (nominal)."
   },
   {
     "at_id": "AT-1279",
     "section_anchor": "2.2.3.2",
-    "line": 2677,
+    "line": 2694,
     "description": "Given: `mm_util >= mm_util_kill`; all other Kill triggers inactive (risk_state Healthy, cortex_override absent, no watchdog/disk/session kill)."
   },
   {
     "at_id": "AT-1280",
     "section_anchor": "2.2.3.2",
-    "line": 2684,
+    "line": 2701,
     "description": "Given: `risk_state == Maintenance`; all Kill triggers inactive; all other ReduceOnly predicates pass (nominal)."
   },
   {
     "at_id": "AT-1281",
     "section_anchor": "2.2.3.2",
-    "line": 2691,
+    "line": 2708,
     "description": "Given: `risk_state == Degraded`; all Kill triggers inactive; all other ReduceOnly predicates pass (nominal)."
   },
   {
     "at_id": "AT-1264",
     "section_anchor": "2.2.3.3",
-    "line": 2761,
+    "line": 2778,
     "description": "Given: `bunker_mode_active` becomes true (Bunker Mode entry via \u00a72.3.2); all other axis inputs nominal."
   },
   {
     "at_id": "AT-1244",
     "section_anchor": "2.2.3.5",
-    "line": 2843,
+    "line": 2860,
     "description": "Given: PolicyGuard computes `TradingMode == ReduceOnly` with multiple active reduce-only predicates (e.g., `risk_state == Degraded` AND `bunker_mode_active == true` AND `open_permission_blocked_latch == true`)."
+  },
+  {
+    "at_id": "AT-1282",
+    "section_anchor": "2.2.3.5",
+    "line": 2867,
+    "description": "Given: `risk_state == Kill`, `session_termination_active == true`, and `bunker_mode_active == true`; all other Kill-tier predicates inactive."
   },
   {
     "at_id": "AT-336",
     "section_anchor": "2.2.3.7",
-    "line": 2897,
+    "line": 2921,
     "description": "Given: `policy_age_sec > max_policy_age_sec`."
   },
   {
     "at_id": "AT-337",
     "section_anchor": "2.2.3.7",
-    "line": 2905,
+    "line": 2929,
     "description": "Given: `now_ms - watchdog_last_heartbeat_ts_ms > watchdog_kill_s * 1000` **AND** `now_ms - loop_tick_last_ts_ms > watchdog_kill_s * 1000`."
   },
   {
     "at_id": "AT-918",
     "section_anchor": "2.2.3.7",
-    "line": 2913,
+    "line": 2937,
     "description": "Given: `risk_state == Kill`."
   },
   {
     "at_id": "AT-416",
     "section_anchor": "2.2.3.7",
-    "line": 2921,
+    "line": 2945,
     "description": "Given: `EvidenceChainState != GREEN` for >60s (window + cooldown per \u00a72.2.2), `enforced_profile != CSP`, and no Kill-tier triggers are active."
   },
   {
     "at_id": "AT-417",
     "section_anchor": "2.2.3.7",
-    "line": 2929,
+    "line": 2953,
     "description": "Given: a sequence of ticks where multiple Axis Resolver predicates toggle (including both kill-tier and reduceonly-tier predicates)."
   },
   {
     "at_id": "AT-931",
     "section_anchor": "2.2.3.7",
-    "line": 2940,
+    "line": 2964,
     "description": "Given: the strategy loop computes an intent while `TradingMode == Active`, but before dispatch the Axis Resolver input flips to ReduceOnly/Kill (e.g., evidence trip)."
   },
   {
     "at_id": "AT-1065",
     "section_anchor": "2.2.3.7",
-    "line": 2948,
+    "line": 2972,
     "description": "Given: `TradingMode == ReduceOnly` and there exist outstanding OPEN orders with `reduce_only != true`."
   },
   {
     "at_id": "AT-1241",
     "section_anchor": "2.2.3.7",
-    "line": 2956,
+    "line": 2980,
     "description": "Given: `TradingMode != Active`, cancel sweep evaluates an in-flight order, and risk direction/classification is ambiguous (including legacy WAL records with missing `reduce_only`)."
   },
   {
     "at_id": "AT-1242",
     "section_anchor": "2.2.3.7",
-    "line": 2964,
+    "line": 2988,
     "description": "Given: `TradingMode != Active`, net exposure is non-zero or unknown, and canceling a candidate in-flight order would leave zero risk-reducing in-flight orders."
   },
   {
     "at_id": "AT-132",
     "section_anchor": "2.2.3.7",
-    "line": 2972,
+    "line": 2996,
     "description": "Given: `emergency_reduceonly_active == true` and the cooldown timer has not expired."
   },
   {
     "at_id": "AT-1048",
     "section_anchor": "2.2.3.7",
-    "line": 2980,
+    "line": 3004,
     "description": "Given: a unit-test harness that can inject axis values into the pure resolver function."
   },
   {
     "at_id": "AT-1053",
     "section_anchor": "2.2.3.7",
-    "line": 2989,
+    "line": 3013,
     "description": "Given: a pure resolver function `resolve_trading_mode(capital, market, system)` and a restrictiveness ordering `Active < ReduceOnly < Kill`."
   },
   {
     "at_id": "AT-1050",
     "section_anchor": "2.2.3.7",
-    "line": 2999,
+    "line": 3023,
     "description": "Given: all Kill-tier triggers are forced inactive, and all ReduceOnly predicates are forced pass EXCEPT `bunker_mode_active`."
   },
   {
     "at_id": "AT-1051",
     "section_anchor": "2.2.3.7",
-    "line": 3007,
+    "line": 3031,
     "description": "Given: all Kill-tier triggers are forced inactive, and all ReduceOnly predicates are forced pass EXCEPT `mm_util >= mm_util_reduceonly`."
   },
   {
     "at_id": "AT-1052",
     "section_anchor": "2.2.3.7",
-    "line": 3015,
+    "line": 3039,
     "description": "Given: all Kill-tier triggers are forced inactive, and all ReduceOnly predicates are forced pass EXCEPT `open_permission_blocked_latch == true`."
   },
   {
     "at_id": "AT-1049",
     "section_anchor": "2.2.3.7",
-    "line": 3024,
+    "line": 3048,
     "description": "Given: `TradingMode in {ReduceOnly, Kill}` and net exposure \u2260 0."
   },
   {
     "at_id": "AT-338",
     "section_anchor": "2.2.3.7",
-    "line": 3032,
+    "line": 3056,
     "description": "Given: `TradingMode == Kill` (e.g., `mm_util >= mm_util_kill`) and open exposure exists."
   },
   {
     "at_id": "AT-339",
     "section_anchor": "2.2.3.7",
-    "line": 3040,
+    "line": 3064,
     "description": "Given: `disk_used_pct >= disk_kill_pct` **and** `disk_used_pct_secondary >= disk_kill_pct`, and open exposure exists."
   },
   {
     "at_id": "AT-340",
     "section_anchor": "2.2.3.7",
-    "line": 3048,
+    "line": 3072,
     "description": "Given: `TradingMode == Kill` due to a kill-tier trigger AND (`EvidenceChainState != GREEN` OR WAL is degraded), with open exposure."
   },
   {
     "at_id": "AT-346",
     "section_anchor": "2.2.3.7",
-    "line": 3056,
+    "line": 3080,
     "description": "Given: `session_termination_active == true` and open exposure exists."
   },
   {
     "at_id": "AT-347",
     "section_anchor": "2.2.3.7",
-    "line": 3064,
+    "line": 3088,
     "description": "Given: watchdog heartbeat **and** loop tick are stale beyond `watchdog_kill_s` AND open exposure exists."
   },
   {
     "at_id": "AT-013",
     "section_anchor": "2.2.3.7",
-    "line": 3072,
+    "line": 3096,
     "description": "Given: `bunker_mode_active == true`, a Kill-tier trigger is active (e.g., `mm_util >= mm_util_kill`), and open exposure exists."
   },
   {
     "at_id": "AT-1066",
     "section_anchor": "2.2.3.7",
-    "line": 3080,
+    "line": 3104,
     "description": "Given: watchdog heartbeat is stale beyond `watchdog_kill_s`, but `loop_tick_last_ts_ms` is fresh."
   },
   {
     "at_id": "AT-1067",
     "section_anchor": "2.2.3.7",
-    "line": 3087,
+    "line": 3111,
     "description": "Given: `disk_used_pct >= disk_kill_pct` but `disk_used_pct_secondary < disk_kill_pct` (or missing/stale)."
   },
   {
     "at_id": "AT-1068",
     "section_anchor": "2.2.3.7",
-    "line": 3094,
+    "line": 3118,
     "description": "Given: `session_termination_active` is missing or unparseable."
   },
   {
     "at_id": "AT-1069",
     "section_anchor": "2.2.3.7",
-    "line": 3101,
+    "line": 3125,
     "description": "Given: confirmed kill predicates per \u00a72.2.3.1.2 (watchdog, disk, or session termination)."
   },
   {
     "at_id": "AT-1243",
     "section_anchor": "2.2.4",
-    "line": 3146,
+    "line": 3170,
     "description": "Given: `open_permission_blocked_latch == true` and reconciliation remains blocked beyond `reconcile_stall_max_delay_s`."
   },
   {
     "at_id": "AT-1100",
     "section_anchor": "2.2.4",
-    "line": 3154,
+    "line": 3178,
     "description": "Given: reconciliation runs and REST `/get_user_trades` over the last `reconcile_trade_lookback_sec` returns trades that are not present in the local ledger (missing trades)."
   },
   {
     "at_id": "AT-1263",
     "section_anchor": "2.2.4",
-    "line": 3161,
+    "line": 3185,
     "description": "Given: `open_permission_blocked_latch == true`; REST `/get_user_trades` returns network error, timeout, HTTP error, or unparseable response."
   },
   {
     "at_id": "AT-1268",
     "section_anchor": "2.2.4",
-    "line": 3167,
+    "line": 3191,
     "description": "Given: reconciliation runs; ledger inflight intents (non-terminal) do NOT match exchange open orders by label (e.g., ledger has an inflight BUY that exchange does not list, or exchange lists an order not in ledger)."
   },
   {
     "at_id": "AT-1269",
     "section_anchor": "2.2.4",
-    "line": 3174,
+    "line": 3198,
     "description": "Given: reconciliation runs; exchange position differs from ledger cumulative fills by more than `position_reconcile_epsilon`."
   },
   {
     "at_id": "AT-010",
     "section_anchor": "2.2.4",
-    "line": 3192,
+    "line": 3216,
     "description": "Given: `open_permission_blocked_latch==true` with `open_permission_reason_codes` containing `RESTART_RECONCILE_REQUIRED`."
   },
   {
     "at_id": "AT-430",
     "section_anchor": "2.2.4",
-    "line": 3199,
+    "line": 3223,
     "description": "Given: startup occurs with no persisted latch state."
   },
   {
     "at_id": "AT-1242",
     "section_anchor": "2.2.4",
-    "line": 3206,
+    "line": 3230,
     "description": "Given: the system is running with `open_permission_blocked_latch==false` (latch clear, normal operation)."
   },
   {
     "at_id": "AT-1270",
     "section_anchor": "2.2.4",
-    "line": 3213,
+    "line": 3237,
     "description": "Given: `open_permission_blocked_latch == true` with `open_permission_reason_codes` containing both `WS_BOOK_GAP_RECONCILE_REQUIRED` and `INVENTORY_MISMATCH_RECONCILE_REQUIRED`."
   },
   {
     "at_id": "AT-011",
     "section_anchor": "2.2.4",
-    "line": 3221,
+    "line": 3245,
     "description": "Given: `open_permission_blocked_latch==true` for a WS gap reason (e.g., `WS_TRADES_GAP_RECONCILE_REQUIRED`)."
   },
   {
     "at_id": "AT-1271",
     "section_anchor": "2.2.4",
-    "line": 3228,
+    "line": 3252,
     "description": "Given: any state transition that sets `open_permission_blocked_latch` to `true` (startup, WS gap, WS trades gap, WS data stale, inventory mismatch, session termination)."
   },
   {
     "at_id": "AT-402",
     "section_anchor": "2.2.4",
-    "line": 3236,
+    "line": 3260,
     "description": "Given: `open_permission_blocked_latch==true` with `open_permission_reason_codes` containing `RESTART_RECONCILE_REQUIRED` and a cancel/replace that increases exposure."
   },
   {
     "at_id": "AT-110",
     "section_anchor": "2.2.4",
-    "line": 3243,
+    "line": 3267,
     "description": "Given: `open_permission_blocked_latch==true`."
   },
   {
     "at_id": "AT-411",
     "section_anchor": "2.2.4",
-    "line": 3250,
+    "line": 3274,
     "description": "Given: runtime binding cert is missing/stale/FAIL OR (`EvidenceChainState != GREEN` and `enforced_profile != CSP`), and no reconcile-class triggers are active."
   },
   {
     "at_id": "AT-1253",
     "section_anchor": "2.2.4",
-    "line": 3258,
+    "line": 3282,
     "description": "Given: runtime binding cert is missing/stale/FAIL AND a reconcile-class trigger is concurrently active (e.g., `WS_BOOK_GAP_RECONCILE_REQUIRED`)."
   },
   {
     "at_id": "AT-917",
     "section_anchor": "2.2.5",
-    "line": 3282,
+    "line": 3306,
     "description": "Given: `EvidenceChainState != GREEN`, `enforced_profile != CSP`, and a risk-increasing cancel/replace."
   },
   {
     "at_id": "AT-930",
     "section_anchor": "2.2.6",
-    "line": 3337,
+    "line": 3361,
     "description": "Given: a test harness that triggers at least one rejection in each category (quantization, liquidity, exposure reservation, preflight, cancel/replace permission)."
   },
   {
     "at_id": "AT-1101",
     "section_anchor": "2.2.6",
-    "line": 3344,
+    "line": 3368,
     "description": "Given: the full set of `Rejected(...)` tokens referenced anywhere in this contract."
   },
   {
     "at_id": "AT-231",
     "section_anchor": "2.3",
-    "line": 3385,
+    "line": 3409,
     "description": "Given: `MarketData` where DVOL jumps by +10% within one minute."
   },
   {
     "at_id": "AT-045",
     "section_anchor": "2.3",
-    "line": 3392,
+    "line": 3416,
     "description": "Given: `spread_bps >= spread_kill_bps` for at least `cortex_kill_window_s` (or `depth_topN <= depth_kill_min` for the same window)."
   },
   {
     "at_id": "AT-418",
     "section_anchor": "2.3",
-    "line": 3399,
+    "line": 3423,
     "description": "Given: Reflexive Cortex would emit `ForceKill` in the same tick that Exchange Health Monitor emits `ForceReduceOnly`."
   },
   {
     "at_id": "AT-420",
     "section_anchor": "2.3",
-    "line": 3406,
+    "line": 3430,
     "description": "Given: top-5 bid levels sum to `320_000` USD and top-5 ask levels sum to `280_000` USD (per-level price * qty)."
   },
   {
     "at_id": "AT-119",
     "section_anchor": "2.3",
-    "line": 3413,
+    "line": 3437,
     "description": "Given: `open_permission_blocked_latch == true` with `open_permission_reason_codes` containing `WS_BOOK_GAP_RECONCILE_REQUIRED` or `WS_TRADES_GAP_RECONCILE_REQUIRED`, and a cancel/replace request that increases exposure (e.g., cancel a reduce-only close or replace with larger size in the risk-increasing direction)."
   },
   {
     "at_id": "AT-232",
     "section_anchor": "2.3.1",
-    "line": 3439,
+    "line": 3463,
     "description": "Given: `/public/get_announcements` indicates maintenance starting in 30 minutes."
   },
   {
     "at_id": "AT-204",
     "section_anchor": "2.3.1",
-    "line": 3446,
+    "line": 3470,
     "description": "Given: `/public/get_announcements` endpoint is unreachable for >= `exchange_health_stale_s`."
   },
   {
     "at_id": "AT-1111",
     "section_anchor": "2.3.1",
-    "line": 3453,
+    "line": 3477,
     "description": "Given: the Exchange Health Monitor is running and `/public/get_announcements` is reachable."
   },
   {
     "at_id": "AT-267",
     "section_anchor": "2.3.2",
-    "line": 3485,
+    "line": 3509,
     "description": "Given: `ws_event_lag_ms` breaches the threshold."
   },
   {
     "at_id": "AT-268",
     "section_anchor": "2.3.2",
-    "line": 3492,
+    "line": 3516,
     "description": "Given: bunker entry conditions clear and metrics stay below thresholds."
   },
   {
     "at_id": "AT-209",
     "section_anchor": "2.3.2",
-    "line": 3499,
+    "line": 3523,
     "description": "Given: `ws_event_lag_ms > bunker_jitter_threshold_ms` (or any other bunker entry condition from \u00a72.3.2 rules)."
   },
   {
     "at_id": "AT-401",
     "section_anchor": "2.3.2",
-    "line": 3506,
+    "line": 3530,
     "description": "Given: `bunker_mode_active == true` and a cancel/replace that increases exposure (e.g., cancel a reduce-only close)."
   },
   {
     "at_id": "AT-345",
     "section_anchor": "2.3.2",
-    "line": 3513,
+    "line": 3537,
     "description": "Given: `deribit_http_p95_ms > 750ms` for three consecutive evaluations of the 30s rolling window and no other bunker entry condition is true."
   },
   {
     "at_id": "AT-115",
     "section_anchor": "2.3.2",
-    "line": 3520,
+    "line": 3544,
     "description": "Given: Bunker Mode entered due to `ws_event_lag_ms` above threshold."
   },
   {
     "at_id": "AT-205",
     "section_anchor": "2.3.2",
-    "line": 3527,
+    "line": 3551,
     "description": "Given: `ws_event_lag_ms` metric is missing/uncomputable (e.g., no WS messages received yet)."
   },
   {
     "at_id": "AT-951",
     "section_anchor": "2.3.3",
-    "line": 3563,
+    "line": 3587,
     "description": "Given: `basis_reduceonly_bps=50`, `basis_reduceonly_window_s=5`, and basis exceeds 50 bps for >=5s."
   },
   {
     "at_id": "AT-952",
     "section_anchor": "2.3.3",
-    "line": 3571,
+    "line": 3595,
     "description": "Given: `basis_kill_bps=150`, `basis_kill_window_s=5`, and basis exceeds 150 bps for >=5s."
   },
   {
     "at_id": "AT-954",
     "section_anchor": "2.3.3",
-    "line": 3579,
+    "line": 3603,
     "description": "Given: required basis price inputs are missing or stale (age > `basis_price_max_age_ms`)."
   },
   {
     "at_id": "AT-963",
     "section_anchor": "2.3.3",
-    "line": 3587,
+    "line": 3611,
     "description": "Given:"
   },
   {
     "at_id": "AT-233",
     "section_anchor": "2.4.1",
-    "line": 3664,
+    "line": 3688,
     "description": "Given: a crash occurs after send, before ACK."
   },
   {
     "at_id": "AT-234",
     "section_anchor": "2.4.1",
-    "line": 3671,
+    "line": 3695,
     "description": "Given: a crash occurs after fill, before local update."
   },
   {
     "at_id": "AT-935",
     "section_anchor": "2.4.1",
-    "line": 3678,
+    "line": 3702,
     "description": "Given: a crash occurs after `WALRecorded` succeeds (commit id/LSN issued), but before any network send attempt, so `sent_ts` is absent and the exchange has no open order for the intent's `s4:` label."
   },
   {
     "at_id": "AT-940",
     "section_anchor": "2.4.1",
-    "line": 3685,
+    "line": 3709,
     "description": "Given: a crash occurs after the exchange ACK is received for an intent, but before local TLSM/WAL updates record `ack_ts` or advance state."
   },
   {
     "at_id": "AT-906",
     "section_anchor": "2.4.1",
-    "line": 3692,
+    "line": 3716,
     "description": "Given: WAL appends use a bounded queue of capacity N, and the WAL writer is stalled so the queue reaches N items."
   },
   {
     "at_id": "AT-1215",
     "section_anchor": "2.4.1",
-    "line": 3699,
+    "line": 3723,
     "description": "Given: `WALQueueAccepted` and `WALRecorded` succeed for an OPEN intent, all other OPEN gates are forced pass, and the intent is evaluated exactly once."
   },
   {
     "at_id": "AT-1232",
     "section_anchor": "2.4.1",
-    "line": 3706,
+    "line": 3730,
     "description": "Given: `WALQueueAccepted` succeeds for an OPEN intent, all other OPEN gates are forced pass, but the WAL writer withholds or fails `WALRecorded` for that intent."
   },
   {
     "at_id": "AT-1231",
     "section_anchor": "2.4.1",
-    "line": 3713,
+    "line": 3737,
     "description": "Given: a CLOSE/HEDGE intent (`reduce_only == true`) is WAL-recorded in a non-terminal TLS state, then a crash occurs before completion."
   },
   {
     "at_id": "AT-969",
     "section_anchor": "2.4.1",
-    "line": 3721,
+    "line": 3745,
     "description": "Given: WAL appends use a bounded queue of capacity N, the WAL writer is stalled so the queue reaches N items, and `enforced_profile != CSP`."
   },
   {
     "at_id": "AT-925",
     "section_anchor": "2.4.1",
-    "line": 3730,
+    "line": 3754,
     "description": "Given: a hot-loop output queue (status writer, telemetry, or order events) reaches capacity N."
   },
   {
     "at_id": "AT-269",
     "section_anchor": "2.4.1",
-    "line": 3747,
+    "line": 3771,
     "description": "Given: order fills during WS disconnect."
   },
   {
     "at_id": "AT-270",
     "section_anchor": "2.4.1",
-    "line": 3754,
+    "line": 3778,
     "description": "Given: duplicate WS trade event."
   },
   {
     "at_id": "AT-1102",
     "section_anchor": "3.1",
-    "line": 3802,
+    "line": 3826,
     "description": "Given: an AtomicNakedEvent is emitted by the emergency close path."
   },
   {
     "at_id": "AT-211",
     "section_anchor": "3.1",
-    "line": 3809,
+    "line": 3833,
     "description": "Given: an atomic group enters mixed state (one leg filled, another rejected or none) and emergency close runs."
   },
   {
     "at_id": "AT-213",
     "section_anchor": "3.1",
-    "line": 3817,
+    "line": 3841,
     "description": "Given: an atomic group enters mixed state (one leg filled, another rejected or none), `enforced_profile != CSP`, and emergency close runs."
   },
   {
     "at_id": "AT-235",
     "section_anchor": "3.1",
-    "line": 3826,
+    "line": 3850,
     "description": "Given: one leg filled and the book thins."
+  },
+  {
+    "at_id": "AT-1284",
+    "section_anchor": "3.1",
+    "line": 3857,
+    "description": "Given: attempt 1 and attempt 2 partially fill while exposure remains."
   },
   {
     "at_id": "AT-1272",
     "section_anchor": "3.1",
-    "line": 3833,
+    "line": 3864,
     "description": "Given: one leg filled, close attempts exhausted with remaining exposure, and hedge dispatch fails (rejected, timeout, or venue error)."
   },
   {
     "at_id": "AT-1273",
     "section_anchor": "3.1",
-    "line": 3840,
+    "line": 3871,
     "description": "Given: one leg filled, close attempts exhausted, and hedge order is partially filled (partial qty filled, remainder unfilled)."
   },
   {
     "at_id": "AT-236",
     "section_anchor": "3.1",
-    "line": 3847,
+    "line": 3878,
     "description": "Given: Liquidity Gate reject conditions are present."
   },
   {
     "at_id": "AT-937",
     "section_anchor": "3.1",
-    "line": 3854,
+    "line": 3885,
     "description": "Given: `L2BookSnapshot` is missing/unparseable/stale and a fresh `L1TickerSnapshot` is available."
   },
   {
     "at_id": "AT-938",
     "section_anchor": "3.1",
-    "line": 3861,
+    "line": 3892,
     "description": "Given: `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, venue band metadata is present/parseable, and instrument metadata freshness holds (`instrument_cache_age_s <= instrument_cache_ttl_s`)."
   },
   {
     "at_id": "AT-1217",
     "section_anchor": "3.1",
-    "line": 3868,
+    "line": 3899,
     "description": "Given: `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, and venue band metadata is missing/unparseable/unquantizable."
   },
   {
     "at_id": "AT-1239",
     "section_anchor": "3.1",
-    "line": 3875,
+    "line": 3906,
     "description": "Given: `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, venue band metadata is present/parseable, and `instrument_cache_age_s > instrument_cache_ttl_s`."
   },
   {
     "at_id": "AT-1251",
     "section_anchor": "3.1",
-    "line": 3882,
+    "line": 3913,
     "description": "Given: an atomic group enters mixed state and emergency close runs through to the hedge fallback (step 3)."
   },
   {
     "at_id": "AT-1252",
     "section_anchor": "3.1",
-    "line": 3889,
+    "line": 3920,
     "description": "Given: venue-band fallback pricing is used and emergency close executes multiple IOC retry attempts."
   },
   {
     "at_id": "AT-237",
     "section_anchor": "3.2",
-    "line": 3911,
+    "line": 3942,
     "description": "Given: a network hiccup mid-hedge."
   },
   {
     "at_id": "AT-203",
     "section_anchor": "3.2",
-    "line": 3918,
+    "line": 3949,
     "description": "Given: `emergency_reduceonly_active == true` and there exists (a) an open order with `reduce_only == false` and (b) a closing/hedging order with `reduce_only == true`."
   },
   {
     "at_id": "AT-106",
     "section_anchor": "3.3",
-    "line": 3947,
+    "line": 3978,
     "description": "Given: `limits_fetch_failures_trip_count=3` and `limits_fetch_failure_window_s=300`."
   },
   {
     "at_id": "AT-133",
     "section_anchor": "3.3",
-    "line": 3954,
+    "line": 3985,
     "description": "Given: `limits_fetch_failures_trip_count=3` and `limits_fetch_failure_window_s=300`."
   },
   {
     "at_id": "AT-238",
     "section_anchor": "3.3",
-    "line": 3990,
+    "line": 4021,
     "description": "Given: token bucket configured at `T tokens/sec` and `burst=B`."
   },
   {
     "at_id": "AT-239",
     "section_anchor": "3.3",
-    "line": 3997,
+    "line": 4028,
     "description": "Given: token bucket exhausted by `DATA` requests."
   },
   {
     "at_id": "AT-919",
     "section_anchor": "3.3",
-    "line": 4004,
+    "line": 4035,
     "description": "Given: limiter pressure (or a 429 burst) and an OPEN intent."
   },
   {
     "at_id": "AT-240",
     "section_anchor": "3.3",
-    "line": 4011,
+    "line": 4042,
     "description": "Given: API returns `too_many_requests` (`code 10028`) mid-run."
   },
   {
     "at_id": "AT-946",
     "section_anchor": "3.4.D",
-    "line": 4091,
+    "line": 4122,
     "description": "Given: an illiquid instrument\u2019s book `change_id` does not advance for > `ws_zombie_silence_ms`, but ticker (or trades)"
   },
   {
     "at_id": "AT-947",
     "section_anchor": "3.4.D",
-    "line": 4101,
+    "line": 4132,
     "description": "Given: `ws_marketdata_event_lag_ms > ws_zombie_silence_ms` and `has_open_exposure == true`, while WS ping/pong continues."
   },
   {
     "at_id": "AT-948",
     "section_anchor": "3.4.D",
-    "line": 4109,
+    "line": 4140,
     "description": "Given: an illiquid instrument with no marketdata events for > `ws_zombie_silence_ms`, but `has_open_exposure == false` and `had_recent_marketdata_activity == false`."
   },
   {
     "at_id": "AT-271",
     "section_anchor": "3.4.D",
-    "line": 4120,
+    "line": 4151,
     "description": "Given: an incremental book update where `prevChangeId != last_changeId`."
   },
   {
     "at_id": "AT-408",
     "section_anchor": "3.4.D",
-    "line": 4127,
+    "line": 4158,
     "description": "Given: an incremental book update where `prevChangeId != last_changeId`."
   },
   {
     "at_id": "AT-272",
     "section_anchor": "3.4.D",
-    "line": 4134,
+    "line": 4165,
     "description": "Given: trades feed where `trade_seq` jumps (gap) for an instrument."
   },
   {
     "at_id": "AT-120",
     "section_anchor": "3.4.D",
-    "line": 4141,
+    "line": 4172,
     "description": "Given: RiskState is Degraded due to a WS continuity break."
   },
   {
     "at_id": "AT-202",
     "section_anchor": "3.4.D",
-    "line": 4148,
+    "line": 4179,
     "description": "Given: a WS trades stream gap is detected (trade_seq non-monotonic)."
   },
   {
     "at_id": "AT-409",
     "section_anchor": "3.4.D",
-    "line": 4155,
+    "line": 4186,
     "description": "Given: a private WS session termination or disconnect is detected (e.g., 10028/session termination)."
   },
   {
     "at_id": "AT-941",
     "section_anchor": "3.4.D",
-    "line": 4162,
+    "line": 4193,
     "description": "Given: a crash occurs during reconciliation (WS reconnect and REST snapshot in progress) while RiskState is Degraded and the open-permission latch is set."
   },
   {
     "at_id": "AT-1112",
     "section_anchor": "3.4.D",
-    "line": 4176,
+    "line": 4207,
     "description": "Given: the reconciliation timer is running under normal operation."
   },
   {
     "at_id": "AT-1103",
     "section_anchor": "3.4.D",
-    "line": 4189,
+    "line": 4220,
     "description": "Given: the reconciliation engine detects a corrective action is needed."
   },
   {
     "at_id": "AT-210",
     "section_anchor": "3.4.D",
-    "line": 4196,
+    "line": 4227,
     "description": "Given: local TLSM state is Sent (or equivalent inflight), but exchange trades show Filled and ACK is missing."
   },
   {
     "at_id": "AT-1113",
     "section_anchor": "3.5",
-    "line": 4215,
+    "line": 4246,
     "description": "Given: the Zombie Sweeper is running under normal operation."
   },
   {
     "at_id": "AT-121",
     "section_anchor": "3.5",
-    "line": 4233,
+    "line": 4264,
     "description": "Given: an order fills during WS disconnect and the Sweeper runs before WS replay."
   },
   {
     "at_id": "AT-122",
     "section_anchor": "3.5",
-    "line": 4240,
+    "line": 4271,
     "description": "Given: an exchange open order has label `s4:` and no matching ledger intent."
   },
   {
     "at_id": "AT-123",
     "section_anchor": "3.5",
-    "line": 4247,
+    "line": 4278,
     "description": "Given: a Sent/Acked order has no open order and no trade in the REST lookback."
   },
   {
     "at_id": "AT-124",
     "section_anchor": "3.5",
-    "line": 4254,
+    "line": 4285,
     "description": "Given: open order age `> stale_order_sec`, `reduce_only == false`, and `RiskState == Degraded`."
   },
   {
     "at_id": "AT-1071",
     "section_anchor": "4.1",
-    "line": 4288,
+    "line": 4319,
     "description": "Given: a last valid SVI fit exists and a new fit attempt includes at least one non-finite value (`NaN` or `Inf`) in fitted parameters or derived implied vols."
   },
   {
     "at_id": "AT-1104",
     "section_anchor": "4.1",
-    "line": 4295,
+    "line": 4326,
     "description": "Given: a last valid SVI fit exists and a new calibration tick produces parameters that exceed `drift_max` vs the last valid fit in a single tick."
   },
   {
     "at_id": "AT-241",
     "section_anchor": "4.1.1",
-    "line": 4320,
+    "line": 4351,
     "description": "Given: a deliberately wavy fit that passes RMSE but violates convexity."
   },
   {
     "at_id": "AT-1105",
     "section_anchor": "4.1.1",
-    "line": 4327,
+    "line": 4358,
     "description": "Given (sub-scenario A): two SVI surfaces for adjacent maturities where total variance at the same log-moneyness `k` is decreasing with maturity (calendar monotonicity violation beyond tolerance `\u03b5`)."
   },
   {
     "at_id": "AT-242",
     "section_anchor": "4.1.2",
-    "line": 4345,
+    "line": 4376,
     "description": "Given: low depth snapshot with `drift=30%` and `rmse=0.07`."
   },
   {
     "at_id": "AT-243",
     "section_anchor": "4.2",
-    "line": 4363,
+    "line": 4394,
     "description": "Given: gross edge smaller than fees."
   },
   {
     "at_id": "AT-1106",
     "section_anchor": "4.2",
-    "line": 4376,
+    "line": 4407,
     "description": "Given: `fee_model_cached_at_ts` is stored and read back."
   },
   {
     "at_id": "AT-244",
     "section_anchor": "4.2",
-    "line": 4387,
+    "line": 4418,
     "description": "Given: fresh fee cache (age <= `fee_cache_soft_s`)."
   },
   {
     "at_id": "AT-245",
     "section_anchor": "4.2",
-    "line": 4394,
+    "line": 4425,
     "description": "Given: hard-stale fee cache (age > `fee_cache_hard_s`)."
   },
   {
     "at_id": "AT-031",
     "section_anchor": "4.2",
-    "line": 4401,
+    "line": 4432,
     "description": "Given: `fee_model_cached_at_ts == T0` (epoch ms) and process restarts before any fee refresh; `now_ms == T0 + (fee_cache_hard_s*1000) + 1`."
   },
   {
     "at_id": "AT-042",
     "section_anchor": "4.2",
-    "line": 4408,
+    "line": 4439,
     "description": "Given: `fee_model_cached_at_ts` is missing or unparseable."
   },
   {
     "at_id": "AT-032",
     "section_anchor": "4.2",
-    "line": 4415,
+    "line": 4446,
     "description": "Given:"
   },
   {
     "at_id": "AT-033",
     "section_anchor": "4.2",
-    "line": 4431,
+    "line": 4462,
     "description": "Given:"
   },
   {
     "at_id": "AT-246",
     "section_anchor": "4.2",
-    "line": 4450,
+    "line": 4481,
     "description": "Given: fee tier changes."
   },
   {
     "at_id": "AT-1114",
     "section_anchor": "4.2",
-    "line": 4457,
+    "line": 4488,
     "description": "Given: the fee model poller is running and `/private/get_account_summary` is reachable."
   },
   {
     "at_id": "AT-1123",
     "section_anchor": "4.3",
-    "line": 4475,
+    "line": 4506,
     "description": "Given: the system starts up on a host."
   },
   {
     "at_id": "AT-273",
     "section_anchor": "4.3",
-    "line": 4483,
+    "line": 4514,
     "description": "Given: `drift_ms > time_drift_threshold_ms`."
   },
   {
     "at_id": "AT-108",
     "section_anchor": "4.3",
-    "line": 4490,
+    "line": 4521,
     "description": "Given: `drift_ms > time_drift_threshold_ms`."
   },
   {
     "at_id": "AT-247",
     "section_anchor": "4.3.1",
-    "line": 4544,
+    "line": 4575,
     "description": "Given: `S_fill == S_signal` and `IV_fill == IV_signal`."
   },
   {
     "at_id": "AT-248",
     "section_anchor": "4.3.1",
-    "line": 4551,
+    "line": 4582,
     "description": "Given: `theta_per_day = -0.04` and `dt_seconds = 43200` (12h)."
   },
   {
     "at_id": "AT-046",
     "section_anchor": "4.3.2",
-    "line": 4587,
+    "line": 4618,
     "description": "Given: `enforced_profile != CSP`, an AtomicGroup has at least one leg eligible for dispatch, `truth_capsule_id` and `decision_snapshot_id` are allocated, and `EvidenceCommitted(truth_capsule_id, decision_snapshot_id) == false`."
   },
   {
     "at_id": "AT-1046",
     "section_anchor": "4.3.2",
-    "line": 4594,
+    "line": 4625,
     "description": "Given: `enforced_profile != CSP`, Evidence writer is healthy, and evidence commit returns success only after a simulated delay `D`."
   },
   {
     "at_id": "AT-1047",
     "section_anchor": "4.3.2",
-    "line": 4601,
+    "line": 4632,
     "description": "Given: `enforced_profile != CSP`, evidence writer fails after ID allocation (commit returns error)."
   },
   {
     "at_id": "AT-249",
     "section_anchor": "4.3.2",
-    "line": 4656,
+    "line": 4687,
     "description": "Given: an order is dispatched."
   },
   {
     "at_id": "AT-250",
     "section_anchor": "4.3.2",
-    "line": 4663,
+    "line": 4694,
     "description": "Given: TruthCapsule write fails."
   },
   {
     "at_id": "AT-251",
     "section_anchor": "4.3.2",
-    "line": 4670,
+    "line": 4701,
     "description": "Given: forced slow disk / slow writer with a bounded queue capacity `N`."
   },
   {
     "at_id": "AT-252",
     "section_anchor": "4.3.2",
-    "line": 4677,
+    "line": 4708,
     "description": "Given: writer thread/process errors OR queue overflows."
   },
   {
     "at_id": "AT-253",
     "section_anchor": "4.3.2",
-    "line": 4684,
+    "line": 4715,
     "description": "Given: an attribution row is written for a filled leg."
   },
   {
     "at_id": "AT-044",
     "section_anchor": "4.3.2",
-    "line": 4691,
+    "line": 4722,
     "description": "Given: a Decision Snapshot is emitted."
   },
   {
     "at_id": "AT-254",
     "section_anchor": "4.4",
-    "line": 4711,
+    "line": 4742,
     "description": "Given: a fixed L2 snapshot and order size."
   },
   {
     "at_id": "AT-255",
     "section_anchor": "4.5",
-    "line": 4746,
+    "line": 4777,
     "description": "Given: 50 synthetic fills where `realized = sim * 1.2`."
   },
   {
     "at_id": "AT-256",
     "section_anchor": "5.2",
-    "line": 4861,
+    "line": 4892,
     "description": "Given: an order/intent is dispatched."
   },
   {
     "at_id": "AT-257",
     "section_anchor": "5.2",
-    "line": 4868,
+    "line": 4899,
     "description": "Given: `snapshot_coverage_pct = 90` (DEGRADED), Decision Snapshots are readable, `open_haircut_mult = 0.50`, and the patch deltas are tightening-only per the table."
   },
   {
     "at_id": "AT-002",
     "section_anchor": "5.2",
-    "line": 4875,
+    "line": 4906,
     "description": "Given: `snapshot_coverage_pct == 95%` and Decision Snapshots are readable."
   },
   {
     "at_id": "AT-1062",
     "section_anchor": "5.2",
-    "line": 4882,
+    "line": 4913,
     "description": "Given: `snapshot_coverage_pct < 80%` OR Decision Snapshots are unreadable/unwritable."
   },
   {
     "at_id": "AT-1064",
     "section_anchor": "5.2",
-    "line": 4904,
+    "line": 4935,
     "description": "Given: `ReplayQuality == DEGRADED` and a patch includes a loosening delta OR any parameter not in the tightening table."
   },
   {
     "at_id": "AT-258",
     "section_anchor": "5.2",
-    "line": 4911,
+    "line": 4942,
     "description": "Given: disk watermark pauses full tick/L2 archives."
   },
   {
     "at_id": "AT-259",
     "section_anchor": "5.2",
-    "line": 4918,
+    "line": 4949,
     "description": "Given: a policy passes replay pre-penalty checks and `ReplayQuality == GOOD`."
   },
   {
     "at_id": "AT-431",
     "section_anchor": "5.2",
-    "line": 4925,
+    "line": 4956,
     "description": "Given: `replay_atomic_naked_events > 0`."
   },
   {
     "at_id": "AT-432",
     "section_anchor": "5.2",
-    "line": 4932,
+    "line": 4963,
     "description": "Given: `replay_net_pnl_penalized <= 0` after realism penalty is applied."
   },
   {
     "at_id": "AT-034",
     "section_anchor": "5.2",
-    "line": 4941,
+    "line": 4972,
     "description": "Given: Replay Gatekeeper is invoked and `dd_limit` is missing or unparseable."
   },
   {
     "at_id": "AT-1107",
     "section_anchor": "5.3",
-    "line": 4960,
+    "line": 4991,
     "description": "Given: a new policy enters Canary Stage 0 (Shadow Only)."
   },
   {
     "at_id": "AT-035",
     "section_anchor": "5.3",
-    "line": 4984,
+    "line": 5015,
     "description": "Given: canary preflight runs and at least one of `slippage_limit`, `fill_rate_floor`, `canary_min_attempts`, `pnl_floor`, `canary_evidence_abort_s` is missing/unparseable."
   },
   {
     "at_id": "AT-036",
     "section_anchor": "5.3",
-    "line": 4991,
+    "line": 5022,
     "description": "Given: canary rollout runs with `slippage_limit` configured and observed `p95_slippage_bps > slippage_limit`."
   },
   {
     "at_id": "AT-433",
     "section_anchor": "5.3",
-    "line": 4998,
+    "line": 5029,
     "description": "Given: canary rollout runs with `fill_rate_floor` configured and observed `fill_rate < fill_rate_floor` with attempts > `canary_min_attempts`."
   },
   {
     "at_id": "AT-434",
     "section_anchor": "5.3",
-    "line": 5005,
+    "line": 5036,
     "description": "Given: canary rollout runs with `pnl_floor` configured and observed `net_pnl_usd < pnl_floor`."
   },
   {
     "at_id": "AT-435",
     "section_anchor": "5.3",
-    "line": 5012,
+    "line": 5043,
     "description": "Given: canary rollout runs and EvidenceChainState != GREEN continuously for `canary_evidence_abort_s + 1` seconds."
   },
   {
     "at_id": "AT-436",
     "section_anchor": "5.3",
-    "line": 5019,
+    "line": 5050,
     "description": "Given: `atomic_naked_events > 0` during canary."
   },
   {
     "at_id": "AT-972",
     "section_anchor": "5.3",
-    "line": 5026,
+    "line": 5057,
     "description": "Given: `canary_evidence_abort_s < (evidenceguard_window_s + evidenceguard_global_cooldown)`."
   },
   {
     "at_id": "AT-973",
     "section_anchor": "5.3",
-    "line": 5033,
+    "line": 5064,
     "description": "Given: `canary_evidence_abort_s = (evidenceguard_window_s + evidenceguard_global_cooldown) + 30`, and EvidenceChainState becomes != GREEN for exactly (`evidenceguard_window_s + evidenceguard_global_cooldown`) seconds, then returns to GREEN and remains GREEN."
   },
   {
     "at_id": "AT-022",
     "section_anchor": "7.0",
-    "line": 5154,
+    "line": 5185,
     "description": "Given: service is running."
   },
   {
     "at_id": "AT-1230",
     "section_anchor": "7.0",
-    "line": 5172,
+    "line": 5203,
     "description": "Given: runtime is in foundation mode (`phase == foundation`)."
   },
   {
     "at_id": "AT-1116",
     "section_anchor": "7.0",
-    "line": 5217,
+    "line": 5248,
     "description": "Given: `enforced_profile == CSP` and `/api/v1/status` is queried."
   },
   {
     "at_id": "AT-1117",
     "section_anchor": "7.0",
-    "line": 5234,
+    "line": 5265,
     "description": "Given: `/api/v1/status` is queried."
   },
   {
     "at_id": "AT-003",
     "section_anchor": "7.0",
-    "line": 5256,
+    "line": 5287,
     "description": "Given: runtime binding cert is present with `status=\"PASS\"`, `generated_ts_ms=T0`, and `f1_cert_freshness_window_s=86400`."
   },
   {
     "at_id": "AT-412",
     "section_anchor": "7.0",
-    "line": 5263,
+    "line": 5294,
     "description": "Given: runtime binding cert is missing or unparseable."
   },
   {
     "at_id": "AT-023",
     "section_anchor": "7.0",
-    "line": 5277,
+    "line": 5308,
     "description": "Given: service is running."
   },
   {
     "at_id": "AT-967",
     "section_anchor": "7.0",
-    "line": 5285,
+    "line": 5316,
     "description": "Given: service is running and `enforced_profile` is GOP or FULL."
   },
   {
     "at_id": "AT-407",
     "section_anchor": "7.0",
-    "line": 5293,
+    "line": 5324,
     "description": "Given: service is running with `TradingMode` and `RiskState` at baseline values."
   },
   {
     "at_id": "AT-405",
     "section_anchor": "7.0",
-    "line": 5300,
+    "line": 5331,
     "description": "Given: `/status` is fetched."
   },
   {
     "at_id": "AT-1220",
     "section_anchor": "7.0",
-    "line": 5307,
+    "line": 5338,
     "description": "Given: `/status` is fetched under each combination of `trading_mode \u2208 {Active, ReduceOnly, Kill}` and `open_permission_blocked_latch \u2208 {true,false}`."
   },
   {
     "at_id": "AT-419",
     "section_anchor": "7.0",
-    "line": 5314,
+    "line": 5345,
     "description": "Given: `/status` is fetched."
   },
   {
     "at_id": "AT-927",
     "section_anchor": "7.0",
-    "line": 5321,
+    "line": 5352,
     "description": "Given: `/status` is fetched."
   },
   {
     "at_id": "AT-907",
     "section_anchor": "7.0",
-    "line": 5328,
+    "line": 5359,
     "description": "Given: `/status` is fetched."
   },
   {
     "at_id": "AT-212",
     "section_anchor": "7.0",
-    "line": 5335,
+    "line": 5366,
     "description": "Given: `open_permission_reason_codes` contains `WS_TRADES_GAP_RECONCILE_REQUIRED`."
   },
   {
     "at_id": "AT-403",
     "section_anchor": "7.0",
-    "line": 5342,
+    "line": 5373,
     "description": "Given: `open_permission_reason_codes` contains `RESTART_RECONCILE_REQUIRED` or `INVENTORY_MISMATCH_RECONCILE_REQUIRED`."
   },
   {
     "at_id": "AT-352",
     "section_anchor": "7.0",
-    "line": 5349,
+    "line": 5380,
     "description": "Given: `bunker_mode_active == true` and `open_permission_reason_codes == []`."
   },
   {
     "at_id": "AT-353",
     "section_anchor": "7.0",
-    "line": 5356,
+    "line": 5387,
     "description": "Given: `bunker_mode_active == false` and `open_permission_reason_codes == []`."
   },
   {
     "at_id": "AT-024",
     "section_anchor": "7.0",
-    "line": 5365,
+    "line": 5396,
     "description": "Given: `/status` is fetched."
   },
   {
     "at_id": "AT-025",
     "section_anchor": "7.0",
-    "line": 5372,
+    "line": 5403,
     "description": "Given: `/status.mode_reasons` contains \u22651 reason."
   },
   {
     "at_id": "AT-1244",
     "section_anchor": "7.0",
-    "line": 5379,
+    "line": 5410,
     "description": "Given: `/status` is fetched and one or more reduce-only/kill predicates are observed but not authoritative for dispatch this tick."
   },
   {
     "at_id": "AT-351",
     "section_anchor": "7.0",
-    "line": 5386,
+    "line": 5417,
     "description": "Given: `policy_age_sec > max_policy_age_sec`, `evidence_chain_state == GREEN`, and no Kill reasons are active."
   },
   {
     "at_id": "AT-968",
     "section_anchor": "7.0",
-    "line": 5394,
+    "line": 5425,
     "description": "Given: `evidence_chain_state != GREEN`, `policy_age_sec <= max_policy_age_sec`, `enforced_profile != CSP`, and no Kill reasons are active."
   },
   {
     "at_id": "AT-026",
     "section_anchor": "7.0",
-    "line": 5403,
+    "line": 5434,
     "description": "Given: `/status.mode_reasons` contains reasons."
   },
   {
     "at_id": "AT-027",
     "section_anchor": "7.0",
-    "line": 5410,
+    "line": 5441,
     "description": "Given: `/status` is fetched."
   },
   {
     "at_id": "AT-342",
     "section_anchor": "7.0",
-    "line": 5417,
+    "line": 5448,
     "description": "Given: `/status` is fetched."
   },
   {
     "at_id": "AT-028",
     "section_anchor": "7.0",
-    "line": 5424,
+    "line": 5455,
     "description": "Given: `/status` is fetched."
   },
   {
     "at_id": "AT-406",
     "section_anchor": "7.0",
-    "line": 5431,
+    "line": 5462,
     "description": "Given: `python_policy_generated_ts_ms = T0` and `now_ms = T0 + 123_000`."
   },
   {
     "at_id": "AT-029",
     "section_anchor": "7.0",
-    "line": 5439,
+    "line": 5470,
     "description": "Given: replay window is `replay_window_hours` (default 48h)."
   },
   {
     "at_id": "AT-1108",
     "section_anchor": "7.1.1",
-    "line": 5458,
+    "line": 5489,
     "description": "Given: a TLSM lifecycle transition occurs (e.g., Sent \u2192 Acked \u2192 Filled) and a policy change is applied (e.g., patch promoted from canary)."
   },
   {
     "at_id": "AT-1109",
     "section_anchor": "7.1.3",
-    "line": 5500,
+    "line": 5531,
     "description": "Given: an incident trigger occurred within the last 24 hours (e.g., `atomic_naked_events > 0` or `429_count_5m > 0` or `10028_count_5m > 0`), and a SAFE patch passes Replay Gatekeeper and Canary."
   },
   {
     "at_id": "AT-274",
     "section_anchor": "7.1.5",
-    "line": 5528,
+    "line": 5559,
     "description": "Given: daily review runs."
   },
   {
     "at_id": "AT-275",
     "section_anchor": "7.1.5",
-    "line": 5535,
+    "line": 5566,
     "description": "Given: patch is AGGRESSIVE and `artifacts/HUMAN_APPROVAL.json` is missing."
   },
   {
     "at_id": "AT-276",
     "section_anchor": "7.1.5",
-    "line": 5542,
+    "line": 5573,
     "description": "Given: `atomic_naked_events > 0`."
   },
   {
     "at_id": "AT-902",
     "section_anchor": "7.1.5",
-    "line": 5549,
+    "line": 5580,
     "description": "Given: an OPEN intent is blocked by any gate."
   },
   {
     "at_id": "AT-903",
     "section_anchor": "7.1.5",
-    "line": 5556,
+    "line": 5587,
     "description": "Given: a policy change is applied."
   },
   {
     "at_id": "AT-904",
     "section_anchor": "7.1.5",
-    "line": 5563,
+    "line": 5594,
     "description": "Given: an incident trigger occurs (`atomic_naked_events > 0` or `429_count_5m > 0` or `10028_count_5m > 0`)."
   },
   {
     "at_id": "AT-1110",
     "section_anchor": "7.2",
-    "line": 5586,
+    "line": 5617,
     "description": "Given: Decision Snapshots are written over a multi-day period."
   },
   {
     "at_id": "AT-260",
     "section_anchor": "7.2",
-    "line": 5617,
+    "line": 5648,
     "description": "Given: simulated `disk_used_pct >= disk_pause_archives_pct`."
   },
   {
     "at_id": "AT-261",
     "section_anchor": "7.2",
-    "line": 5624,
+    "line": 5655,
     "description": "Given: simulated `disk_used_pct >= disk_degraded_pct`."
   },
   {
     "at_id": "AT-262",
     "section_anchor": "7.2",
-    "line": 5631,
+    "line": 5662,
     "description": "Given: simulated `disk_used_pct >= disk_kill_pct` AND net exposure \u2260 0."
   },
   {
     "at_id": "AT-263",
     "section_anchor": "7.2",
-    "line": 5638,
+    "line": 5669,
     "description": "Given: simulated `disk_used_pct >= disk_degraded_pct`."
   },
   {
     "at_id": "AT-942",
     "section_anchor": "7.2",
-    "line": 5645,
+    "line": 5676,
     "description": "Given: a crash occurs during `retention_reclaim()` after some cold partitions are deleted but before the reclaim run is finalized."
   },
   {
     "at_id": "AT-264",
     "section_anchor": "8.1",
-    "line": 5694,
+    "line": 5725,
     "description": "Given: Time-to-DeltaNeutral >= 2s in any incident."
   },
   {
     "at_id": "AT-265",
     "section_anchor": "8.1",
-    "line": 5701,
+    "line": 5732,
     "description": "Given: Fee Drag Ratio exceeds threshold."
   },
   {
     "at_id": "AT-328",
     "section_anchor": "8.2",
-    "line": 5770,
+    "line": 5801,
     "description": "Given: Leg A Filled, Leg B Rejected."
   },
   {
     "at_id": "AT-329",
     "section_anchor": "8.2",
-    "line": 5777,
+    "line": 5808,
     "description": "Given: WS drop after send."
   },
   {
     "at_id": "AT-330",
     "section_anchor": "8.2",
-    "line": 5784,
+    "line": 5815,
     "description": "Given: 10028/too_many_requests session termination."
   },
   {
     "at_id": "AT-331",
     "section_anchor": "8.2",
-    "line": 5793,
+    "line": 5824,
     "description": "Given: replay window includes a vol shock day."
   },
   {
     "at_id": "AT-332",
     "section_anchor": "8.2",
-    "line": 5800,
+    "line": 5831,
     "description": "Given: a policy whose replay profit flips \u2264 0 after realism penalty."
   },
   {
     "at_id": "AT-266",
     "section_anchor": "8.4",
-    "line": 5825,
+    "line": 5856,
     "description": "Given: `atomic_naked_events = 1` in a test run."
   },
   {
     "at_id": "AT-341",
     "section_anchor": "A.CSP",
-    "line": 5845,
+    "line": 5876,
     "description": "Given: config missing `instrument_cache_ttl_s` and `mm_util_kill` at runtime."
   },
   {
     "at_id": "AT-424",
     "section_anchor": "A.CSP",
-    "line": 5852,
+    "line": 5883,
     "description": "Given: each CSP safety-critical config value listed in Appendix A.CSP is omitted at runtime (one-at-a-time), with other gates satisfied."
   },
   {
     "at_id": "AT-040",
     "section_anchor": "A.GOP",
-    "line": 5863,
+    "line": 5894,
     "description": "Given: a safety-critical gate references a required parameter that has no Appendix A default (e.g., `dd_limit` in \u00a75.2)."
   },
   {
     "at_id": "AT-970",
     "section_anchor": "A.GOP",
-    "line": 5870,
+    "line": 5901,
     "description": "Given: config missing `evidenceguard_global_cooldown` and `replay_window_hours` at runtime."
   },
   {
     "at_id": "AT-971",
     "section_anchor": "A.GOP",
-    "line": 5877,
+    "line": 5908,
     "description": "Given: each GOP safety-critical config value listed in Appendix A.GOP is omitted at runtime (one-at-a-time), with other gates satisfied."
   },
   {
     "at_id": "AT-278",
     "section_anchor": "A.1",
-    "line": 5896,
+    "line": 5927,
     "description": "Given: two legs filled at nominally equal quantities differing only by \u2264 `atomic_qty_epsilon` (no partials)."
   },
   {
     "at_id": "AT-279",
     "section_anchor": "A.1",
-    "line": 5906,
+    "line": 5937,
     "description": "Given: `instrument_cache_age_s > instrument_cache_ttl_s`."
   },
   {
     "at_id": "AT-280",
     "section_anchor": "A.1",
-    "line": 5917,
+    "line": 5948,
     "description": "Given: `contracts=100` and `amount` deviates by >0.1% from `contracts * contract_multiplier`."
   },
   {
     "at_id": "AT-281",
     "section_anchor": "A.1.1",
-    "line": 5932,
+    "line": 5963,
     "description": "Given: `inventory_bias=0.9` for a risk-increasing trade."
   },
   {
     "at_id": "AT-282",
     "section_anchor": "A.1.1",
-    "line": 5943,
+    "line": 5974,
     "description": "Given: `inventory_bias=1.0` for a BUY."
   },
   {
     "at_id": "AT-283",
     "section_anchor": "A.1.1",
-    "line": 5955,
+    "line": 5986,
     "description": "Given: a mixed-state rescue attempt."
   },
   {
     "at_id": "AT-284",
     "section_anchor": "A.2",
-    "line": 5970,
+    "line": 6001,
     "description": "Given: `spread_bps = 26`."
   },
   {
     "at_id": "AT-285",
     "section_anchor": "A.2",
-    "line": 5981,
+    "line": 6012,
     "description": "Given: `spread_bps >= spread_kill_bps` for `cortex_kill_window_s`."
   },
   {
     "at_id": "AT-286",
     "section_anchor": "A.2",
-    "line": 5994,
+    "line": 6025,
     "description": "Given: `depth_topN = 299_999`."
   },
   {
     "at_id": "AT-287",
     "section_anchor": "A.2",
-    "line": 6001,
+    "line": 6032,
     "description": "Given: `depth_topN = 299_999`."
   },
   {
     "at_id": "AT-288",
     "section_anchor": "A.2",
-    "line": 6013,
+    "line": 6044,
     "description": "Given: `depth_topN <= depth_kill_min` for `cortex_kill_window_s`."
   },
   {
     "at_id": "AT-289",
     "section_anchor": "A.2",
-    "line": 6024,
+    "line": 6055,
     "description": "Given: breach persists 9s and then 10s."
   },
   {
     "at_id": "AT-290",
     "section_anchor": "A.2",
-    "line": 6035,
+    "line": 6066,
     "description": "Given: DVOL increases by \u226510% within 60s."
   },
   {
     "at_id": "AT-291",
     "section_anchor": "A.2",
-    "line": 6046,
+    "line": 6077,
     "description": "Given: DVOL jump from 0.50 to 0.55 over 61s, then over 59s."
   },
   {
     "at_id": "AT-292",
     "section_anchor": "A.2",
-    "line": 6057,
+    "line": 6088,
     "description": "Given: DVOL trip at T=0."
   },
   {
     "at_id": "AT-293",
     "section_anchor": "A.2",
-    "line": 6068,
+    "line": 6099,
     "description": "Given: spread/depth trip at T=0."
   },
   {
     "at_id": "AT-958",
     "section_anchor": "A.2",
-    "line": 6078,
+    "line": 6109,
     "description": "Given: any basis input timestamp is older than 5000ms."
   },
   {
     "at_id": "AT-959",
     "section_anchor": "A.2",
-    "line": 6093,
+    "line": 6124,
     "description": "Given: basis exceeds 50 bps for 5s."
   },
   {
     "at_id": "AT-294",
     "section_anchor": "A.2.1",
-    "line": 6115,
+    "line": 6146,
     "description": "Given: `now - runtime_binding_cert.generated_ts_ms > 86400000ms`."
   },
   {
     "at_id": "AT-295",
     "section_anchor": "A.2.1",
-    "line": 6126,
+    "line": 6157,
     "description": "Given: `mm_util_last_update_ts_ms` stale > 30s."
   },
   {
     "at_id": "AT-296",
     "section_anchor": "A.2.1",
-    "line": 6137,
+    "line": 6168,
     "description": "Given: `disk_used_last_update_ts_ms` stale > 30s."
   },
   {
     "at_id": "AT-297",
     "section_anchor": "A.3",
-    "line": 6152,
+    "line": 6183,
     "description": "Given: 6s of silence, then 11s of silence."
   },
   {
     "at_id": "AT-298",
     "section_anchor": "A.3",
-    "line": 6168,
+    "line": 6199,
     "description": "Given: bunker metrics remain below thresholds for `bunker_exit_stable_s`."
   },
   {
     "at_id": "AT-299",
     "section_anchor": "A.3",
-    "line": 6179,
+    "line": 6210,
     "description": "Given: `/public/get_announcements` unreachable or invalid for >= 180s."
   },
   {
     "at_id": "AT-300",
     "section_anchor": "A.3",
-    "line": 6223,
+    "line": 6254,
     "description": "Given: `mm_util >= 0.70`."
   },
   {
     "at_id": "AT-301",
     "section_anchor": "A.3",
-    "line": 6234,
+    "line": 6265,
     "description": "Given: `mm_util >= 0.85`."
   },
   {
     "at_id": "AT-302",
     "section_anchor": "A.3",
-    "line": 6245,
+    "line": 6276,
     "description": "Given: `mm_util >= 0.95`."
   },
   {
     "at_id": "AT-303",
     "section_anchor": "A.3",
-    "line": 6256,
+    "line": 6287,
     "description": "Given: non-reduce-only order age >30s."
   },
   {
     "at_id": "AT-304",
     "section_anchor": "A.3",
-    "line": 6273,
+    "line": 6304,
     "description": "Given: write errors stop."
   },
   {
     "at_id": "AT-305",
     "section_anchor": "A.3",
-    "line": 6284,
+    "line": 6315,
     "description": "Given: ledger vs exchange position differ by \u2264 epsilon, then by > epsilon."
   },
   {
     "at_id": "AT-306",
     "section_anchor": "A.3",
-    "line": 6295,
+    "line": 6326,
     "description": "Given: reconciliation runs."
   },
   {
     "at_id": "AT-307",
     "section_anchor": "A.3",
-    "line": 6319,
+    "line": 6350,
     "description": "Given: `parquet_queue_depth_pct > 0.90` for \u2265 `parquet_queue_trip_window_s`."
   },
   {
     "at_id": "AT-308",
     "section_anchor": "A.3",
-    "line": 6330,
+    "line": 6361,
     "description": "Given: queue depth exceeds 90% for 4s, then 5s."
   },
   {
     "at_id": "AT-309",
     "section_anchor": "A.3",
-    "line": 6341,
+    "line": 6372,
     "description": "Given: queue depth drops below 70%."
   },
   {
     "at_id": "AT-310",
     "section_anchor": "A.3",
-    "line": 6352,
+    "line": 6383,
     "description": "Given: queue drops below 70%."
   },
   {
     "at_id": "AT-311",
     "section_anchor": "A.3",
-    "line": 6363,
+    "line": 6394,
     "description": "Given: `disk_used_pct >= 0.80`."
   },
   {
     "at_id": "AT-312",
     "section_anchor": "A.3",
-    "line": 6374,
+    "line": 6405,
     "description": "Given: `disk_used_pct >= 0.85`."
   },
   {
     "at_id": "AT-313",
     "section_anchor": "A.3",
-    "line": 6386,
+    "line": 6417,
     "description": "Given: `disk_used_pct >= 0.92` AND net exposure \u2260 0."
   },
   {
     "at_id": "AT-314",
     "section_anchor": "A.3",
-    "line": 6397,
+    "line": 6428,
     "description": "Given: `drift_ms > 50ms`."
   },
   {
     "at_id": "AT-315",
     "section_anchor": "A.3",
-    "line": 6408,
+    "line": 6439,
     "description": "Given: `policy_age_sec > 300`."
   },
   {
     "at_id": "AT-316",
     "section_anchor": "A.3.1",
-    "line": 6435,
+    "line": 6466,
     "description": "Given: emergency close attempts 1, 2, 3."
   },
   {
     "at_id": "AT-317",
     "section_anchor": "A.3.1",
-    "line": 6446,
+    "line": 6477,
     "description": "Given: L2 walk estimates `slippage_bps > 10`."
   },
   {
     "at_id": "AT-318",
     "section_anchor": "A.4",
-    "line": 6467,
+    "line": 6498,
     "description": "Given: fee cache age > 300s."
   },
   {
     "at_id": "AT-319",
     "section_anchor": "A.4",
-    "line": 6478,
+    "line": 6509,
     "description": "Given: fee cache age > 900s."
   },
   {
     "at_id": "AT-320",
     "section_anchor": "A.4",
-    "line": 6489,
+    "line": 6520,
     "description": "Given: soft-stale cache."
   },
   {
     "at_id": "AT-321",
     "section_anchor": "A.5",
-    "line": 6504,
+    "line": 6535,
     "description": "Given: SVI drift/math/arb guard fails 3 times in 5min."
   },
   {
     "at_id": "AT-322",
     "section_anchor": "A.5",
-    "line": 6515,
+    "line": 6546,
     "description": "Given: guard failures separated by >5min."
   },
   {
     "at_id": "AT-323",
     "section_anchor": "A.6",
-    "line": 6532,
+    "line": 6563,
     "description": "Given: Decision Snapshots older than 30 days and snapshots within the replay window."
   },
   {
     "at_id": "AT-324",
     "section_anchor": "A.6",
-    "line": 6543,
+    "line": 6574,
     "description": "Given: Replay Gatekeeper evaluates the last 48h window."
   },
   {
     "at_id": "AT-325",
     "section_anchor": "A.6",
-    "line": 6554,
+    "line": 6585,
     "description": "Given: tick/L2 archives older than 72h."
   },
   {
     "at_id": "AT-326",
     "section_anchor": "A.6",
-    "line": 6565,
+    "line": 6596,
     "description": "Given: Parquet analytics older than 30 days."
   }
 ]
