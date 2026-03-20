@@ -19,6 +19,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::risk::RiskState;
+use crate::telemetry::EventSink;
 use crate::venue::opens_blocked;
 
 use super::dispatch_map::DispatchConsistencyProof;
@@ -220,6 +221,56 @@ pub enum GateSequenceResult {
     Rejected,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WalNonblockingSource {
+    WalGateError,
+    PrecomputedFalse,
+    NoGateConfigured,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ChokeEvent {
+    GateSequenceAllowed,
+    GateSequenceRejected,
+    WalNonblockingAllowed {
+        intent_class: ChokeIntentClass,
+        source: WalNonblockingSource,
+        wal_error: Option<String>,
+    },
+}
+
+struct ProductionChokeEvents;
+
+impl EventSink<ChokeEvent> for ProductionChokeEvents {
+    fn emit(&mut self, event: ChokeEvent) {
+        match event {
+            ChokeEvent::GateSequenceAllowed => {
+                record_gate_sequence_result(GateSequenceResult::Allowed)
+            }
+            ChokeEvent::GateSequenceRejected => {
+                record_gate_sequence_result(GateSequenceResult::Rejected)
+            }
+            ChokeEvent::WalNonblockingAllowed {
+                intent_class,
+                source,
+                wal_error,
+            } => {
+                record_wal_nonblocking_allowed(intent_class, source);
+                let wal_error = wal_error.as_deref().unwrap_or(match source {
+                    WalNonblockingSource::WalGateError => "wal_gate_error",
+                    WalNonblockingSource::PrecomputedFalse => "precomputed false",
+                    WalNonblockingSource::NoGateConfigured => "no_gate_configured",
+                });
+                tracing::warn!(
+                    intent_class = ?intent_class,
+                    wal_error,
+                    "WAL recording failed for non-OPEN intent — allowing per CSP.3.2"
+                );
+            }
+        }
+    }
+}
+
 static GATE_SEQUENCE_ALLOWED_TOTAL: AtomicU64 = AtomicU64::new(0);
 static GATE_SEQUENCE_REJECTED_TOTAL: AtomicU64 = AtomicU64::new(0);
 static WAL_NONBLOCKING_ALLOWED_TOTAL: AtomicU64 = AtomicU64::new(0);
@@ -231,35 +282,99 @@ pub fn gate_sequence_total(result: GateSequenceResult) -> u64 {
     }
 }
 
+pub fn wal_nonblocking_allowed_total() -> u64 {
+    WAL_NONBLOCKING_ALLOWED_TOTAL.load(Ordering::Relaxed)
+}
+
 /// Increment the global WAL-nonblocking-allowed counter.
 ///
 /// Called by `engine::decide_pipeline` when the WAL gate is absent for a
-/// Close/Hedge intent (H-4: no_gate_configured case). The caller is
-/// responsible for also emitting the `wal_nonblocking_allowed_total` metric
-/// line with `source=no_gate_configured`.
-pub(super) fn bump_wal_nonblocking_allowed_total() {
-    WAL_NONBLOCKING_ALLOWED_TOTAL.fetch_add(1, Ordering::Relaxed);
+/// Close/Hedge intent (H-4: no_gate_configured case). This wrapper preserves
+/// the legacy counter and metric-line contract while keeping graybox logic
+/// sink-only.
+pub(super) fn bump_wal_nonblocking_allowed_total(intent_class: ChokeIntentClass) {
+    record_wal_nonblocking_allowed(intent_class, WalNonblockingSource::NoGateConfigured)
 }
 
-fn finish_approved(metrics: &mut ChokeMetrics, gate_trace: Vec<GateStep>) -> ChokeResult {
+fn finish_approved<E: EventSink<ChokeEvent>>(
+    metrics: &mut ChokeMetrics,
+    gate_trace: Vec<GateStep>,
+    events: &mut E,
+) -> ChokeResult {
     metrics.record_approved();
-    GATE_SEQUENCE_ALLOWED_TOTAL.fetch_add(1, Ordering::Relaxed);
-    super::emit_execution_metric_line(super::METRIC_GATE_SEQUENCE_TOTAL, "result=allowed");
+    events.emit(ChokeEvent::GateSequenceAllowed);
     ChokeResult::Approved { gate_trace }
 }
 
-fn finish_rejected(
+fn finish_rejected<E: EventSink<ChokeEvent>>(
     metrics: &mut ChokeMetrics,
     reason: ChokeRejectReason,
     gate_trace: Vec<GateStep>,
+    events: &mut E,
 ) -> ChokeResult {
     metrics.record_rejected();
     if reason == ChokeRejectReason::RiskStateNotHealthy {
         metrics.record_rejected_risk_state();
     }
-    GATE_SEQUENCE_REJECTED_TOTAL.fetch_add(1, Ordering::Relaxed);
-    super::emit_execution_metric_line(super::METRIC_GATE_SEQUENCE_TOTAL, "result=rejected");
+    events.emit(ChokeEvent::GateSequenceRejected);
     ChokeResult::Rejected { reason, gate_trace }
+}
+
+fn record_gate_sequence_result(result: GateSequenceResult) {
+    #[cfg(test)]
+    {
+        crate::execution::with_metrics_update_lock(|| {
+            record_gate_sequence_result_inner(result);
+        })
+    }
+
+    #[cfg(not(test))]
+    {
+        record_gate_sequence_result_inner(result);
+    }
+}
+
+fn record_gate_sequence_result_inner(result: GateSequenceResult) {
+    match result {
+        GateSequenceResult::Allowed => {
+            GATE_SEQUENCE_ALLOWED_TOTAL.fetch_add(1, Ordering::Relaxed);
+            super::emit_execution_metric_line(super::METRIC_GATE_SEQUENCE_TOTAL, "result=allowed");
+        }
+        GateSequenceResult::Rejected => {
+            GATE_SEQUENCE_REJECTED_TOTAL.fetch_add(1, Ordering::Relaxed);
+            super::emit_execution_metric_line(super::METRIC_GATE_SEQUENCE_TOTAL, "result=rejected");
+        }
+    }
+}
+
+fn record_wal_nonblocking_allowed(intent_class: ChokeIntentClass, source: WalNonblockingSource) {
+    #[cfg(test)]
+    {
+        crate::execution::with_metrics_update_lock(|| {
+            record_wal_nonblocking_allowed_inner(intent_class, source);
+        })
+    }
+
+    #[cfg(not(test))]
+    {
+        record_wal_nonblocking_allowed_inner(intent_class, source);
+    }
+}
+
+fn record_wal_nonblocking_allowed_inner(
+    intent_class: ChokeIntentClass,
+    source: WalNonblockingSource,
+) {
+    WAL_NONBLOCKING_ALLOWED_TOTAL.fetch_add(1, Ordering::Relaxed);
+    let source_label = match source {
+        WalNonblockingSource::WalGateError => "wal_gate_error",
+        WalNonblockingSource::PrecomputedFalse => "precomputed_false",
+        WalNonblockingSource::NoGateConfigured => "no_gate_configured",
+    };
+    super::emit_execution_metric_line(
+        super::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL,
+        &format!("intent_class={intent_class:?} source={source_label}"),
+    );
 }
 
 // --- Chokepoint evaluator ------------------------------------------------
@@ -299,17 +414,41 @@ fn build_order_intent_internal(
     gate_results: &GateResults,
     wal_gate: Option<&mut dyn RecordedBeforeDispatchGate>,
 ) -> ChokeResult {
+    let mut events = ProductionChokeEvents;
+    build_order_intent_internal_with_events(
+        intent_class,
+        risk_state,
+        metrics,
+        gate_results,
+        wal_gate,
+        &mut events,
+    )
+}
+
+fn build_order_intent_internal_with_events<E: EventSink<ChokeEvent>>(
+    intent_class: ChokeIntentClass,
+    risk_state: RiskState,
+    metrics: &mut ChokeMetrics,
+    gate_results: &GateResults,
+    wal_gate: Option<&mut dyn RecordedBeforeDispatchGate>,
+    events: &mut E,
+) -> ChokeResult {
     let mut trace = Vec::new();
 
     // Gate 1: Dispatch authorization (RiskState check)
     trace.push(GateStep::DispatchAuth);
     if intent_class == ChokeIntentClass::Open && opens_blocked(risk_state) {
-        return finish_rejected(metrics, ChokeRejectReason::RiskStateNotHealthy, trace);
+        return finish_rejected(
+            metrics,
+            ChokeRejectReason::RiskStateNotHealthy,
+            trace,
+            events,
+        );
     }
 
     // CANCEL-only intents skip remaining gates.
     if intent_class == ChokeIntentClass::CancelOnly {
-        return finish_approved(metrics, trace);
+        return finish_approved(metrics, trace, events);
     }
 
     // Gate 2: Preflight
@@ -322,6 +461,7 @@ fn build_order_intent_internal(
                 reason: REJECT_REASON_PREFLIGHT.to_string(),
             },
             trace,
+            events,
         );
     }
 
@@ -335,6 +475,7 @@ fn build_order_intent_internal(
                 reason: REJECT_REASON_QUANTIZE.to_string(),
             },
             trace,
+            events,
         );
     }
 
@@ -348,6 +489,7 @@ fn build_order_intent_internal(
                 reason: REJECT_REASON_DISPATCH_CONSISTENCY.to_string(),
             },
             trace,
+            events,
         );
     }
 
@@ -366,6 +508,7 @@ fn build_order_intent_internal(
                         reason: REJECT_REASON_DISPATCH_CLAMP_EXCEEDED.to_string(),
                     },
                     trace,
+                    events,
                 );
             }
         }
@@ -377,6 +520,7 @@ fn build_order_intent_internal(
                     reason: REJECT_REASON_DISPATCH_CLAMP_INCOMPLETE.to_string(),
                 },
                 trace,
+                events,
             );
         }
     }
@@ -391,6 +535,7 @@ fn build_order_intent_internal(
                 reason: REJECT_REASON_FEE_CACHE_STALE.to_string(),
             },
             trace,
+            events,
         );
     }
 
@@ -404,6 +549,7 @@ fn build_order_intent_internal(
                 reason: REJECT_REASON_EXPIRY_GUARD.to_string(),
             },
             trace,
+            events,
         );
     }
 
@@ -419,6 +565,7 @@ fn build_order_intent_internal(
                     reason: REJECT_REASON_LIQUIDITY_GATE.to_string(),
                 },
                 trace,
+                events,
             );
         }
 
@@ -432,6 +579,7 @@ fn build_order_intent_internal(
                     reason: REJECT_REASON_NET_EDGE.to_string(),
                 },
                 trace,
+                events,
             );
         }
 
@@ -445,6 +593,7 @@ fn build_order_intent_internal(
                     reason: REJECT_REASON_PRICER.to_string(),
                 },
                 trace,
+                events,
             );
         }
     }
@@ -475,28 +624,24 @@ fn build_order_intent_internal(
                     reason: wal_error.unwrap_or_else(|| REJECT_REASON_WAL.to_string()),
                 },
                 trace,
+                events,
             );
         }
         // CSP.3.2: WAL failure does not block Close/Hedge, but log for visibility.
         metrics.record_wal_nonblocking_allowed();
-        WAL_NONBLOCKING_ALLOWED_TOTAL.fetch_add(1, Ordering::Relaxed);
         let source = if wal_error.is_some() {
-            "wal_gate_error"
+            WalNonblockingSource::WalGateError
         } else {
-            "precomputed_false"
+            WalNonblockingSource::PrecomputedFalse
         };
-        super::emit_execution_metric_line(
-            super::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL,
-            &format!("intent_class={intent_class:?} source={source}"),
-        );
-        tracing::warn!(
-            intent_class = ?intent_class,
-            wal_error = wal_error.as_deref().unwrap_or("precomputed false"),
-            "WAL recording failed for non-OPEN intent — allowing per CSP.3.2"
-        );
+        events.emit(ChokeEvent::WalNonblockingAllowed {
+            intent_class,
+            source,
+            wal_error,
+        });
     }
 
-    finish_approved(metrics, trace)
+    finish_approved(metrics, trace, events)
 }
 
 /// Build an order intent and attach a contract registry reject reason code.

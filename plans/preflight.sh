@@ -617,6 +617,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_rust_gates_smoke_targets.sh"
   "plans/tests/test_rust_gates_quick_clippy.sh"
   "plans/tests/test_lint_execution_facade.sh"
+  "plans/tests/test_lint_graybox_telemetry.sh"
   "plans/tests/test_lint_risk_facade.sh"
   "plans/tests/test_lint_venue_facade.sh"
   "plans/tests/test_lint_soldier_infra_facade.sh"

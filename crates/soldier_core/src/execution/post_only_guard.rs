@@ -41,8 +41,11 @@ pub enum PostOnlyResult {
 }
 
 /// Internal post-only guard events used for graybox testing.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum PostOnlyEvent {
+    InvalidLimitPrice { limit_price: f64 },
+    InvalidBestAsk { best_ask: f64 },
+    InvalidBestBid { best_bid: f64 },
     Reject,
 }
 
@@ -51,6 +54,18 @@ struct ProductionPostOnlyEvents;
 impl EventSink<PostOnlyEvent> for ProductionPostOnlyEvents {
     fn emit(&mut self, event: PostOnlyEvent) {
         match event {
+            PostOnlyEvent::InvalidLimitPrice { limit_price } => tracing::warn!(
+                limit_price,
+                "post_only: non-finite limit_price, rejecting (fail-closed)"
+            ),
+            PostOnlyEvent::InvalidBestAsk { best_ask } => tracing::warn!(
+                best_ask,
+                "post_only: non-finite best_ask, rejecting (fail-closed)"
+            ),
+            PostOnlyEvent::InvalidBestBid { best_bid } => tracing::warn!(
+                best_bid,
+                "post_only: non-finite best_bid, rejecting (fail-closed)"
+            ),
             PostOnlyEvent::Reject => bump_post_only_reject(),
         }
     }
@@ -141,10 +156,9 @@ pub(crate) fn check_post_only_with_events<E: EventSink<PostOnlyEvent>>(
     // IEEE 754: NaN comparisons always return false, so NaN >= ask would
     // silently pass the crossing check. is_finite() catches both NaN and Inf.
     if !input.limit_price.is_finite() {
-        tracing::warn!(
-            limit_price = input.limit_price,
-            "post_only: non-finite limit_price, rejecting (fail-closed)"
-        );
+        events.emit(PostOnlyEvent::InvalidLimitPrice {
+            limit_price: input.limit_price,
+        });
         return reject_with_events(metrics, events);
     }
 
@@ -153,10 +167,7 @@ pub(crate) fn check_post_only_with_events<E: EventSink<PostOnlyEvent>>(
         Side::Buy => match input.best_ask {
             Some(ask) => {
                 if !ask.is_finite() {
-                    tracing::warn!(
-                        best_ask = ask,
-                        "post_only: non-finite best_ask, rejecting (fail-closed)"
-                    );
+                    events.emit(PostOnlyEvent::InvalidBestAsk { best_ask: ask });
                     return reject_with_events(metrics, events);
                 }
                 input.limit_price >= ask
@@ -167,10 +178,7 @@ pub(crate) fn check_post_only_with_events<E: EventSink<PostOnlyEvent>>(
         Side::Sell => match input.best_bid {
             Some(bid) => {
                 if !bid.is_finite() {
-                    tracing::warn!(
-                        best_bid = bid,
-                        "post_only: non-finite best_bid, rejecting (fail-closed)"
-                    );
+                    events.emit(PostOnlyEvent::InvalidBestBid { best_bid: bid });
                     return reject_with_events(metrics, events);
                 }
                 input.limit_price <= bid

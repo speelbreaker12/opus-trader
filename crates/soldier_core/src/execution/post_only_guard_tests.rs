@@ -339,6 +339,32 @@ fn test_post_only_graybox_emits_reject_event_without_global_side_effects() {
 }
 
 #[test]
+fn test_post_only_graybox_invalid_limit_price_preserves_context_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = post_only_reject_total();
+    let mut metrics = PostOnlyMetrics::new();
+    let mut events = Vec::new();
+    let input = post_only_buy(f64::NAN, Some(100.0));
+
+    let result = check_post_only_with_events(&input, &mut metrics, &mut events);
+
+    assert_eq!(result, PostOnlyResult::Rejected);
+    assert_eq!(metrics.reject_total(), 1);
+    assert!(matches!(
+        events.as_slice(),
+        [PostOnlyEvent::InvalidLimitPrice { limit_price }, PostOnlyEvent::Reject]
+            if limit_price.is_nan()
+    ));
+    assert_eq!(post_only_reject_total(), before);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
 fn test_post_only_graybox_allowed_emits_no_events_or_global_side_effects() {
     let _guard = begin_metrics_test();
     let before = post_only_reject_total();
