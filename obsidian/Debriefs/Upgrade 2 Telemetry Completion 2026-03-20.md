@@ -4,7 +4,8 @@ date: "2026-03-20"
 ---
 
 ## Commits
-- pending
+- `240baeaf` — shipped code for Upgrade 2 graybox telemetry completion
+- `pending` — project/debrief PR-boundary update for PR #223 and refresh/validation status
 
 ## 0) What shipped
 - Feature/behavior: Completed Upgrade 2 graybox telemetry seams across the remaining execution/risk paths and enforced the boundary with a dedicated lint.
@@ -20,8 +21,15 @@ date: "2026-03-20"
 - Validation (proof it got better): `bash plans/tests/test_lint_graybox_telemetry.sh`, `bash plans/lint_graybox_telemetry.sh`, and `env CARGO_TARGET_DIR=/tmp/wt_upgrade2-target cargo test -p soldier_core --locked` all passed after the final context-preserving fixes.
 
 ## 2) Best follow-up
-- Single best next step: Resolve the unrelated workflow-doc failure around `.claude/commands/review-stack.md` so `./plans/workflow_verify.sh` and repo-level `./plans/verify.sh full` can go green on this branch too.
-- 1-3 upgrades worth considering: Update the checklist/debrief with the eventual commit hash; add any future wrapper-only telemetry helpers to the graybox lint fixture matrix; fold this branch back into the broader execution facade tracking once the branch-level review/merge path is chosen.
+- Single best next step: Fix `plans/tests/test_preflight_fixture_profiles.sh` on the proper workflow branch so `./plans/workflow_verify.sh` stops failing on the new smoke fixture count and PR #223 can present a green workflow surface.
+- 1-3 upgrades worth considering: Replace the pending PR-boundary hash once committed; add any future wrapper-only telemetry helpers to the graybox lint fixture matrix; fold this branch back into the broader execution facade tracking once the review/merge path is chosen.
+
+## PR Boundary
+- Refresh method: `git fetch origin --prune` then `git rebase origin/main` on `upgrade2` (no-op; already up to date).
+- PR: #223 — https://github.com/speelbreaker12/opus-trader/pull/223
+- Validation after refresh: `bash plans/lint_graybox_telemetry.sh` passed, `bash plans/tests/test_lint_graybox_telemetry.sh` passed, `env CARGO_TARGET_DIR=/tmp/wt_upgrade2-target cargo test -p soldier_core --locked` passed.
+- Known blocker after refresh: `env CARGO_TARGET_DIR=/tmp/wt_upgrade2-target ./plans/workflow_verify.sh` fails in `wf_test_preflight_fixture_profiles` with `unexpected smoke fixture count: 13 (expected 12)`.
+- Handoff / next step: resolve the workflow smoke-count expectation on the workflow-owned branch, then rerun workflow verification and update PR #223 if needed.
 
 ## 3) Enforceable rules
 1-3 rules so the next agent doesn't repeat the constraint:
