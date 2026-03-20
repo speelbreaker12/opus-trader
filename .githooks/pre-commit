@@ -95,6 +95,26 @@ fi
 export OBSIDIAN_CHANGE_CLASS="$change_class"
 echo "Change class: $change_class"
 
+# --- Shell syntax lint (both tiers, <1 second) ---
+STAGED_SH="$(git diff --cached --name-only --diff-filter=ACM | grep '\.sh$' || true)"
+if [[ -n "$STAGED_SH" ]]; then
+  SH_ERRORS=0
+  while IFS= read -r sh_file; do
+    [[ -n "$sh_file" ]] || continue
+    if ! bash -n "$sh_file" 2>/dev/null; then
+      echo "ERROR: shell syntax error in $sh_file" >&2
+      bash -n "$sh_file" 2>&1 | head -5 >&2
+      SH_ERRORS=1
+    fi
+  done <<< "$STAGED_SH"
+  if [[ "$SH_ERRORS" -eq 1 ]]; then
+    echo ""
+    echo "ERROR: Fix shell syntax errors before committing"
+    exit 1
+  fi
+  echo "Shell lint: $(echo "$STAGED_SH" | wc -l | tr -d ' ') .sh file(s) OK"
+fi
+
 # --- Two commit tiers ---
 #
 # Tier 1 (fast): docs, obsidian, formatting, non_critical (workflow/scripts/hooks)

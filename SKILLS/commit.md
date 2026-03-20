@@ -1,150 +1,49 @@
 # Commit Skill
 
-You are the OpusTrader Commit Agent.
-
-Your job is to create a clean local commit in the correct workspace.
-You do **not** push, open PRs, merge, or modify remote state.
-
-## Purpose
-Use this skill when code or docs have already been changed in the assigned task worktree and the next step is to create a safe, reviewable local commit.
-
-## Workspace safety
-Follow `SKILLS/workspace-policy.md` before any mutating action.
+Create a clean local commit in the assigned worktree. No push, no PR, no merge.
 
 ## Never
-- never commit on `main` — main is for syncing and cutting new worktrees only
-- never push
-- never open or update a PR
-- never merge or rebase as part of this skill
-- never include unrelated files in the commit
-- never claim tests/validation ran if they did not
-- **never call `code_review_expert_attest.sh` unless you actually ran code-review-expert and reported findings in this session** — the attestation script is not a rubber stamp
+- commit on `main` or from bare repo root
+- push, open/update PR, merge, or rebase
+- include unrelated files
+- call `code_review_expert_attest.sh` without actually running code-review-expert
 
-## Required input
-At minimum, know:
-- assigned worktree path
-- assigned branch name
-- intended scope of commit
-- whether commit is allowed for this task
-
-If commit permission is unclear, stop.
-
-## Flow
-
-### 1) Confirm workspace + main branch gate
-
-Run the preflight from `SKILLS/workspace-policy.md`. Review the `git status --short` output to identify in-scope and unexpected files.
-
-**Hard gate:** check the current branch immediately:
-
-```bash
-current_branch="$(git branch --show-current)"
-```
-
-If `current_branch` is `main` or `master`: **STOP.** Do not proceed. Print:
+## Fast path (tier 1: docs, obsidian, scripts, formatting)
 
 ```
-ERROR: Current branch is main. Commits on main are blocked.
-Use /main-recovery if main is in an abnormal state.
-Otherwise, switch to your assigned worktree.
+1. Confirm worktree + branch (not main)
+2. Stage files: git add <paths>
+3. Commit: git commit -m "<area>: <what changed>"
 ```
 
-If any other preflight check fails, stop.
+That's it. The pre-commit hook handles classification and defers heavy gates to push.
 
-### 2) Stage intended files + Obsidian tracking
+## Full path (tier 2: crates/ — trading system code)
 
-Stage implementation files by explicit path, not broad wildcards, unless the operator explicitly approves broader staging.
+Same three steps, plus the pre-commit hook runs scope guard, SSOT lint, contract checks, and unwrap detection. Expect 30-60 seconds.
 
-```bash
-git add path/to/file_a path/to/file_b
-```
+## Staging rules
+- Stage by explicit path, not `git add -A`
+- Verify with `git diff --cached --stat`
+- If scope guard rejects: check project note `scope_paths`
 
-Then verify staged content:
+## Obsidian tracking
+- **Debrief note:** append one log line per commit (hash + what changed). Do not rewrite on every commit.
+- **Project page:** update once per session or at PR boundary (`/push-pr`). Not on every commit.
+- **First commit in review window:** create debrief, link from project note `## Debriefs`.
+- **Follow-up commit:** `OBSIDIAN_REVIEW_FIX=1` skips debrief requirement.
+- **Amend:** auto-detected.
+- **docs_only / obsidian_only / formatting_only:** obsidian gate skipped at commit (enforced at push).
 
-```bash
-git diff --cached --stat
-git diff --cached
-```
+## Commit message
+Format: `<area>: <what changed>` — under 72 chars.
 
-If staged content includes unrelated work, unstage and fix before continuing.
-
-**Scope guard note:** The pre-commit hook runs `project_scope_guard.sh`, which validates staged files against the project's `scope_paths` frontmatter. If the hook rejects the commit, check that all staged files are within the project's declared scope.
-
-**Obsidian tracking (soft gate):**
-The pre-commit hook classifies changes by risk class (`docs_only`, `obsidian_only`, `formatting_only`, `non_critical`, `critical`). For `non_critical` and `critical` changes:
-
-- **On each commit:** append to the session debrief/handoff note (`obsidian/Debriefs/`). This is an append-only log — do not rewrite it on every commit.
-- **On the first commit in a review window:** create the debrief note and link it from the project note's `## Debriefs` section.
-- **Do not update the main project page (`obsidian/Projects/`) on every commit.** Update it once per session or at the PR boundary (`/push-pr`). Touching it on every commit creates merge conflicts across branches.
-- If this is a **follow-up commit** (debrief already on this branch), set `OBSIDIAN_REVIEW_FIX=1` to skip the debrief requirement.
-- If **amending**, the guard auto-detects and passes.
-
-Stage the debrief alongside implementation files:
-
-```bash
-git add path/to/impl obsidian/Debriefs/MyProject\ 2026-03-19\ Summary.md
-```
-
-For `docs_only`, `obsidian_only`, and `formatting_only` changes, the gate is skipped at commit time (enforced at push/PR boundary).
-
-### 3) Validation record
-Before commit, record what was checked.
-
-Minimum output:
-- Tests run:
-- Remaining known risk:
-
-If nothing was validated, say so explicitly.
-
-### 4) Create commit
-Use a clear commit message aligned to the actual change.
-
-Format: `<area>: <what changed>`
-
-Examples:
-- `risk: fail closed when margin headroom input is missing`
-- `execution: add regression coverage for post-only guard`
-- `docs: clarify worktree commit policy`
-
-Keep the first line under 72 characters. Reference CONTRACT.md sections when implementing contract requirements.
-
-Co-author footer is optional. Include it when the agent materially contributed to the implementation:
-
-```bash
-git commit -m "$(cat <<'EOF'
-risk: fail closed when margin headroom input is missing
-
-Co-Authored-By: <agent-identity>
-EOF
-)"
-```
-
-### 5) Record result
-After commit, print:
-
+## Result
 ```
 Commit Result
 - Folder:
 - Branch:
-- Commit created: yes/no
 - Commit hash:
-- Commit message:
 - Files included:
-- Validation:
-- Next recommended step:
+- Next step:
 ```
-
-## Obsidian update rule
-
-- **Debrief/handoff note:** append on each commit (commit hash, what changed, validation).
-- **Main project page:** update once per session or at PR boundary — not on every commit.
-
-## Definition of done
-This skill is done only when all are true:
-- correct worktree confirmed (not main, not bare repo root)
-- intended files staged only
-- local commit created successfully
-- no push performed
-- no PR action performed
-- debrief/handoff note appended
-- next step stated clearly

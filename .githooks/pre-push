@@ -72,7 +72,14 @@ while read -r _local_ref _local_sha remote_ref _remote_sha; do
   fi
 
   if [[ "${SKIP_PRE_PUSH_VERIFY:-0}" == "1" ]]; then
-    echo "WARN: SKIP_PRE_PUSH_VERIFY=1, skipping verification"
+    echo "WARN: SKIP_PRE_PUSH_VERIFY=1, skipping verification and scope guard"
+    continue
+  fi
+
+  # SKIP_VERIFY_ONLY: skip verify.sh but keep scope/frontmatter/code-review gates.
+  # Use when you already ran verify locally and just want a fast push.
+  if [[ "${SKIP_VERIFY_ONLY:-0}" == "1" ]]; then
+    echo "WARN: SKIP_VERIFY_ONLY=1, skipping verify.sh (scope/frontmatter/review gates ran above)"
     continue
   fi
 
