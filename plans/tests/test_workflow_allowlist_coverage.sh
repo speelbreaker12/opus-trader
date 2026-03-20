@@ -140,6 +140,7 @@ required=(
   plans/tests/test_obsidian_context_hook_branch_guard.sh
   plans/tests/test_obsidian_precommit_hook.sh
   plans/tests/test_open_project_pr.sh
+  plans/tests/test_pre_push_hook_env_isolation.sh
   plans/tests/test_pr_gate.sh
   plans/tests/test_pr_review_gate_hook_scope.sh
   plans/tests/test_prd_cache.sh

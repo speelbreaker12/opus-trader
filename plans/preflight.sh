@@ -609,6 +609,7 @@ fi
 # run later in verify_fork.sh gate 14g so quick-mode preflight stays inside the
 # outer verify timeout budget even on dirty workflow worktrees.
 SMOKE_REVIEW_FIXTURE_TESTS=(
+  "plans/tests/test_pre_push_hook_env_isolation.sh"
   "plans/tests/test_check_skills_index.sh"
   "plans/tests/test_run_prd_auditor_invocation.sh"
   "plans/tests/test_guard_no_command_substitution.sh"

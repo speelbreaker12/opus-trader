@@ -159,6 +159,7 @@ assert_list_contains "$smoke_list" "plans/tests/test_fail_closed_gate_map_paths.
 assert_list_contains "$smoke_list" "plans/tests/test_rust_gates_quick_clippy.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_rust_gates_smoke_targets.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_lint_facade_public_modules.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_pre_push_hook_env_isolation.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_lint_execution_facade.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_lint_risk_facade.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_lint_venue_facade.sh"
@@ -303,7 +304,7 @@ serial_overlap="$(
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_serial_count="$(printf '%s\n' "$full_only_serial_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "13" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 13)"
+[[ "$smoke_count" == "14" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 14)"
 [[ "$full_only_count" == "9" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 9)"
 [[ "$full_only_serial_count" == "0" ]] || fail "unexpected full-only serial fixture count: $full_only_serial_count (expected 0)"
 

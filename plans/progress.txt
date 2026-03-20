@@ -1304,3 +1304,9 @@ Next: Convert `crates/soldier_core/src/execution/preflight.rs` next, then move t
   Commands: bash plans/tests/test_lint_facade_public_modules.sh; bash plans/tests/test_rust_gates_smoke_targets.sh; ./plans/workflow_verify.sh; ./plans/verify.sh quick.
   Evidence: plans/lint_facade_public_modules.sh; plans/tests/test_lint_facade_public_modules.sh; plans/lib/rust_gates.sh; plans/tests/test_preflight_fixture_profiles.sh; plans/tests/test_rust_gates_smoke_targets.sh; plans/tests/test_workflow_allowlist_coverage.sh; plans/verify_fork.sh; plans/workflow_files_allowlist.txt; .claude/commands/review-stack.md; artifacts/verify/20260319_222216.
   Notes: Restored var/runtime/runtime_state.json to checked-in metadata after verification to keep commit scope deterministic. Full verify still pending.
+- Story: workflow-facade-leak-guard
+  Date: 2026-03-20 21:10:00 UTC
+  Summary: Re-cut the slice onto a clean v2 branch after push-hook fixture commits polluted the first PR branch, identified hook-scoped git environment leakage as the root cause, patched `.githooks/pre-push` to clear `GIT_*` variables before verify, and added a dedicated regression test plus preflight/allowlist wiring for that invariant.
+  Commands: bash plans/tests/test_pre_push_hook_env_isolation.sh; bash plans/tests/test_preflight_fixture_profiles.sh; bash plans/tests/test_workflow_allowlist_coverage.sh; ./plans/verify.sh quick.
+  Evidence: .githooks/pre-push; plans/tests/test_pre_push_hook_env_isolation.sh; plans/preflight.sh; plans/tests/test_preflight_fixture_profiles.sh; plans/tests/test_workflow_allowlist_coverage.sh; plans/workflow_files_allowlist.txt; artifacts/verify/20260320_150043.
+  Notes: The new env-isolation regression passes. `./plans/verify.sh quick` still hit an existing smoke-fixture timeout in `plans/tests/test_lint_execution_facade.sh` while the tree was dirty; the next authoritative check is the clean-tree push-hook verify on the v2 branch.

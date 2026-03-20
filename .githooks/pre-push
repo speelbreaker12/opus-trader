@@ -52,5 +52,10 @@ while read -r _local_ref _local_sha remote_ref _remote_sha; do
 
   # Main/master push is blocked above — all remaining pushes are feature branches
   echo "Pushing to feature branch: $remote_ref"
-  "$VERIFY_SH_PATH" quick
+  (
+    # Git hook invocations export repo-bound environment variables that can
+    # redirect fixture-repo git commands back into the active worktree.
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_PREFIX
+    "$VERIFY_SH_PATH" quick
+  )
 done

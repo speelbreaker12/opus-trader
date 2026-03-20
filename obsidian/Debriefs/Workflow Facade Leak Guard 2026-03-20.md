@@ -5,7 +5,8 @@ date: "2026-03-20"
 
 ## Commits
 - `0c944689` — workflow: add facade leak guard
-- pending — project-note refresh for dedicated branch/worktree and PR-boundary readiness
+- `a89f7c6e` — obsidian: bind facade guard project to dedicated branch
+- pending — isolate pre-push hook git env and retry push/PR from v2 branch
 
 ## 0) What shipped
 - Feature/behavior: Added a repo-wide facade public-module leak guard, wired it into live verification, and covered semicolon, attribute-prefixed, multiline-attribute, and inline-block `pub mod` forms with regression fixtures.
@@ -21,7 +22,7 @@ date: "2026-03-20"
 - Validation (proof it got better): `bash plans/tests/test_lint_facade_public_modules.sh`, `bash plans/tests/test_rust_gates_smoke_targets.sh`, and `./plans/verify.sh quick` all passed after the hardening and live-wire fixes.
 
 ## 2) Best follow-up
-- Single best next step: Push the dedicated branch `project/workflow-facade-leak-guard` and open the PR now that `./plans/verify.sh full` has passed and the workspace is correctly attached.
+- Single best next step: Push the cleaned `project/workflow-facade-leak-guard-v2` branch after the pre-push hook env isolation fix so verify fixtures stop mutating the active review branch.
 - 1-3 upgrades worth considering:
   - Add a fixture that fails if a workflow integration test listed in `verify_fork.sh` does not exist on disk.
   - Add a fixture that compares new lint scripts under `plans/` against the live rust/workflow gate wiring.
