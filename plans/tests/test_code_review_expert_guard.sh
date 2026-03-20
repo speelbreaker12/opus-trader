@@ -25,6 +25,7 @@ cd "$repo"
 git init -q
 git config user.name "Test User"
 git config user.email "test@example.com"
+git config core.hooksPath /dev/null
 
 echo "base" > README.md
 git add README.md

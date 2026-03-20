@@ -56,6 +56,7 @@ EOF_CONTRACT
 (
   cd "$repo"
   git init -q
+  git config core.hooksPath /dev/null
   git checkout -qb main
   git config user.email "test@example.com"
   git config user.name "Test User"

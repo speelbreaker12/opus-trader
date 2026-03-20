@@ -115,6 +115,7 @@ mkdir -p "$repo"
 git -C "$repo" init -q
 git -C "$repo" config user.name "Test User"
 git -C "$repo" config user.email "test@example.com"
+git -C "$repo" config core.hooksPath /dev/null
 git -C "$repo" checkout -qb "story/S1-pr-gate-hook"
 
 echo "seed" > "$repo/sample.txt"
@@ -140,6 +141,7 @@ mkdir -p "$target_repo"
 git -C "$target_repo" init -q
 git -C "$target_repo" config user.name "Target User"
 git -C "$target_repo" config user.email "target@example.com"
+git -C "$target_repo" config core.hooksPath /dev/null
 git -C "$target_repo" checkout -qb "story/S2-pr-gate-hook"
 echo "target" > "$target_repo/target.txt"
 git -C "$target_repo" add target.txt

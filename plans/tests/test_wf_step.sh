@@ -77,6 +77,7 @@ trap cleanup EXIT
 
 cd "$TMPDIR"
 git init -q
+git config core.hooksPath /dev/null
 git config user.email "test@test.com"
 git config user.name "Test"
 

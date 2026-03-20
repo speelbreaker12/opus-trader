@@ -16,6 +16,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 
 cd "$TMP_DIR"
 git init -q
+git config core.hooksPath /dev/null
 git config user.email "test@example.com"
 git config user.name "Test User"
 

@@ -64,6 +64,7 @@ EOF
   (
     cd "$fixture_root"
     git init -q
+    git config core.hooksPath /dev/null
     git config user.name "Recon Bundle Test"
     git config user.email "recon-bundle-test@example.com"
     git add .

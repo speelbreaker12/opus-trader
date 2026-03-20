@@ -281,6 +281,7 @@ mkdir -p "$wrapper_repo/plans"
 git -C "$tmp_dir" init -q wrapper_repo
 git -C "$wrapper_repo" config user.email "test@example.com"
 git -C "$wrapper_repo" config user.name "Wrapper Test"
+git -C "$wrapper_repo" config core.hooksPath /dev/null
 cp "$ROOT/plans/recon_scoreboard.py" "$wrapper_repo/plans/recon_scoreboard.py"
 cp "$ROOT/plans/recon_scoreboard.sh" "$wrapper_repo/plans/recon_scoreboard.sh"
 chmod +x "$wrapper_repo/plans/recon_scoreboard.sh"

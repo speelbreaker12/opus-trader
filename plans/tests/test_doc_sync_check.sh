@@ -34,7 +34,7 @@ run_test() {
     mv "$tmpdir/prd.json" "$tmpdir/plans/prd.json"
   fi
 
-  (cd "$tmpdir" && git init -q && git add -A && git commit -q -m "fixture" --allow-empty)
+  (cd "$tmpdir" && git init -q && git config core.hooksPath /dev/null && git add -A && git commit -q -m "fixture" --allow-empty)
 
   local output
   local actual_exit=0
@@ -99,7 +99,7 @@ run_kill_switch_test() {
     mkdir -p "$tmpdir/plans"
     mv "$tmpdir/prd.json" "$tmpdir/plans/prd.json"
   fi
-  (cd "$tmpdir" && git init -q && git add -A && git commit -q -m "fixture" --allow-empty)
+  (cd "$tmpdir" && git init -q && git config core.hooksPath /dev/null && git add -A && git commit -q -m "fixture" --allow-empty)
 
   local output actual_exit=0
   output="$(cd "$tmpdir" && DOC_SYNC_GATE=0 bash "$GATE_SCRIPT" 2>&1)" || actual_exit=$?

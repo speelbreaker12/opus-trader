@@ -16,6 +16,7 @@ trap 'rm -rf "$tmp_dir"' EXIT
 
 cd "$tmp_dir"
 git init -q
+git config core.hooksPath /dev/null
 git symbolic-ref HEAD refs/heads/main
 git config user.email "test@example.com"
 git config user.name "Test"

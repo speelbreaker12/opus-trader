@@ -33,6 +33,7 @@ mkdir -p "$repo/plans/tests" "$repo/plans/lib" "$repo/specs/schemas/recon" "$rep
 git -C "$tmp_dir" init -q repo
 git -C "$repo" config user.email "test@example.com"
 git -C "$repo" config user.name "Test"
+git -C "$repo" config core.hooksPath /dev/null
 
 cp "$RUNNER" "$repo/plans/recon_operator_run.sh"
 cp "$TRACE_SCRIPT" "$repo/plans/recon_trace.sh"

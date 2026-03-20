@@ -21,6 +21,7 @@ repo="$tmp_dir/repo"
 git -C "$tmp_dir" init -q repo
 git -C "$repo" config user.email "test@example.com"
 git -C "$repo" config user.name "WF Step Test"
+git -C "$repo" config core.hooksPath /dev/null
 
 mkdir -p "$repo/plans" "$repo/plans/lib"
 cp "$WF_STEP_SRC" "$repo/plans/wf_step.sh"

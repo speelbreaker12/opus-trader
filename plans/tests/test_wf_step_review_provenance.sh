@@ -77,6 +77,7 @@ mkdir -p "$repo/plans" "$repo/plans/lib" "$repo/.wf/receipts/S9-000" "$repo/arti
 )
 git -C "$repo" config user.email "test@example.com"
 git -C "$repo" config user.name "Test"
+git -C "$repo" config core.hooksPath /dev/null
 
 cp "$WF_STEP_SRC" "$repo/plans/wf_step.sh"
 cp "$REVIEW_LOGGED_SRC" "$repo/plans/review_logged.sh"

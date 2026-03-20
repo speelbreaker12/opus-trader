@@ -205,6 +205,7 @@ EOF
   git init -q
   git config user.name "fixture"
   git config user.email "fixture@example.com"
+  git config core.hooksPath /dev/null
 )
 
 invalid_wait_mode_log="$tmp_dir/invalid_wait_mode.log"

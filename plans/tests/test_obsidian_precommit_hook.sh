@@ -48,6 +48,8 @@ mkdir -p "$repo"
 git -C "$repo" init -q
 git -C "$repo" config user.name "Test User"
 git -C "$repo" config user.email "test@example.com"
+# Disable hooks in temp repo so parent repo's GIT_DIR/core.hooksPath doesn't leak
+git -C "$repo" config core.hooksPath /dev/null
 
 echo "seed" >"$repo/sample.txt"
 git -C "$repo" add sample.txt

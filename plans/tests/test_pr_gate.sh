@@ -335,6 +335,7 @@ chmod +x "$fake_bin/gh"
 git -C "$repo_dir" init -q
 git -C "$repo_dir" config user.email "ci@example.com"
 git -C "$repo_dir" config user.name "CI"
+git -C "$repo_dir" config core.hooksPath /dev/null
 mkdir -p "$repo_dir/docs"
 echo "fixture" > "$repo_dir/README.md"
 echo "keep-me" > "$repo_dir/docs/unchanged.txt"

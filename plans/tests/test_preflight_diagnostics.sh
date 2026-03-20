@@ -87,6 +87,7 @@ EOF
   git init -q
   git config user.name "fixture"
   git config user.email "fixture@example.com"
+  git config core.hooksPath /dev/null
   git add .
   git commit -qm "fixture"
 )

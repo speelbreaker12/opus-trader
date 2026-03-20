@@ -17,6 +17,7 @@ trap 'rm -rf "$tmp_dir"' EXIT
 fixture="$tmp_dir/repo"
 mkdir -p "$fixture/docs" "$fixture/reviews/premortems"
 git init -q "$fixture"
+git -C "$fixture" config core.hooksPath /dev/null
 
 cat > "$fixture/docs/good.md" <<'MD'
 Use reviews/premortems/S1-007_premortem.md.

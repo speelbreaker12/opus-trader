@@ -13,6 +13,7 @@ trap cleanup EXIT
 
 cd "$tmp_dir"
 git init -q
+git config core.hooksPath /dev/null
 
 mkdir -p plans
 touch touch.txt

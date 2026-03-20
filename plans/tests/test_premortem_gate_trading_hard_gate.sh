@@ -17,6 +17,7 @@ trap 'rm -rf "$tmp_dir"' EXIT
 repo="$tmp_dir/repo"
 mkdir -p "$repo/plans" "$repo/reviews/premortems"
 git init -q "$repo"
+git -C "$repo" config core.hooksPath /dev/null
 
 cp "$SCRIPT" "$repo/plans/premortem_gate.sh"
 chmod +x "$repo/plans/premortem_gate.sh"

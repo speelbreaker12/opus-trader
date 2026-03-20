@@ -29,6 +29,7 @@ mkdir -p "$repo/plans/tests" "$repo/specs/schemas/recon"
 git -C "$tmp_dir" init -q repo
 git -C "$repo" config user.email "test@example.com"
 git -C "$repo" config user.name "Test"
+git -C "$repo" config core.hooksPath /dev/null
 
 cp "$TRACE_SCRIPT" "$repo/plans/recon_trace.sh"
 cp "$REPORT_VALIDATOR" "$repo/plans/validate_recon_step_report.py"

@@ -37,6 +37,7 @@ mkdir -p "$repo/plans" "$repo/plans/lib"
 git -C "$repo" init -q
 git -C "$repo" config user.name "Test User"
 git -C "$repo" config user.email "test@example.com"
+git -C "$repo" config core.hooksPath /dev/null
 git -C "$repo" checkout -qb "project/scope-test"
 
 cp "$ROOT/plans/project_scope_guard.sh" "$repo/plans/project_scope_guard.sh"
