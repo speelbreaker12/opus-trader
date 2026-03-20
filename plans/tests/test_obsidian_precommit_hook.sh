@@ -13,31 +13,13 @@ run_hook() {
   local repo="$1"
   local command_text="$2"
 
+  local payload
+  payload="$(python3 -c "import json,sys; print(json.dumps({'tool_input':{'command':sys.argv[1]}}))" "$command_text")"
+
   (
     cd "$repo"
-    python3 -c "import json,sys; print(json.dumps({'tool_input':{'command':sys.argv[1]}}))" \
-      "$command_text" | bash "$HOOK"
+    printf '%s\n' "$payload" | bash "$HOOK"
   )
-}
-
-expect_block() {
-  local label="$1"
-  local pattern="$2"
-  local repo="$3"
-  local command_text="$4"
-
-  local output=""
-  set +e
-  output="$(run_hook "$repo" "$command_text" 2>&1)"
-  local rc=$?
-  set -e
-
-  if [[ $rc -ne 2 ]]; then
-    fail "$label expected exit 2, got $rc with output: $output"
-  fi
-  if ! printf '%s\n' "$output" | grep -Fq "$pattern"; then
-    fail "$label missing expected text '$pattern' in output: $output"
-  fi
 }
 
 expect_pass() {
@@ -56,108 +38,6 @@ expect_pass() {
   fi
 }
 
-write_project() {
-  local path="$1"
-  local debrief_line="$2"
-
-  cat >"$path" <<EOF
----
-status: in-progress
-priority: P1
-branch: main
-pr:
-started: "2026-03-17"
----
-
-## Current State
-Testing the Claude-side Obsidian hook.
-
-## Key Files
-- sample.txt
-
-## Debriefs
-$debrief_line
-
-## Log
-### 2026-03-17
-- Updated project note.
-EOF
-}
-
-write_debrief() {
-  local path="$1"
-  local project_name="$2"
-
-  cat >"$path" <<EOF
----
-project: "[[$project_name]]"
-date: "2026-03-17"
-type: debrief
----
-
-## Commits
-- \`pending\`
-
-## Session Handoff
-
-### Context
-- Project: $project_name
-- Branch: main
-- Worktree: repo fixture
-- PR state:
-- Lifecycle: testing
-
-### State
-- Task: Add a debrief fixture.
-- Goal: Leave session context for the Claude-side hook tests.
-- Stop point: Fixture written and staged.
-- Validation: Hook should accept valid debrief/project linkage.
-- Open decisions / blockers: none
-- Resume command: bash plans/tests/test_obsidian_precommit_hook.sh
-
-### Touch List
-- Files touched: obsidian/Projects/Test Project.md, obsidian/Debriefs/*.md
-- Tests touched: plans/tests/test_obsidian_precommit_hook.sh
-- Contract/docs touched: AGENTS.md Obsidian Project Tracking
-
-### Shipped
-- Feature/behavior: Added a debrief fixture.
-- Value: Leaves session context.
-
-### Constraint (ONE)
-- Constraint: Missing debrief evidence.
-- Symptoms: Follow-up cleanup and missing session history.
-- Workaround: Wrote the debrief directly.
-- Permanent fix: Add a commit guard.
-- Smallest increment: Add a shell guard script.
-- Proof: Guard blocks missing debrief commits.
-
-### Best Follow-Up - Project
-- Next step: Wire the guard into pre-commit.
-- Upgrades:
-
-### Best Follow-Up - Workflow
-- Issue: Missing debriefs can slip through without a shared guard.
-- Smallest fix: Reuse the guard in every commit entrypoint.
-
-### Best Follow-Up - Non-Task
-- Issue:
-- Owner/path:
-
-### Rules
-- Rule 1: Stage a debrief before commit.
-- Rule 2:
-- Rule 3:
-EOF
-}
-
-write_linked_project() {
-  local path="$1"
-  local debrief_name="$2"
-
-  write_project "$path" "- [[${debrief_name}]]"
-}
-
 [[ -x "$HOOK" ]] || fail "missing executable hook: $HOOK"
 
 tmp_dir="$(mktemp -d)"
@@ -173,49 +53,18 @@ echo "seed" >"$repo/sample.txt"
 git -C "$repo" add sample.txt
 git -C "$repo" commit -qm "seed"
 
-mkdir -p "$repo/obsidian/Projects" "$repo/obsidian/Debriefs"
-write_project "$repo/obsidian/Projects/Test Project.md" "-"
-git -C "$repo" add "obsidian/Projects/Test Project.md"
-
-expect_block \
-  "project-only staging blocks commit" \
-  "No staged Obsidian debrief" \
-  "$repo" \
-  "git commit -m test"
-
-write_debrief "$repo/obsidian/Debriefs/Test Project 2026-03-17 Hook.md" "Test Project"
-git -C "$repo" add "obsidian/Debriefs/Test Project 2026-03-17 Hook.md"
-write_project \
-  "$repo/obsidian/Projects/Test Project.md" \
-  "- [[Test Project 2026-03-17 Hook]]"
-git -C "$repo" add "obsidian/Projects/Test Project.md"
+# The precommit hook is intentionally disabled (no-op, exit 0).
+# The git pre-commit hook (.githooks/pre-commit) handles commit gating.
+# This test verifies the hook remains a no-op.
 
 expect_pass \
-  "linked project and debrief allow commit" \
+  "disabled hook allows git commit" \
   "$repo" \
   "git commit -m test"
 
 expect_pass \
-  "non-commit commands are ignored" \
+  "disabled hook allows non-commit commands" \
   "$repo" \
   "git status"
-
-git -C "$repo" reset --hard -q HEAD
-mkdir -p "$repo/obsidian/Projects" "$repo/obsidian/Debriefs"
-write_linked_project \
-  "$repo/obsidian/Projects/Test Project.md" \
-  "Test Project 2026-03-17 Hook"
-write_debrief "$repo/obsidian/Debriefs/Test Project 2026-03-17 Hook.md" "Test Project"
-write_debrief "$repo/obsidian/Debriefs/Other Project 2026-03-17 Hook.md" "Other Project"
-git -C "$repo" add \
-  "obsidian/Projects/Test Project.md" \
-  "obsidian/Debriefs/Test Project 2026-03-17 Hook.md" \
-  "obsidian/Debriefs/Other Project 2026-03-17 Hook.md"
-
-expect_block \
-  "unrelated staged debrief blocks commit" \
-  "belongs to a different project" \
-  "$repo" \
-  "git commit -m test"
 
 echo "test_obsidian_precommit_hook.sh: ok"

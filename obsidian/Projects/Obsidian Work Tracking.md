@@ -37,6 +37,7 @@ scope_paths:
 In progress. Obsidian debrief now acts as the default session handoff for normal project work, and the repo is adding Codex mirrors for `/commit` and `/push-pr` so the same workflow skills are available outside Claude-specific wrappers.
 
 ## Commits
+- `pending` — 2026-03-19 — fix obsidian hook tests: align with branch-ownership routing, add frontmatter module to test fixtures, fix precommit no-op test
 - `pending` — 2026-03-19 — guard improvements: formatting-only detection, review currency, shared parser, PR gate marker, skill scope refinements
 - `pending` — 2026-03-19 — disable redundant Claude Code hooks, context-aware dangerous-command-blocker
 - `c1ec15f0` — 2026-03-19 — block git commit from bare repo root
@@ -64,6 +65,7 @@ In progress. Obsidian debrief now acts as the default session handoff for normal
 - [[Obsidian Work Tracking 2026-03-19 Guard Hardening]]
 - [[Obsidian Work Tracking 2026-03-19 Codex Command Mirrors]]
 - [[Obsidian Workflow Fixes 2026-03-19 Guard Improvements]]
+- [[Obsidian Work Tracking 2026-03-19 Test Alignment]]
 
 ## Log
 ### 2026-03-16

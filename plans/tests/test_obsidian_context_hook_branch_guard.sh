@@ -72,7 +72,8 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
 repo="$tmp_dir/repo"
-mkdir -p "$repo/obsidian/Projects" "$repo/.tmp" "$repo/src"
+mkdir -p "$repo/obsidian/Projects" "$repo/.tmp" "$repo/src" "$repo/plans/lib"
+cp "$ROOT/plans/lib/obsidian_frontmatter.py" "$repo/plans/lib/"
 git -C "$repo" init -q
 git -C "$repo" config user.name "Test User"
 git -C "$repo" config user.email "test@example.com"
@@ -93,11 +94,19 @@ write_project \
   "Scope guard follow-up lives on the other branch." \
   "src/other.txt"
 
-output="$(run_hook "$repo" "branch-mismatch" "Please continue the scope guard follow-up on the other note.")"
-expect_contains "matched project present" "$output" "Matched Obsidian project: obsidian/Projects/Other Note.md"
-expect_contains "branch mismatch warning" "$output" "BRANCH/WORKTREE MISMATCH"
-expect_contains "current branch named" "$output" "Current branch: project/current-note"
-expect_contains "matched branch named" "$output" "Matched project branch: project/other-note"
-expect_contains "switch instruction" "$output" "Switch or create the matched project's worktree before editing."
+# --- Test 1: Branch ownership matches Current Note (deterministic) ---
+output="$(run_hook "$repo" "branch-ownership" "Please continue the scope guard follow-up.")"
+expect_contains "branch ownership matches current" "$output" "Matched existing project: Current Note"
+expect_contains "branch name shown" "$output" "Branch: project/current-note"
+expect_contains "routing decision present" "$output" "Routing decision:"
+
+# --- Test 2: Both projects are listed ---
+expect_contains "current note listed" "$output" "Current Note (in-progress)"
+expect_contains "other note listed" "$output" "Other Note (in-progress)"
+
+# --- Test 3: Switch to unowned branch -> no match ---
+git -C "$repo" checkout -qb "feature/unowned"
+no_match_output="$(run_hook "$repo" "branch-unowned" "Any message.")"
+expect_contains "no branch match" "$no_match_output" "No branch-owned project matched."
 
 echo "test_obsidian_context_hook_branch_guard.sh: ok"
