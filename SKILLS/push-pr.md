@@ -29,8 +29,6 @@ Follow `SKILLS/workspace-policy.md` before any mutating action.
 At minimum, know:
 - assigned worktree path
 - assigned branch
-- whether a PR already exists for this branch
-- whether push/PR creation is allowed
 
 If push or PR permission is unclear, stop.
 
@@ -67,53 +65,82 @@ git merge origin/main
 
 If fetch fails (network down), stop and report. Do not push stale state.
 
-If conflicts occur:
-- resolve them in this feature branch/worktree
-- rerun relevant validation
-- commit the merge resolution
-- push the same branch
-
 Never rebase a review-bound branch by default.
 
 ## Flow
 
-### 1) Confirm workspace and cleanliness
-Run the preflight from `SKILLS/workspace-policy.md`. Additionally confirm:
+### 1) Confirm workspace + main branch gate
+
+Run the preflight from `SKILLS/workspace-policy.md`.
+
+**Hard gate:** check the current branch immediately:
+
+```bash
+current_branch="$(git branch --show-current)"
+```
+
+If `current_branch` is `main` or `master`: **STOP.** Print:
+
+```
+ERROR: Current branch is main. Pushes from main are blocked.
+Use /main-recovery if main is in an abnormal state.
+```
+
+Additionally confirm:
 - Clean status: yes/no
-- PR exists already: yes/no
 - Push allowed: yes/no
-- PR allowed: yes/no
 
 If not clean, stop.
 
-### 2) Confirm last local commit to ship
-Print:
+### 2) Detect PR state
+
+Deterministically check whether a PR already exists for this branch. Do not rely on operator memory.
 
 ```bash
-git log --oneline -n 3
+gh pr view --json number,state,url 2>/dev/null || echo "NO_PR"
 ```
 
-Then state:
-- commit(s) being shipped
-- whether this is a new PR or update to existing PR
+If that fails, fall back:
+
+```bash
+gh pr list --state open --head "$(git branch --show-current)" --json number,url --jq '.[0]'
+```
+
+Print:
+
+```
+PR state
+- Branch: <branch>
+- Existing PR: #<number> (<url>) | none
+- Refresh method: rebase (no PR) | merge (PR open)
+```
 
 ### 3) Refresh branch safely
-Apply the refresh rule:
+Apply the refresh rule from step 2:
 - no PR yet -> rebase
 - PR open -> merge
 
 If fetch fails, stop. Do not continue with stale refs.
 
-If conflicts occur, stop after listing conflicted files unless the operator explicitly wants you to continue with conflict resolution.
-
-List conflicts with:
+**Default on conflicts: stop.** Print conflicted files and hand off to `/git` (conflict resolution skill). Do not improvise conflict resolution inline.
 
 ```bash
 git diff --name-only --diff-filter=U
 ```
 
-### 4) Validation after refresh
-After rebase/merge or conflict resolution, record:
+If the operator explicitly authorizes continuing with resolution, follow `SKILLS/git.md` Part 2.
+
+### 4) Post-refresh verification
+
+After rebase/merge, confirm clean state before push:
+
+```bash
+git status --short
+```
+
+If not clean, stop. Dirty state after refresh means resolution is incomplete.
+
+Record:
 - tests/checks rerun
 - remaining known risk
 - whether branch is ready for review
@@ -129,7 +156,7 @@ Before pushing, be aware of the gates that will fire. The pre-push hook runs the
 | Verify (cargo) | `verify.sh quick` | Rust compilation + tests + clippy | Fix code; skipped if no crates/ changes on branch |
 | Verify cache | `.verify-cache` | Tree SHA match | Auto-skip if already verified |
 
-If creating a new PR (not updating an existing one), the `pr-review-gate-hook.sh` will additionally check for a review-stack marker under `artifacts/pr-review-gate/<branch>.json`. If missing, run `/review-stack` first.
+If creating a new PR (not updating an existing one), the `pr-review-gate-hook.sh` will additionally check for a review-stack marker under `artifacts/pr-review-gate/<branch>.json`. If missing, run `/review-stack` and then `./plans/write_review_gate_marker.sh --pr-gate` first.
 
 ### 5) Push branch
 #### New PR case
@@ -166,7 +193,7 @@ gh pr list --state open --json number,title,headRefName --limit 30
 If any open PR touches the same files, warn the operator. Do not block — let the operator decide.
 
 ### 7) Create or update PR
-- If PR already exists: update the same PR, do not create a duplicate
+- If PR already exists (from step 2): update the same PR, do not create a duplicate
 - If no PR exists: create one with a narrow title and clear summary
 
 ```bash
@@ -176,8 +203,6 @@ gh pr create --title "<title>" --body "$(cat <<'EOF'
 
 ## Test plan
 - [ ] <how to verify the changes>
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
 EOF
 )"
 ```
@@ -196,30 +221,34 @@ Push/PR Result
 - Folder:
 - Branch:
 - Refresh method: rebase | merge
+- Force-with-lease used: yes/no
+- Post-refresh status: clean | dirty (should not happen)
 - Push completed: yes/no
 - PR action: created | updated | none
 - PR link/number:
 - Validation after refresh:
-- Conflicts encountered: yes/no
+- Conflicts encountered: yes/no (if yes, delegated to /git)
 - Next recommended step:
 ```
 
 ## Obsidian update requirement
-Before finishing, update the relevant Obsidian session/project note with:
-- branch
-- worktree path
+At PR boundary, update the main project page (`obsidian/Projects/`) with:
 - latest commit hash shipped
 - whether branch was rebased or merged with main
 - PR number/url
 - validation after refresh
 - handoff / next step
 
+This is the correct time to update the project page — not on every commit.
+
 ## Definition of done
 This skill is done only when all are true:
-- correct worktree confirmed
+- correct worktree confirmed (not main, not bare repo root)
 - clean state confirmed before refresh
+- PR state detected deterministically (not from memory)
 - branch refreshed using correct rule
+- post-refresh status clean
 - branch pushed safely
 - PR created or updated appropriately
-- Obsidian updated
+- Obsidian project page updated
 - next step stated clearly

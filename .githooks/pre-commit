@@ -95,72 +95,69 @@ fi
 export OBSIDIAN_CHANGE_CLASS="$change_class"
 echo "Change class: $change_class"
 
-# 1. Obsidian tracking guard
-#    Advisory at commit time for docs_only / obsidian_only / formatting_only.
-#    Hard enforcement happens at push/PR boundary.
-plans/obsidian_commit_guard.sh
-
-# 2. Project scope guard — staged files vs scope_paths (warn only)
-plans/project_scope_guard.sh commit
-
-# 3. SSOT lint (existing)
-plans/ssot_lint.sh
-
-# 4. Contract cross-reference check (if CONTRACT.md is staged)
-if git diff --cached --name-only | grep -q "specs/CONTRACT.md"; then
-  echo "CONTRACT.md staged - running cross-reference check..."
-  if ! python3 scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --strict --check-at; then
-    echo ""
-    echo "ERROR: Contract cross-reference check failed"
-    echo "Fix the issues above before committing"
-    exit 1
-  fi
-fi
-
-# 5. PRD schema check (if prd.json is staged)
-if git diff --cached --name-only | grep -q "plans/prd.json"; then
-  echo "prd.json staged - running schema check..."
-  if ! plans/prd_schema_check.sh plans/prd.json; then
-    echo ""
-    echo "ERROR: PRD schema validation failed"
-    echo "Run 'plans/prd_gate.sh' for full diagnostics"
-    exit 1
-  fi
-fi
-
-# 6. Check for unwrap() in staged Rust files (safety-critical paths only)
-STAGED_RS=$(git diff --cached --name-only --diff-filter=ACM | grep -E "^crates/soldier_core/.*\.rs$" || true)
-if [[ -n "$STAGED_RS" ]]; then
-  echo "Checking staged soldier_core files for unwrap()..."
-  UNWRAP_FOUND=0
-  for file in $STAGED_RS; do
-    # Skip test files
-    if [[ "$file" == *"test"* ]]; then
-      continue
-    fi
-    if git diff --cached "$file" | grep -q "\.unwrap()"; then
-      echo "WARN: unwrap() added in $file"
-      UNWRAP_FOUND=1
-    fi
-  done
-  if [[ $UNWRAP_FOUND -eq 1 ]]; then
-    echo ""
-    echo "WARNING: unwrap() found in staged changes"
-    echo "Consider using ? or .ok_or() instead"
-    echo "(Proceeding anyway - this is a warning only)"
-    echo ""
-  fi
-fi
-
-# 7. Code-review-expert attestation
-#    Advisory at commit time: skip for docs_only, obsidian_only, formatting_only.
-#    Hard enforcement moves to push/PR boundary.
+# --- Fast path: docs/obsidian/formatting commits skip heavy gates ---
+# Per WORKFLOW_V2: commit is a cheap local checkpoint, not a launch.
+# Heavy validation (SSOT lint, scope guard, contract checks) runs at push.
 case "$change_class" in
   docs_only|obsidian_only|formatting_only)
-    echo "Skipping code-review-expert guard (change_class=$change_class, enforced at push)"
+    echo "Fast path: $change_class — skipping heavy gates (enforced at push)"
+    # Still run obsidian guard for tracking
+    plans/obsidian_commit_guard.sh
     ;;
   *)
-    plans/code_review_expert_guard.sh
+    # 1. Obsidian tracking guard
+    plans/obsidian_commit_guard.sh
+
+    # 2. Project scope guard — staged files vs scope_paths
+    plans/project_scope_guard.sh commit
+
+    # 3. SSOT lint
+    plans/ssot_lint.sh
+
+    # 4. Contract cross-reference check (if CONTRACT.md is staged)
+    if git diff --cached --name-only | grep -q "specs/CONTRACT.md"; then
+      echo "CONTRACT.md staged - running cross-reference check..."
+      if ! python3 scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --strict --check-at; then
+        echo ""
+        echo "ERROR: Contract cross-reference check failed"
+        echo "Fix the issues above before committing"
+        exit 1
+      fi
+    fi
+
+    # 5. PRD schema check (if prd.json is staged)
+    if git diff --cached --name-only | grep -q "plans/prd.json"; then
+      echo "prd.json staged - running schema check..."
+      if ! plans/prd_schema_check.sh plans/prd.json; then
+        echo ""
+        echo "ERROR: PRD schema validation failed"
+        echo "Run 'plans/prd_gate.sh' for full diagnostics"
+        exit 1
+      fi
+    fi
+
+    # 6. Check for unwrap() in staged Rust files (safety-critical paths only)
+    STAGED_RS=$(git diff --cached --name-only --diff-filter=ACM | grep -E "^crates/soldier_core/.*\.rs$" || true)
+    if [[ -n "$STAGED_RS" ]]; then
+      echo "Checking staged soldier_core files for unwrap()..."
+      UNWRAP_FOUND=0
+      for file in $STAGED_RS; do
+        if [[ "$file" == *"test"* ]]; then
+          continue
+        fi
+        if git diff --cached "$file" | grep -q "\.unwrap()"; then
+          echo "WARN: unwrap() added in $file"
+          UNWRAP_FOUND=1
+        fi
+      done
+      if [[ $UNWRAP_FOUND -eq 1 ]]; then
+        echo ""
+        echo "WARNING: unwrap() found in staged changes"
+        echo "Consider using ? or .ok_or() instead"
+        echo "(Proceeding anyway - this is a warning only)"
+        echo ""
+      fi
+    fi
     ;;
 esac
 

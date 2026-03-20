@@ -51,6 +51,26 @@ while read -r _local_ref _local_sha remote_ref _remote_sha; do
     ./plans/post_rebase_frontmatter_check.sh --branch "$local_branch"
   fi
 
+  # Code-review-expert attestation — enforced at publish boundary.
+  # Skipped for branches with no significant (crates/scripts) changes.
+  branch_base_for_class="$(git merge-base origin/main HEAD 2>/dev/null || true)"
+  has_significant_changes=0
+  if [[ -n "$branch_base_for_class" ]]; then
+    if git diff --name-only "${branch_base_for_class}...HEAD" | grep -qE '^(crates/|plans/.*\.sh|scripts/|python/)'; then
+      has_significant_changes=1
+    fi
+  else
+    has_significant_changes=1  # fail-closed
+  fi
+
+  if [[ "$has_significant_changes" -eq 1 ]]; then
+    if [[ -x ./plans/code_review_expert_guard.sh ]]; then
+      ./plans/code_review_expert_guard.sh
+    fi
+  else
+    echo "Skipping code-review-expert guard (no significant changes on branch)"
+  fi
+
   if [[ "${SKIP_PRE_PUSH_VERIFY:-0}" == "1" ]]; then
     echo "WARN: SKIP_PRE_PUSH_VERIFY=1, skipping verification"
     continue

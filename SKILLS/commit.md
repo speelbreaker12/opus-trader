@@ -31,8 +31,25 @@ If commit permission is unclear, stop.
 
 ## Flow
 
-### 1) Confirm workspace
-Run the preflight from `SKILLS/workspace-policy.md`. Review the `git status --short` output to identify in-scope and unexpected files. If any preflight check fails, stop.
+### 1) Confirm workspace + main branch gate
+
+Run the preflight from `SKILLS/workspace-policy.md`. Review the `git status --short` output to identify in-scope and unexpected files.
+
+**Hard gate:** check the current branch immediately:
+
+```bash
+current_branch="$(git branch --show-current)"
+```
+
+If `current_branch` is `main` or `master`: **STOP.** Do not proceed. Print:
+
+```
+ERROR: Current branch is main. Commits on main are blocked.
+Use /main-recovery if main is in an abnormal state.
+Otherwise, switch to your assigned worktree.
+```
+
+If any other preflight check fails, stop.
 
 ### 2) Stage intended files + Obsidian tracking
 
@@ -54,48 +71,32 @@ If staged content includes unrelated work, unstage and fix before continuing.
 **Scope guard note:** The pre-commit hook runs `project_scope_guard.sh`, which validates staged files against the project's `scope_paths` frontmatter. If the hook rejects the commit, check that all staged files are within the project's declared scope.
 
 **Obsidian tracking (soft gate):**
-The pre-commit hook classifies changes by risk class (`docs_only`, `obsidian_only`, `non_critical`, `critical`). For `non_critical` and `critical` changes:
+The pre-commit hook classifies changes by risk class (`docs_only`, `obsidian_only`, `formatting_only`, `non_critical`, `critical`). For `non_critical` and `critical` changes:
 
-- Update the project note (`obsidian/Projects/`) with what changed.
-- If this is the **first commit in a review window**, create or update a debrief/session handoff (`obsidian/Debriefs/`) and link it from the project note's `## Debriefs` section.
+- **On each commit:** append to the session debrief/handoff note (`obsidian/Debriefs/`). This is an append-only log — do not rewrite it on every commit.
+- **On the first commit in a review window:** create the debrief note and link it from the project note's `## Debriefs` section.
+- **Do not update the main project page (`obsidian/Projects/`) on every commit.** Update it once per session or at the PR boundary (`/push-pr`). Touching it on every commit creates merge conflicts across branches.
 - If this is a **follow-up commit** (debrief already on this branch), set `OBSIDIAN_REVIEW_FIX=1` to skip the debrief requirement.
 - If **amending**, the guard auto-detects and passes.
 
-Stage obsidian files alongside implementation files:
+Stage the debrief alongside implementation files:
 
 ```bash
-git add path/to/impl obsidian/Projects/MyProject.md obsidian/Debriefs/MyProject\ 2026-03-19\ Summary.md
+git add path/to/impl obsidian/Debriefs/MyProject\ 2026-03-19\ Summary.md
 ```
 
-For `docs_only` and `obsidian_only` changes, the gate is skipped at commit time (enforced at push/PR boundary).
+For `docs_only`, `obsidian_only`, and `formatting_only` changes, the gate is skipped at commit time (enforced at push/PR boundary).
 
-### 3) Code review gate
-
-For `non_critical` and `critical` changes, the pre-commit hook requires a code-review-expert attestation. This gate exists to ensure you actually reviewed your own work before committing.
-
-**You must run code-review-expert BEFORE attempting the commit.** The flow is:
-
-1. Run `code-review-expert` (the superpowers agent) on the staged changes
-2. Report the findings to the operator
-3. Fix any P0/P1 issues found
-4. Only then call `./plans/code_review_expert_attest.sh` to write the marker
-5. Proceed to commit
-
-**Do not call `code_review_expert_attest.sh` to unblock the gate without running the review.** That is fake compliance. If you did not review the code, say so in the commit result and let the operator decide.
-
-For `docs_only`, `obsidian_only`, and `formatting_only` changes, this gate is skipped at commit time.
-
-### 4) Validation record
+### 3) Validation record
 Before commit, record what was checked.
 
 Minimum output:
-- Code review: ran / skipped (with reason)
 - Tests run:
 - Remaining known risk:
 
 If nothing was validated, say so explicitly.
 
-### 5) Create commit
+### 4) Create commit
 Use a clear commit message aligned to the actual change.
 
 Format: `<area>: <what changed>`
@@ -107,18 +108,18 @@ Examples:
 
 Keep the first line under 72 characters. Reference CONTRACT.md sections when implementing contract requirements.
 
-Use a HEREDOC to pass the message:
+Co-author footer is optional. Include it when the agent materially contributed to the implementation:
 
 ```bash
 git commit -m "$(cat <<'EOF'
 risk: fail closed when margin headroom input is missing
 
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+Co-Authored-By: <agent-identity>
 EOF
 )"
 ```
 
-### 6) Record result
+### 5) Record result
 After commit, print:
 
 ```
@@ -133,21 +134,17 @@ Commit Result
 - Next recommended step:
 ```
 
-## Obsidian update requirement
-Before finishing, update the relevant Obsidian session/project note with:
-- worktree path
-- branch
-- short commit hash
-- summary of what changed
-- validation performed
-- handoff / next step
+## Obsidian update rule
+
+- **Debrief/handoff note:** append on each commit (commit hash, what changed, validation).
+- **Main project page:** update once per session or at PR boundary — not on every commit.
 
 ## Definition of done
 This skill is done only when all are true:
-- correct worktree confirmed
+- correct worktree confirmed (not main, not bare repo root)
 - intended files staged only
 - local commit created successfully
 - no push performed
 - no PR action performed
-- Obsidian updated
+- debrief/handoff note appended
 - next step stated clearly
