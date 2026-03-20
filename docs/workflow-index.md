@@ -64,7 +64,7 @@ How the workflow system fits together. Skills define agent behavior at each boun
 | Hook | Trigger | Gate | What it does |
 |------|---------|------|--------------|
 | `obsidian-context-hook.sh` | UserPromptSubmit | soft | First-message project routing via branch ownership |
-| `obsidian-precommit-hook.sh` | PreToolUse (Bash) | hard | Blocks `git commit` unless obsidian_commit_guard passes |
+| `obsidian-precommit-hook.sh` | PreToolUse (Bash) | disabled | No-op — git pre-commit hook handles obsidian enforcement |
 | `post-commit-review-hook.sh` | PreToolUse (Bash) | advisory | Reminds agent to run code-review-expert after commit |
 | `pr-review-gate-hook.sh` | PreToolUse (Bash) | hard | Runs scope guard at PR creation |
 | `pre-verify-fmt.sh` | PreToolUse (Bash) | soft | Pre-verify formatting check |
@@ -80,8 +80,8 @@ How the workflow system fits together. Skills define agent behavior at each boun
 
 | Hook | Gate | What it does |
 |------|------|--------------|
-| `pre-commit` | hard | Main guard, change-class tier, obsidian guard, scope guard, SSOT lint, contract check, unwrap check, code-review-expert gate |
-| `pre-push` | hard | Main guard, scope guard (push mode), frontmatter integrity check, verify cache |
+| `pre-commit` | hard | Main guard, change-class tier, obsidian guard (all tiers), scope guard + SSOT + contract + unwrap (Tier 2 only) |
+| `pre-push` | hard | Main guard, scope guard (push mode), frontmatter integrity check, code-review-expert attestation, verify cache |
 | `pre-rebase` | hard | Main guard, confirmation speed bump |
 | `post-commit` | soft | Dashboard sync notification |
 
@@ -89,9 +89,9 @@ How the workflow system fits together. Skills define agent behavior at each boun
 
 | Script | Called by | Purpose |
 |--------|----------|---------|
-| `obsidian_commit_guard.sh` | pre-commit, obsidian-precommit-hook | Project note + debrief enforcement (change-class aware, amend-aware, review-fix mode) |
+| `obsidian_commit_guard.sh` | pre-commit | Project note + debrief enforcement (change-class aware, amend-aware, review-fix mode) |
 | `project_scope_guard.sh` | pre-commit, pre-push, pr-review-gate-hook | Staged/branch files vs scope_paths (commit warn, push/PR hard fail, `--dry-run` mode) |
-| `code_review_expert_guard.sh` | pre-commit | Attestation marker check (skipped for docs/obsidian/formatting changes) |
+| `code_review_expert_guard.sh` | pre-push (publish mode) | Attestation marker check (skipped for branches with no significant changes) |
 | `code_review_expert_attest.sh` | agent (manual) | Writes attestation marker — only after running code-review-expert |
 | `post_rebase_frontmatter_check.sh` | pre-push | Verifies branch/base/scope_paths not clobbered by rebase |
 | `write_review_gate_marker.sh` | agent (manual) | One-liner to write/check review attestation |

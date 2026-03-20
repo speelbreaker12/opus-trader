@@ -216,4 +216,84 @@ git -C "$repo" add \
   "obsidian/Debriefs/Test Project 2026-03-17 Hook.md"
 expect_block "multiple project notes block" "Stage Obsidian files for exactly one project note per commit." "$repo"
 
+# ===== New feature tests =====
+
+# --- Test: change-class docs_only auto-exempts ---
+git -C "$repo" reset --hard -q HEAD
+echo "changed again" >"$repo/sample.txt"
+git -C "$repo" add sample.txt
+# Without OBSIDIAN_CHANGE_CLASS, default is "critical" → should block
+expect_block "default critical blocks without obsidian" "No staged Obsidian project note" "$repo"
+
+# With docs_only → should auto-pass (exempt)
+set +e
+output="$(cd "$repo" && OBSIDIAN_CHANGE_CLASS=docs_only bash "$GUARD" 2>&1)"
+rc=$?
+set -e
+if [[ $rc -ne 0 ]]; then
+  fail "docs_only change class should auto-pass, got $rc: $output"
+fi
+
+# With obsidian_only → should auto-pass
+set +e
+output="$(cd "$repo" && OBSIDIAN_CHANGE_CLASS=obsidian_only bash "$GUARD" 2>&1)"
+rc=$?
+set -e
+if [[ $rc -ne 0 ]]; then
+  fail "obsidian_only change class should auto-pass, got $rc: $output"
+fi
+
+# With formatting_only → should auto-pass
+set +e
+output="$(cd "$repo" && OBSIDIAN_CHANGE_CLASS=formatting_only bash "$GUARD" 2>&1)"
+rc=$?
+set -e
+if [[ $rc -ne 0 ]]; then
+  fail "formatting_only change class should auto-pass, got $rc: $output"
+fi
+
+# With non_critical → should still block (not exempt)
+expect_block "non_critical still blocks without obsidian" "No staged Obsidian project note" "$repo"
+
+# --- Test: hotfix branch auto-exempts ---
+git -C "$repo" checkout -b hotfix/urgent-fix -q 2>/dev/null
+echo "hotfix change" >"$repo/sample.txt"
+git -C "$repo" add sample.txt
+expect_pass "hotfix branch auto-exempts from obsidian gate" "$repo"
+
+git -C "$repo" checkout -b fix/typo -q 2>/dev/null
+expect_pass "fix/ branch auto-exempts from obsidian gate" "$repo"
+
+# Return to main for remaining tests
+git -C "$repo" checkout main -q 2>/dev/null || git -C "$repo" checkout -b main -q
+
+# --- Test: review-fix mode (OBSIDIAN_REVIEW_FIX=1) ---
+# Set up: commit with obsidian files first, then make a follow-up commit
+git -C "$repo" reset --hard -q HEAD
+mkdir -p "$repo/obsidian/Projects" "$repo/obsidian/Debriefs"
+write_linked_project "$repo/obsidian/Projects/Test Project.md" "Test Project 2026-03-17 Hook"
+write_debrief "$repo/obsidian/Debriefs/Test Project 2026-03-17 Hook.md" "Test Project"
+echo "base" >"$repo/sample.txt"
+git -C "$repo" add sample.txt "obsidian/Projects/Test Project.md" "obsidian/Debriefs/Test Project 2026-03-17 Hook.md"
+git -C "$repo" commit -qm "base with obsidian"
+
+# Create an origin/main ref for merge-base to work
+git -C "$repo" branch -f origin/main HEAD~1 2>/dev/null || true
+
+# Now make a follow-up change without obsidian files
+echo "follow-up" >"$repo/sample.txt"
+git -C "$repo" add sample.txt
+
+# Without review-fix → blocks
+expect_block "follow-up without review-fix blocks" "No staged Obsidian project note" "$repo"
+
+# With review-fix → passes (obsidian was updated on this branch)
+set +e
+output="$(cd "$repo" && OBSIDIAN_REVIEW_FIX=1 bash "$GUARD" 2>&1)"
+rc=$?
+set -e
+if [[ $rc -ne 0 ]]; then
+  fail "OBSIDIAN_REVIEW_FIX=1 should pass when branch has prior obsidian update, got $rc: $output"
+fi
+
 echo "test_obsidian_commit_guard.sh: ok"

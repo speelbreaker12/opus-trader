@@ -95,6 +95,11 @@ fi
 export OBSIDIAN_CHANGE_CLASS="$change_class"
 echo "Change class: $change_class"
 
+# --- Obsidian tracking guard (all commits, change-class-aware) ---
+# The guard itself handles exemptions: docs_only/obsidian_only/formatting_only auto-pass.
+# This runs before the tier dispatch so obsidian tracking is enforced for ALL commits.
+plans/obsidian_commit_guard.sh
+
 # --- Shell syntax lint (both tiers, <1 second) ---
 STAGED_SH="$(git diff --cached --name-only --diff-filter=ACM | grep '\.sh$' || true)"
 if [[ -n "$STAGED_SH" ]]; then
