@@ -48,7 +48,7 @@ Upgrade 2 is complete on branch `upgrade2` and PR #223 is open against `main`. T
 - `1b33802d` — 2026-03-20 — close PR #223 review gaps in graybox lint coverage, smoke fixture accounting, event payload typing, and wrapper/graybox telemetry tests.
 - `d626c5af` — 2026-03-20 — fix `plans/preflight.sh` full-mode empty-array handling so `set -u` does not abort when the serial full-only fixture list is empty.
 - `9c11df57` — 2026-03-20 — align the review-stack wrapper with the enforced skill contract, remove the stale deleted workflow test from `verify_fork`, and add a regression that every workflow test listed in verify exists on disk.
-- `pending` — 2026-03-21 — wire `graybox_telemetry_lint` into the workflow contract and verify-gate contract checker, with a regression proving the rust gate token cannot silently drift.
+- `3e3e7f0b` — 2026-03-21 — wire `graybox_telemetry_lint` into the workflow contract and verify-gate contract checker, with a regression proving the rust gate token cannot silently drift.
 
 ## Key Files
 - `crates/soldier_core/src/execution/build_order_intent.rs`
