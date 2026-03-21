@@ -24,10 +24,10 @@ scope_paths:
 ---
 
 ## Current State
-In progress. PR #230 is open for the first workflow timeout root cause fix: `mechanical_verification` was capped at `240s` even though the clean-main direct run now takes `247.54s`. The downstream `wf_test_pr_review_gate_hook` timeout investigation is now reduced to a stale-test mismatch: the hook warns instead of blocking for missing or stale review markers at PR creation, the focused regression test now passes in `2:27.68`, and `workflow_verify.sh` advances beyond that gate to the next pre-existing failure in `wf_test_review_command_wrappers`.
+In progress. PR #230 is open for the first workflow timeout root cause fix: `mechanical_verification` was capped at `240s` even though the clean-main direct run now takes `247.54s`. The downstream `wf_test_pr_review_gate_hook` timeout investigation is now reduced to a stale-test mismatch: commit `a3cd8a51` aligns the regression with the hook's warning-only PR-create contract, the focused test passes in `2:27.68`, and `workflow_verify.sh` advances beyond that gate to the next pre-existing failure in `wf_test_review_command_wrappers`.
 
 ## Commits
-- `pending` — 2026-03-21 — align `wf_test_pr_review_gate_hook` expectations with warning-only PR-create review-gate behavior
+- `a3cd8a51` — 2026-03-21 — align `wf_test_pr_review_gate_hook` expectations with warning-only PR-create review-gate behavior
 - `e988d95d` — 2026-03-21 — record PR #230 and continue `wf_test_pr_review_gate_hook` timeout investigation
 - `09ce84bc` — 2026-03-21 — raise mechanical verification timeout budget and publish root-cause evidence
 
