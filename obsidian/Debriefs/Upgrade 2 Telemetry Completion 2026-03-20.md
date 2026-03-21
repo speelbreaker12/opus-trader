@@ -6,7 +6,7 @@ date: "2026-03-20"
 ## Commits
 - `240baeaf` — shipped code for Upgrade 2 graybox telemetry completion
 - `1b33802d` — PR #223 review-closure fixes for graybox lint coverage, smoke fixture accounting, event payload typing, and wrapper/graybox telemetry gaps
-- `pending` — preflight full-mode empty-array fix for bash-3.2 `set -u` during merge verification
+- `d626c5af` — preflight full-mode empty-array fix for bash-3.2 `set -u` during merge verification
 
 ## 0) What shipped
 - Feature/behavior: Completed Upgrade 2 graybox telemetry seams across the remaining execution/risk paths, closed the PR #223 review gaps, and then fixed a preflight full-mode harness bug that only appears on bash 3.2 when the serial full-only fixture list is empty.

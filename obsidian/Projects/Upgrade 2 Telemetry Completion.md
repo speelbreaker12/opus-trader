@@ -41,7 +41,7 @@ Upgrade 2 is complete on branch `upgrade2` and PR #223 is open against `main`. T
 ## Commits
 - `240baeaf` — 2026-03-20 — complete Upgrade 2 graybox telemetry migration, preserve wrapper parity and diagnostic context, add graybox telemetry lint plus regression coverage.
 - `1b33802d` — 2026-03-20 — close PR #223 review gaps in graybox lint coverage, smoke fixture accounting, event payload typing, and wrapper/graybox telemetry tests.
-- `pending` — 2026-03-20 — fix `plans/preflight.sh` full-mode empty-array handling so `set -u` does not abort when the serial full-only fixture list is empty.
+- `d626c5af` — 2026-03-20 — fix `plans/preflight.sh` full-mode empty-array handling so `set -u` does not abort when the serial full-only fixture list is empty.
 
 ## Key Files
 - `crates/soldier_core/src/execution/build_order_intent.rs`
