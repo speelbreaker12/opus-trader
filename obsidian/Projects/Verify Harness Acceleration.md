@@ -45,7 +45,7 @@ scope_paths:
 The verify-harness acceleration tranche is closed. `verify_fork.sh` uses the shared `verify_env` bootstrap plus shared contract/workflow scope helpers, nonblocking gates distinguish findings from broken harness execution, the Rust runner exposes reusable functions with explicit `sccache` / `nextest` controls and deterministic metadata, `verify_scope.sh` remains a non-authoritative local dispatcher, and parallel failure reporting preserves meaningful wait status plus secondary-failure context. The final closeout also fixed the stale `.claude/commands/review-stack.md` wrapper, hardened `.claude/hooks/pr-review-gate-hook.sh` against stdin-driven hangs, and removed a Bash 3.2 `set -u` empty-array failure in `plans/preflight.sh`. Authoritative `./plans/verify.sh quick` and `./plans/verify.sh full` are green from this worktree. Python-overlap concurrency is explicitly deferred: this repo state does not enter `plans/lib/python_gates.sh` during authoritative verify because there is no `pyproject.toml` or `requirements.txt`, so there is no measured Python slice to justify extra scheduling complexity.
 
 ## Commits
-- `pending` — 2026-03-20 — verify harness acceleration work in progress.
+- `7061f36e` — 2026-03-20 — verify harness acceleration tranche landed with fresh authoritative quick/full proof.
 
 ## Key Files
 - .claude/commands/review-stack.md

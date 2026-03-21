@@ -4,7 +4,7 @@ date: "2026-03-20"
 ---
 
 ## Commits
-- pending
+- `7061f36e` — verify: finish harness acceleration tranche
 
 ## 0) What shipped
 - Feature/behavior: Landed the verify-harness truthfulness hardening, shared verify bootstrap and scope runners, non-authoritative focused verify entrypoints, explicit Rust accelerators, and the late closeout fixes for the review-stack wrapper, PR-review hook stdin handling, and Bash 3.2 preflight array handling. Python overlap was explicitly deferred because the current authoritative repo path does not run a Python gate tranche.
