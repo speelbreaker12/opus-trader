@@ -5,4 +5,4 @@ context: fork
 allowed-tools: ["Read", "Glob", "Grep", "Bash", "Agent"]
 ---
 
-!`cat "$(git rev-parse --show-toplevel)/SKILLS/review-stack.md"`
+!`cat SKILLS/review-stack.md || echo "ERROR: SKILLS/review-stack.md not found"`

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT="$ROOT/plans/recon_scoreboard.py"
@@ -281,6 +283,7 @@ mkdir -p "$wrapper_repo/plans"
 git -C "$tmp_dir" init -q wrapper_repo
 git -C "$wrapper_repo" config user.email "test@example.com"
 git -C "$wrapper_repo" config user.name "Wrapper Test"
+git -C "$wrapper_repo" config core.hooksPath /dev/null
 cp "$ROOT/plans/recon_scoreboard.py" "$wrapper_repo/plans/recon_scoreboard.py"
 cp "$ROOT/plans/recon_scoreboard.sh" "$wrapper_repo/plans/recon_scoreboard.sh"
 chmod +x "$wrapper_repo/plans/recon_scoreboard.sh"

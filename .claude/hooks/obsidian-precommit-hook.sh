@@ -1,38 +1,11 @@
 #!/usr/bin/env bash
-# PreToolUse hook (Bash matcher): delegate Obsidian commit enforcement to the
-# shared repo guard. Exit 2 = block the tool call.
+# PreToolUse hook (Bash matcher): DISABLED.
+#
+# This hook previously duplicated the obsidian commit guard logic, but it runs
+# from the bare repo root — wrong staging area, wrong script version, can't see
+# worktree env vars. The git pre-commit hook (.githooks/pre-commit) already runs
+# obsidian_commit_guard.sh in the correct worktree context.
+#
+# Kept as a no-op so the settings.json reference doesn't break.
 
-set -euo pipefail
-
-INPUT=$(cat)
-
-COMMAND=$(python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    print(d.get('tool_input', {}).get('command', ''))
-except Exception:
-    print('')
-" <<< "$INPUT" 2>/dev/null || echo "")
-
-# Exit early for non-commit commands — this hook only guards git commit
-if ! echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])git commit( |$)'; then
-    exit 0
-fi
-
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-
-if [[ ! -x "$ROOT/plans/obsidian_commit_guard.sh" ]]; then
-    cat >&2 <<EOF
-BLOCKED: Missing shared Obsidian commit guard.
-
-Expected executable:
-  $ROOT/plans/obsidian_commit_guard.sh
-EOF
-    exit 2
-fi
-
-if ! output="$(bash "$ROOT/plans/obsidian_commit_guard.sh" 2>&1)"; then
-    printf '%s\n' "$output" >&2
-    exit 2
-fi
+exit 0

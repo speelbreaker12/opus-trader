@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT="$ROOT/plans/recon_bundle.sh"
@@ -64,6 +66,7 @@ EOF
   (
     cd "$fixture_root"
     git init -q
+    git config core.hooksPath /dev/null
     git config user.name "Recon Bundle Test"
     git config user.email "recon-bundle-test@example.com"
     git add .
