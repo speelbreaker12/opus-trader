@@ -130,6 +130,7 @@ branch_name="$(git -C "$repo" rev-parse --abbrev-ref HEAD)"
 safe_branch="${branch_name//\//_}"
 marker_dir="$repo/artifacts/pr-review-gate"
 marker_path="$marker_dir/${safe_branch}.json"
+legacy_marker_path="$marker_dir/${safe_branch}.review-stack.json"
 external_marker_path="$marker_dir/${safe_branch}.external.json"
 mkdir -p "$marker_dir"
 
@@ -139,6 +140,24 @@ write_review_marker "$marker_path" "PASS" "head" "$(git -C "$repo" rev-parse --s
   cd "$repo"
   expect_pass "fresh marker permits gh pr create with --repo" "gh --repo owner/repo pr create --title ready"
 )
+
+rm -f "$marker_path"
+write_review_marker "$legacy_marker_path" "PASS" "head" "$(git -C "$repo" rev-parse --short HEAD)"
+
+(
+  cd "$repo"
+  expect_pass "legacy review-stack marker filename still permits gh pr create" "gh pr create --title ready"
+)
+
+write_review_marker "$marker_path" "FAIL" "head" "$(git -C "$repo" rev-parse --short HEAD)"
+
+(
+  cd "$repo"
+  expect_block "canonical marker verdict wins over legacy fallback" "verdict for 'story/S1-pr-gate-hook' is 'FAIL'" "gh pr create --title ready"
+)
+
+rm -f "$legacy_marker_path"
+rm -f "$marker_path"
 
 target_repo="$tmp_dir/target-repo"
 mkdir -p "$target_repo"
@@ -332,6 +351,7 @@ write_git_wrapper "$mock_git_dir/git" "$real_git" "$new_head_short"
 )
 
 grep -Fq 'git rev-parse HEAD' "$ROOT/.claude/commands/review-stack.md" || fail "review-stack marker writer should use full HEAD SHA"
+grep -Fq 'artifacts/pr-review-gate/${SAFE_BRANCH}.json' "$ROOT/.claude/commands/review-stack.md" || fail "review-stack marker writer should use the canonical PR gate marker path"
 grep -Fq 'git rev-parse HEAD' "$ROOT/.claude/commands/external-review.md" || fail "external-review marker writer should use full HEAD SHA"
 
 echo "test_pr_review_gate_hook.sh: ok"
