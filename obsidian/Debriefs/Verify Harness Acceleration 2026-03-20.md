@@ -8,7 +8,7 @@ date: "2026-03-20"
 
 ## 0) What shipped
 - Feature/behavior: Landed the verify-harness truthfulness hardening, shared verify bootstrap and scope runners, non-authoritative focused verify entrypoints, explicit Rust accelerators, and the late closeout fixes for the review-stack wrapper, PR-review hook stdin handling, and Bash 3.2 preflight array handling. Python overlap was explicitly deferred because the current authoritative repo path does not run a Python gate tranche.
-- Value (what problem it solves): Local harness iteration is faster and more truthful without weakening `./plans/verify.sh quick|full` as the only authoritative verify surface, and the surrounding workflow surfaces no longer block or hang the branch spuriously.
+- Value (what problem it solves): Local harness iteration is faster and more truthful without weakening `./plans/verify.sh quick|full` as the only authoritative verify surface, the surrounding workflow surfaces no longer block or hang the branch spuriously, and the work is now up on PR #227.
 
 ## 1) Constraint (ONE)
 - How it manifested (2-3 concrete symptoms): The harness core was green, but authoritative verify still failed or stalled in adjacent workflow control surfaces: the stale `.claude/commands/review-stack.md` wrapper broke `plans/tests/test_review_command_wrappers.sh`, `.claude/hooks/pr-review-gate-hook.sh` could hang under the piped hook test harness, and `plans/preflight.sh` tripped a Bash 3.2 empty-array `set -u` edge case in full mode.
