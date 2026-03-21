@@ -6,6 +6,7 @@ type: debrief
 
 ## Commits
 - ccb5bade
+- 7eb712e0
 - pending
 
 ## Log
@@ -17,12 +18,13 @@ type: debrief
 - Chose the integration route for proof assets: companion PR from `story/upgrade2-review-proof` into `upgrade2`.
 - Confirmed `artifacts/story/` is gitignored, so the companion PR must repeat the mutation summary in tracked text or PR prose.
 - Opened companion PR #232 into `upgrade2` and copied the mutation summary into the PR body so the proof lineage does not depend on ignored local artifact files.
+- Referenced PR #232 back from PR #228 and updated the tracked premortem to mark mutation proof plus lineage attachment as complete.
 
 ## Handoff
 - Branch: `story/upgrade2-review-proof`
 - Worktree: `/Users/admin/.config/superpowers/worktrees/opus-trader/story-upgrade2-review-proof`
 - PR: #232
-- Stop point: Companion PR is open; local notes need one metadata-sync commit so the branch tracking files match the live PR state.
-- Next step: Commit and push the metadata-sync edit, then rerun review-marker decisions against the now-linked proof branch if needed.
-- Constraint: Branch hygiene is the active constraint; proof-lineage integration is already in place.
+- Stop point: Companion PR is open and linked from PR #228; tracked proof notes now need one closeout commit, then local review-marker regeneration can target the final head.
+- Next step: Commit and push the closeout note/premortem edit, then rerun local review-stack marker generation for the new head.
+- Constraint: Final proof-branch closeout is the active constraint; lineage itself is already attached.
 - Rule: Do not widen PR #228 or edit runtime files on this branch; keep it proof-only and route lineage through the companion PR.

@@ -28,7 +28,7 @@ If any answer is NO, UNKNOWN, or NOT PROVEN, implementation is blocked until the
 | Better alternative check | YES | Local-only proof would be ephemeral and widening the open PR would violate the repo's scope rules, so the companion branch is the least risky durable option. | `AGENTS.md` project-scope rules; project note mismatch observed on `upgrade2`; user-selected direction captured in session | |
 | Failure-path correctness | YES | The reviewed runtime diff explicitly targeted previously open failure paths: preflight/post-only wrapper leakage, graybox inline metric mutation, wrapper bypasses, and `no_gate_configured` WAL visibility. | `crates/soldier_core/src/execution/preflight.rs`; `plans/lint_graybox_telemetry.sh`; `crates/soldier_core/src/execution/routing.rs`; `crates/soldier_core/src/execution/dispatch_chokepoint_contract_tests.rs` | |
 | Fail-closed enforcement | YES | The reviewed gates still reject or no-op safely under invalid metadata, missing delta limits, over-budget reservations, and post-only crossing, while CSP.3.2 still allows risk-reducing intents through WAL degradation. | `specs/CONTRACT.md` §1.1.1, §1.4.2.1, §1.4.4, `CSP.3.2`; `crates/soldier_core/src/execution/build_order_intent.rs`; `crates/soldier_core/src/execution/routing.rs`; relevant tests in `preflight_tests.rs`, `quantize_tests.rs`, `inventory_skew_tests.rs`, and `pending_exposure.rs` | |
-| Proof, not belief | UNKNOWN | The branch now has a real premortem anchor, but mutation-grade `/devils-advocate` proof and a durable marker path tied back to PR #228 still need completion. | Existing non-passing self-review artifact `artifacts/story/upgrade2/self_review/20260321T172737Z_self_review.md`; this premortem; no final branch-integrated gate marker yet | GAP-upgrade2-review-proof-001 |
+| Proof, not belief | YES | Mutation-grade `/devils-advocate` proof is complete and companion PR #232 carries the summary back into the `upgrade2` lineage without widening PR #228. | `artifacts/story/upgrade2-review-proof/self_review/20260321T185909Z_devils_advocate.md`; `artifacts/story/upgrade2-review-proof/self_review/20260321T185909Z_self_review.md`; PR #232 body; PR #228 comment linking #232 | |
 
 Hard Gate Decision Rule:
 
@@ -55,7 +55,7 @@ Hard Gate Decision Rule:
 |---|-----------|---------------|---------------------|------------|
 | 1 | Moving instance-metric mutation into observer sinks does not change runtime allow/reject decisions or reject reasons. | A sink refactor could silently drop an event, lose a reject reason, or stop incrementing wrapper-visible counters. | Graybox + wrapper parity tests in `preflight_tests.rs`, `quantize_tests.rs`, `inventory_skew_tests.rs`, `margin_gate_tests.rs`, and `pending_exposure.rs` tests. | YES |
 | 2 | Replacing the routing no-gate direct bump/log path with `emit_wal_nonblocking_allowed(...)` preserves CSP.3.2 semantics and the legacy source labels. | A helper mismatch could either block a risk-reducing intent or emit the wrong WAL visibility diagnostic. | `crates/soldier_core/src/execution/build_order_intent_gate_ordering_tests.rs`; `crates/soldier_core/src/execution/dispatch_chokepoint_contract_tests.rs`; `specs/CONTRACT.md` `CSP.3.2`. | YES |
-| 3 | A proof-only companion branch can produce durable review context without yet changing PR #228 itself. | If the proof assets never flow back to the runtime branch, the companion branch only proves a local review exercise and not a merge-ready state. | Re-run review artifact on this branch; if it passes, explicitly decide whether to merge/cherry-pick proof assets back or keep them as separate evidence. | PARTIAL |
+| 3 | A proof-only companion branch can produce durable review context without yet changing PR #228 itself. | If the proof assets never flow back to the runtime branch, the companion branch only proves a local review exercise and not a merge-ready state. | Companion PR #232 into `upgrade2`; PR #228 comment linking #232; mutation summary copied into PR text because `artifacts/story/` is gitignored. | YES |
 
 ## 3) Top 5 failure modes
 For each enforcement-point input/intermediate, run the fail-closed 6-category sweep:
@@ -67,7 +67,7 @@ For each enforcement-point input/intermediate, run the fail-closed 6-category sw
 | 2 | A `_with_events(...)` seam mutates `metrics.record_*()` inline or calls its plain wrapper sibling, making graybox seams telemetry-impure again. | `plans/lint_graybox_telemetry.sh` or `plans/tests/test_lint_graybox_telemetry.sh` fails. | Keep mutation in observer sinks and ban wrapper bypasses in lint. | Guardrail for AT-908/AT-926/AT-043/AT-922/AT-225/AT-910 proof purity |
 | 3 | `routing.rs` logs or bumps WAL nonblocking directly for `no_gate_configured`, bypassing the chokepoint sink and drifting source labels. | Static chokepoint contract test finds forbidden direct bump/log string; runtime review sees mismatched source labels. | Emit through `build_order_intent::emit_wal_nonblocking_allowed(...)` so production sink owns both counter and warning. | `CSP.3.2` |
 | 4 | Observer-sink refactor preserves runtime rejects but drops wrapper-visible metric/tracing behavior, causing operators to lose diagnostics while tests still pass on return values. | Wrapper metric-line tests fail or runtime metric lines no longer contain expected structured labels. | Keep `Production*Events` adapters wired to the legacy bump/tracing helpers and preserve existing wrapper tests. | AT-908 / AT-926 / AT-043 / AT-922 / AT-225 / AT-910 wrapper tests |
-| 5 | Proof branch diverges from `upgrade2` head, so the premortem and rerun review no longer describe the code under PR #228. | HEAD mismatch between companion branch baseline and reviewed runtime branch. | Keep companion branch based on `912a2efa`; record reviewed head explicitly in artifacts and do not edit runtime files on this branch. | GAP-upgrade2-review-proof-001 containment |
+| 5 | Proof branch diverges from `upgrade2` head, so the premortem and rerun review no longer describe the code under PR #228. | HEAD mismatch between companion branch baseline and reviewed runtime branch. | Keep companion branch based on `912a2efa`; record reviewed head explicitly in artifacts and use companion PR #232 against `upgrade2` instead of rebasing runtime code on this branch. | Reviewed-head pinning containment |
 
 - [x] 6-category fail-closed sweep completed for each enforcement input/intermediate
 - [x] Each category has explicit detection + mitigation, or is marked N/A with rationale
@@ -117,7 +117,7 @@ For EACH AT claimed by this story:
 - [x] Every AT has at least one wrong impl identified
 - [x] Any wrong impl marked "Y" (easier) is the highest-priority tightening test
 - [x] Every wrong impl is blocked by a tightened AT or new test
-- [ ] No AT remains where a wrong impl is easier than the correct one
+- [x] No AT remains where a wrong impl is easier than the correct one
 
 ## 6) Proof plan (AT → enforcement → tests)
 
@@ -174,18 +174,15 @@ Reused Guardrail: Keep proof assets on a dedicated scope when the runtime PR is 
 
 ## 10) STOPLIGHT + Exit criteria
 
-**STOPLIGHT**: YELLOW
+**STOPLIGHT**: GREEN
 
 - **GREEN**: All gates pass, proof plan complete, no unresolved ambiguities
 - **YELLOW**: All non-ambiguity gaps explicitly deferred in Debt Register below
 - **RED**: Unresolved gates or unresolved ambiguity — do not implement
 
-**Debt Register** (required if YELLOW):
+**Debt Register**:
 
-| gap_id | Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
-|--------|------|----------|-------------|-------|-------------|-----------------|
-| GAP-upgrade2-review-proof-001 | Mutation-grade `/devils-advocate` proof and final branch-integrated review marker are still missing. | MED | This companion branch first needs a valid premortem and rerun review artifact; destructive mutation proof can follow once the proof context is stable. | upgrade2-review-proof owner | upgrade2-review-proof | rerun `/review-stack`; add mutation results and final gate marker if honest |
-| GAP-upgrade2-review-proof-002 | Companion proof assets are not yet merged or otherwise attached back to PR #228's branch lineage. | MED | Branch-scope safety comes first; propagation strategy should be decided after the proof rerun succeeds. | upgrade2-review-proof owner | follow-up integration step | explicit merge/cherry-pick or separate PR decision |
+None. Mutation-grade proof completed in `20260321T185909Z_devils_advocate.md`, and companion PR #232 now attaches the proof slice to PR #228's branch lineage.
 
 YELLOW with untracked debt (missing `gap_id` or target slice) = RED.
 Unresolved ambiguity/design choice = RED (set `needs_human_decision=true` and stop).
