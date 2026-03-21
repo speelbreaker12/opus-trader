@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT="$ROOT/plans/premortem_gate.sh"
@@ -17,6 +19,7 @@ trap 'rm -rf "$tmp_dir"' EXIT
 repo="$tmp_dir/repo"
 mkdir -p "$repo/plans" "$repo/reviews/premortems"
 git init -q "$repo"
+git -C "$repo" config core.hooksPath /dev/null
 
 cp "$SCRIPT" "$repo/plans/premortem_gate.sh"
 chmod +x "$repo/plans/premortem_gate.sh"

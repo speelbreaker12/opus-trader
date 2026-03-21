@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT="$ROOT/plans/recon_precheck.sh"
@@ -16,6 +18,7 @@ trap 'rm -rf "$tmp_dir"' EXIT
 
 cd "$tmp_dir"
 git init -q
+git config core.hooksPath /dev/null
 git symbolic-ref HEAD refs/heads/main
 git config user.email "test@example.com"
 git config user.name "Test"

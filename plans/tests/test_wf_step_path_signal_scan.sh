@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WF_STEP_SRC="$ROOT/plans/wf_step.sh"
@@ -21,6 +23,7 @@ repo="$tmp_dir/repo"
 git -C "$tmp_dir" init -q repo
 git -C "$repo" config user.email "test@example.com"
 git -C "$repo" config user.name "WF Step Test"
+git -C "$repo" config core.hooksPath /dev/null
 
 mkdir -p "$repo/plans" "$repo/plans/lib"
 cp "$WF_STEP_SRC" "$repo/plans/wf_step.sh"

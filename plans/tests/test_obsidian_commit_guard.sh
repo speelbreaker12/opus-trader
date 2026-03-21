@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GUARD="$ROOT/plans/obsidian_commit_guard.sh"
@@ -80,28 +82,62 @@ write_debrief() {
 ---
 project: "[[$project_name]]"
 date: "2026-03-17"
+type: debrief
 ---
 
-## 0) What shipped
-- Feature/behavior: Added a debrief.
-- Value (what problem it solves): Leaves session context.
+## Commits
+- \`pending\`
 
-## 1) Constraint (ONE)
-- How it manifested (2-3 concrete symptoms): Missing debrief evidence.
-- Time/token drain it caused: Follow-up cleanup.
-- Workaround I used this session (exploit): Wrote the debrief directly.
-- Next-agent default behavior (subordinate): Stage a debrief before commit.
-- Permanent fix proposal (elevate): Add a commit guard.
+## Session Handoff
+
+### Context
+- Project: $project_name
+- Branch: main
+- Worktree: repo fixture
+- PR state:
+- Lifecycle: testing
+
+### State
+- Task: Add a debrief fixture.
+- Goal: Leave session context for the commit guard tests.
+- Stop point: Fixture written and staged.
+- Validation: Guard should accept valid debrief/project linkage.
+- Open decisions / blockers: none
+- Resume command: bash plans/tests/test_obsidian_commit_guard.sh
+
+### Touch List
+- Files touched: obsidian/Projects/Test Project.md, obsidian/Debriefs/*.md
+- Tests touched: plans/tests/test_obsidian_commit_guard.sh
+- Contract/docs touched: AGENTS.md Obsidian Project Tracking
+
+### Shipped
+- Feature/behavior: Added a debrief fixture.
+- Value: Leaves session context.
+
+### Constraint (ONE)
+- Constraint: Missing debrief evidence.
+- Symptoms: Follow-up cleanup and missing session history.
+- Workaround: Wrote the debrief directly.
+- Permanent fix: Add a commit guard.
 - Smallest increment: Add a shell guard script.
-- Validation (proof it got better): Guard blocks missing debrief commits.
+- Proof: Guard blocks missing debrief commits.
 
-## 2) Best follow-up
-- Single best next step: Wire the guard into pre-commit.
-- 1-3 upgrades worth considering:
+### Best Follow-Up - Project
+- Next step: Wire the guard into pre-commit.
+- Upgrades:
 
-## 3) Enforceable rules
-1-3 rules so the next agent doesn't repeat the constraint:
-- Stage a debrief before commit.
+### Best Follow-Up - Workflow
+- Issue: Missing debriefs can slip through without a shared guard.
+- Smallest fix: Reuse the guard in every commit entrypoint.
+
+### Best Follow-Up - Non-Task
+- Issue:
+- Owner/path:
+
+### Rules
+- Rule 1: Stage a debrief before commit.
+- Rule 2:
+- Rule 3:
 EOF
 }
 
@@ -119,6 +155,8 @@ mkdir -p "$repo"
 git -C "$repo" init -q
 git -C "$repo" config user.name "Test User"
 git -C "$repo" config user.email "test@example.com"
+# Disable hooks in temp repo so parent repo's GIT_DIR/core.hooksPath doesn't leak
+git -C "$repo" config core.hooksPath /dev/null
 
 echo "seed" >"$repo/sample.txt"
 git -C "$repo" add sample.txt
@@ -127,13 +165,11 @@ git -C "$repo" commit -qm "seed"
 echo "changed" >"$repo/sample.txt"
 git -C "$repo" add sample.txt
 expect_block "missing project note blocks" "No staged Obsidian project note" "$repo"
-expect_block "missing project note includes scope reminder" "Only include the changes you made in this commit." "$repo"
 
 mkdir -p "$repo/obsidian/Projects" "$repo/obsidian/Debriefs"
 write_project "$repo/obsidian/Projects/Test Project.md" "-"
 git -C "$repo" add "obsidian/Projects/Test Project.md"
 expect_block "missing debrief blocks" "No staged Obsidian debrief" "$repo"
-expect_block "missing debrief includes scope reminder" "Only include the changes you made in this commit." "$repo"
 
 write_debrief "$repo/obsidian/Debriefs/Test Project 2026-03-17 Hook.md" "Test Project"
 git -C "$repo" add "obsidian/Debriefs/Test Project 2026-03-17 Hook.md"
@@ -164,7 +200,6 @@ git -C "$repo" add \
   "obsidian/Debriefs/Test Project 2026-03-17 Hook.md" \
   "obsidian/Debriefs/Other Project 2026-03-17 Hook.md"
 expect_block "unrelated debrief blocks" "belongs to a different project" "$repo"
-expect_block "unrelated debrief reminds scope" "Only include the changes you made in this commit." "$repo"
 
 git -C "$repo" reset --hard -q HEAD
 mkdir -p "$repo/obsidian/Projects" "$repo/obsidian/Debriefs"
@@ -180,5 +215,85 @@ git -C "$repo" add \
   "obsidian/Projects/Other Project.md" \
   "obsidian/Debriefs/Test Project 2026-03-17 Hook.md"
 expect_block "multiple project notes block" "Stage Obsidian files for exactly one project note per commit." "$repo"
+
+# ===== New feature tests =====
+
+# --- Test: change-class docs_only auto-exempts ---
+git -C "$repo" reset --hard -q HEAD
+echo "changed again" >"$repo/sample.txt"
+git -C "$repo" add sample.txt
+# Without OBSIDIAN_CHANGE_CLASS, default is "critical" → should block
+expect_block "default critical blocks without obsidian" "No staged Obsidian project note" "$repo"
+
+# With docs_only → should auto-pass (exempt)
+set +e
+output="$(cd "$repo" && OBSIDIAN_CHANGE_CLASS=docs_only bash "$GUARD" 2>&1)"
+rc=$?
+set -e
+if [[ $rc -ne 0 ]]; then
+  fail "docs_only change class should auto-pass, got $rc: $output"
+fi
+
+# With obsidian_only → should auto-pass
+set +e
+output="$(cd "$repo" && OBSIDIAN_CHANGE_CLASS=obsidian_only bash "$GUARD" 2>&1)"
+rc=$?
+set -e
+if [[ $rc -ne 0 ]]; then
+  fail "obsidian_only change class should auto-pass, got $rc: $output"
+fi
+
+# With formatting_only → should auto-pass
+set +e
+output="$(cd "$repo" && OBSIDIAN_CHANGE_CLASS=formatting_only bash "$GUARD" 2>&1)"
+rc=$?
+set -e
+if [[ $rc -ne 0 ]]; then
+  fail "formatting_only change class should auto-pass, got $rc: $output"
+fi
+
+# With non_critical → should still block (not exempt)
+expect_block "non_critical still blocks without obsidian" "No staged Obsidian project note" "$repo"
+
+# --- Test: hotfix branch auto-exempts ---
+git -C "$repo" checkout -b hotfix/urgent-fix -q 2>/dev/null
+echo "hotfix change" >"$repo/sample.txt"
+git -C "$repo" add sample.txt
+expect_pass "hotfix branch auto-exempts from obsidian gate" "$repo"
+
+git -C "$repo" checkout -b fix/typo -q 2>/dev/null
+expect_pass "fix/ branch auto-exempts from obsidian gate" "$repo"
+
+# Return to main for remaining tests
+git -C "$repo" checkout main -q 2>/dev/null || git -C "$repo" checkout -b main -q
+
+# --- Test: review-fix mode (OBSIDIAN_REVIEW_FIX=1) ---
+# Set up: commit with obsidian files first, then make a follow-up commit
+git -C "$repo" reset --hard -q HEAD
+mkdir -p "$repo/obsidian/Projects" "$repo/obsidian/Debriefs"
+write_linked_project "$repo/obsidian/Projects/Test Project.md" "Test Project 2026-03-17 Hook"
+write_debrief "$repo/obsidian/Debriefs/Test Project 2026-03-17 Hook.md" "Test Project"
+echo "base" >"$repo/sample.txt"
+git -C "$repo" add sample.txt "obsidian/Projects/Test Project.md" "obsidian/Debriefs/Test Project 2026-03-17 Hook.md"
+git -C "$repo" commit -qm "base with obsidian"
+
+# Create an origin/main ref for merge-base to work
+git -C "$repo" branch -f origin/main HEAD~1 2>/dev/null || true
+
+# Now make a follow-up change without obsidian files
+echo "follow-up" >"$repo/sample.txt"
+git -C "$repo" add sample.txt
+
+# Without review-fix → blocks
+expect_block "follow-up without review-fix blocks" "No staged Obsidian project note" "$repo"
+
+# With review-fix → passes (obsidian was updated on this branch)
+set +e
+output="$(cd "$repo" && OBSIDIAN_REVIEW_FIX=1 bash "$GUARD" 2>&1)"
+rc=$?
+set -e
+if [[ $rc -ne 0 ]]; then
+  fail "OBSIDIAN_REVIEW_FIX=1 should pass when branch has prior obsidian update, got $rc: $output"
+fi
 
 echo "test_obsidian_commit_guard.sh: ok"

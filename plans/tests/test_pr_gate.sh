@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 # Note: expect_fail subshells use `bash -c` (not `bash -lc`) intentionally.
 # Login shells load user profiles that may set unexpected PATH/env, making
 # tests non-hermetic across machines.
@@ -46,6 +48,8 @@ chmod +x "$repo_dir/plans/pr_gate.sh"
 cat > "$repo_dir/plans/pre_pr_review_gate.sh" <<'EOF_PRE_PR'
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 if [[ "${PRE_PR_MODE:-pass}" == "fail" ]]; then
   echo "pre-pr gate forced failure" >&2
@@ -65,6 +69,8 @@ chmod +x "$repo_dir/plans/pre_pr_review_gate.sh"
 cat > "$fake_bin/gh" <<'EOF_GH'
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 mode="${GH_MODE:-clean}"
 head_sha="${GH_HEAD_SHA:-abc123}"
@@ -335,6 +341,7 @@ chmod +x "$fake_bin/gh"
 git -C "$repo_dir" init -q
 git -C "$repo_dir" config user.email "ci@example.com"
 git -C "$repo_dir" config user.name "CI"
+git -C "$repo_dir" config core.hooksPath /dev/null
 mkdir -p "$repo_dir/docs"
 echo "fixture" > "$repo_dir/README.md"
 echo "keep-me" > "$repo_dir/docs/unchanged.txt"

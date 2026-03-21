@@ -1,0 +1,1 @@
+Use the `/merge-cleanup` skill from `SKILLS/merge-cleanup.md` to merge a single approved PR, sync main, remove the worktree and branch, and update Obsidian.

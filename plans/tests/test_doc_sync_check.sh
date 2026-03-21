@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Tests for plans/doc_sync_check.sh
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FIXTURES_DIR="$SCRIPT_DIR/fixtures/doc_sync"
@@ -34,7 +36,7 @@ run_test() {
     mv "$tmpdir/prd.json" "$tmpdir/plans/prd.json"
   fi
 
-  (cd "$tmpdir" && git init -q && git add -A && git commit -q -m "fixture" --allow-empty)
+  (cd "$tmpdir" && git init -q && git config core.hooksPath /dev/null && git add -A && git commit -q -m "fixture" --allow-empty)
 
   local output
   local actual_exit=0
@@ -99,7 +101,7 @@ run_kill_switch_test() {
     mkdir -p "$tmpdir/plans"
     mv "$tmpdir/prd.json" "$tmpdir/plans/prd.json"
   fi
-  (cd "$tmpdir" && git init -q && git add -A && git commit -q -m "fixture" --allow-empty)
+  (cd "$tmpdir" && git init -q && git config core.hooksPath /dev/null && git add -A && git commit -q -m "fixture" --allow-empty)
 
   local output actual_exit=0
   output="$(cd "$tmpdir" && DOC_SYNC_GATE=0 bash "$GATE_SCRIPT" 2>&1)" || actual_exit=$?
