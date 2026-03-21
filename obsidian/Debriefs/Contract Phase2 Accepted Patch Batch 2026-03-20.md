@@ -6,7 +6,8 @@ date: "2026-03-20"
 ## Commits
 - `17404bca` — contract: apply accepted hardened phase2 patch batch
 - `8bd288e1` — obsidian: sync contract phase2 patch batch metadata
-- `pending` — obsidian: record PR boundary for contract phase2 patch batch
+- `85b742ee` — obsidian: record PR boundary for contract phase2 patch batch
+- `pending` — obsidian: retarget contract patch batch PR to main after #224 merged
 
 ## 0) What shipped
 - Feature/behavior: Applied the accepted LG, EG, TMC, and EC contract deltas from the hardened Phase 2 autoresearch review batch, renumbered the placeholder ATs to `AT-1283` and `AT-1284`, and refreshed the derived contract/autoresearch artifacts.
@@ -22,7 +23,7 @@ date: "2026-03-20"
 - Validation (proof it got better): `python3 scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --check-at --strict --include-bare-section-refs`, `python3 scripts/check_contract_kernel.py --kernel docs/contract_kernel.json`, `./plans/check_contract_change_ledger.sh`, and `git diff --check` all passed. `./plans/verify.sh quick` run `20260320_171755` completed but failed outside this slice in `wf_test_review_command_wrappers`, which expected `Use the Skill tool with skill name "review-stack"` in `.claude/commands/review-stack.md`.
 
 ## 2) Best follow-up
-- Single best next step: Review and land stacked PR #226 against `project/contract-autoresearch-harness-fix`, then fix or route the unrelated `wf_test_review_command_wrappers` failure on a workflow-scoped branch before using quick/full as merge evidence.
+- Single best next step: Land PR #226 against `main` now that PR #224 has merged, then fix or route the unrelated `wf_test_review_command_wrappers` failure on a workflow-scoped branch before using quick/full as merge evidence.
 - 1-3 upgrades worth considering:
   - Reserve permanent AT ids during review rendering so accepted patch files never ship placeholders.
   - Add a helper that promotes accepted contract review packages into a dedicated contract worktree automatically.
@@ -39,3 +40,9 @@ date: "2026-03-20"
 - PR opened: #226 — https://github.com/speelbreaker12/opus-trader/pull/226
 - Review gate: `artifacts/story/contract-phase2-accepted-patch-batch/self_review/review_stack.md` recorded `CONDITIONAL_PASS` for HEAD `8bd288e1`.
 - Validation after refresh: `python3 scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --check-at --strict --include-bare-section-refs`, `python3 scripts/check_contract_kernel.py --kernel docs/contract_kernel.json`, `./plans/check_contract_change_ledger.sh`, and `git diff --check` passed; repo quick run `20260320_171755` still failed only on unrelated `wf_test_review_command_wrappers`.
+
+## Retarget To Main
+- PR #224 merged into `main` as merge commit `5fb10390`, eliminating the stacked-PR scope conflict.
+- PR #226 was retargeted from `project/contract-autoresearch-harness-fix` to `main`.
+- Branch refresh after retarget: `git merge origin/main` produced local merge commit `fe595abc` with no conflicts.
+- Post-retarget diff to `main` remained the same 15 contract-scope files only.

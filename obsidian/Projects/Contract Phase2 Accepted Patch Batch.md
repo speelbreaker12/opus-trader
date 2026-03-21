@@ -2,7 +2,7 @@
 status: in-progress
 priority: P1
 branch: project/contract-phase2-accepted-patch-batch
-base: project/contract-autoresearch-harness-fix
+base: main
 pr: 226
 started: "2026-03-20"
 aliases: []
@@ -22,12 +22,13 @@ scope_paths:
 
 ## Current State
 
-Stacked branch `project/contract-phase2-accepted-patch-batch` is cut from `project/contract-autoresearch-harness-fix` to apply the accepted hardened Phase 2 contract patches without widening PR #224. Before push/PR, the branch was refreshed with `git rebase origin/project/contract-autoresearch-harness-fix` and was already up to date, so no conflicts were introduced. PR #226 is now open against `project/contract-autoresearch-harness-fix`: https://github.com/speelbreaker12/opus-trader/pull/226. The accepted LG/EG/TMC/EC deltas are applied to `specs/CONTRACT.md` with permanent IDs `AT-1282`, `AT-1283`, and `AT-1284`, plus ledger row `CCL-2026-03-20-01`. `docs/contract_kernel.json`, autoresearch common context, and the affected Phase 1/Phase 2 fixtures/snapshots were refreshed. Targeted contract checks are green, and the PR review gate artifact for HEAD `8bd288e1` recorded `CONDITIONAL_PASS` under `artifacts/story/contract-phase2-accepted-patch-batch/self_review/review_stack.md`. Repo quick verify run `20260320_171755` still fails only on the unrelated workflow test `wf_test_review_command_wrappers`, expecting `Use the Skill tool with skill name "review-stack"` in `.claude/commands/review-stack.md`; this branch does not touch that file.
+This branch started as a stacked follow-up off `project/contract-autoresearch-harness-fix` so the accepted hardened Phase 2 contract patches would not widen PR #224. PR #224 was then refreshed, merged into `main` as merge commit `5fb10390`, and PR #226 was retargeted from the stacked base to `main`. The branch has now been refreshed with `git merge origin/main`, producing local merge commit `fe595abc` with no conflicts, so the contract batch remains a 15-file diff against `main`. PR #226 is open against `main`: https://github.com/speelbreaker12/opus-trader/pull/226. The accepted LG/EG/TMC/EC deltas remain applied to `specs/CONTRACT.md` with permanent IDs `AT-1282`, `AT-1283`, and `AT-1284`, plus ledger row `CCL-2026-03-20-01`. `docs/contract_kernel.json`, autoresearch common context, and the affected Phase 1/Phase 2 fixtures/snapshots were refreshed. Targeted contract checks are green, the PR review gate artifact for HEAD `8bd288e1` recorded `CONDITIONAL_PASS` under `artifacts/story/contract-phase2-accepted-patch-batch/self_review/review_stack.md`, and PR #226 CI is being rerun after the retarget/main-refresh step. Repo quick verify run `20260320_171755` still fails only on the unrelated workflow test `wf_test_review_command_wrappers`, expecting `Use the Skill tool with skill name "review-stack"` in `.claude/commands/review-stack.md`; this branch does not touch that file.
 
 ## Commits
 - `17404bca` — 2026-03-20 — Apply accepted LG/EG/TMC/EC Phase 2 contract patches and refresh dependent artifacts.
 - `8bd288e1` — 2026-03-20 — Sync the contract patch batch Obsidian metadata before the stacked push/PR boundary.
-- `pending` — 2026-03-20 — Record PR #226, stacked-base refresh status, and review-gate evidence for the accepted Phase 2 contract patch batch.
+- `85b742ee` — 2026-03-21 — Record PR #226, stacked-base refresh status, and review-gate evidence for the accepted Phase 2 contract patch batch.
+- `pending` — 2026-03-21 — Record the `#224` merge, retarget PR #226 to `main`, and refresh this branch against `origin/main`.
 
 ## Key Files
 - `specs/CONTRACT.md`
@@ -51,3 +52,5 @@ Stacked branch `project/contract-phase2-accepted-patch-batch` is cut from `proje
 - Refreshed the stacked branch with `git fetch origin --prune && git rebase origin/project/contract-autoresearch-harness-fix`; the branch was already up to date.
 - Created stacked PR #226 against `project/contract-autoresearch-harness-fix`: https://github.com/speelbreaker12/opus-trader/pull/226.
 - Wrote the review-gate artifact for HEAD `8bd288e1` under `artifacts/story/contract-phase2-accepted-patch-batch/self_review/` and recorded a `CONDITIONAL_PASS` marker for PR creation.
+- Merged PR #224 into `main` as merge commit `5fb10390`, then retargeted PR #226 from the stacked base to `main`.
+- Refreshed this branch with `git merge origin/main` after the `#224` merge so the PR stays current against `main` without widening its diff.
