@@ -88,6 +88,15 @@ assert_list_absent() {
   fi
 }
 
+assert_list_paths_exist() {
+  local list="$1"
+  local path=""
+  while IFS= read -r path; do
+    [[ -n "$path" ]] || continue
+    [[ -f "$ROOT/$path" ]] || fail "verify fixture path missing on disk: $path"
+  done <<< "$list"
+}
+
 smoke_list="$(extract_array "SMOKE_REVIEW_FIXTURE_TESTS")"
 full_only_list="$(extract_array "FULL_ONLY_REVIEW_FIXTURE_TESTS")"
 full_only_serial_list="$(extract_array "FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS")"
@@ -180,9 +189,13 @@ full_mode_workflow_verify_list="$(extract_array "FULL_MODE_WORKFLOW_INTEGRATION_
 [[ -n "$workflow_verify_list" ]] || fail "WORKFLOW_INTEGRATION_TESTS is empty"
 [[ -n "$full_mode_workflow_verify_list" ]] || fail "FULL_MODE_WORKFLOW_INTEGRATION_TESTS is empty"
 
+assert_list_paths_exist "$workflow_verify_list"
+assert_list_paths_exist "$full_mode_workflow_verify_list"
+
 assert_list_contains "$full_mode_workflow_verify_list" "plans/tests/test_preflight_fixture_timeout_controls.sh"
 assert_list_contains "$full_mode_workflow_verify_list" "plans/tests/test_recon_operator_runner.sh"
 assert_list_contains "$full_mode_workflow_verify_list" "plans/tests/test_prd_set_pass.sh"
+assert_list_absent "$workflow_verify_list" "plans/tests/test_contract_at_wording_drift.sh"
 
 workflow_gate_block="$(
   awk '
