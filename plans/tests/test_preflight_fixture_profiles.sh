@@ -97,6 +97,8 @@ full_only_serial_list="$(extract_array "FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS")"
 
 assert_contains_line 'quick) PREFLIGHT_FIXTURE_MODE="smoke" ;;'
 assert_contains_line 'if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then'
+assert_contains_line 'if [[ ${#FULL_ONLY_REVIEW_FIXTURE_TESTS[@]} -gt 0 ]]; then'
+assert_contains_line 'if [[ ${#FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS[@]} -gt 0 ]]; then'
 assert_contains_line 'pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"'
 assert_contains_line 'fixture_timeout_default=240'
 assert_contains_line 'fixture_timeout_default=300'
