@@ -507,10 +507,7 @@ fn test_inventory_skew_graybox_success_emits_no_events_or_global_side_effects() 
             && (adjusted_limit_price - 100.0).abs() < 1e-9
     ));
     assert_eq!(metrics.allowed_total(), 1);
-    assert!(
-        events.is_empty(),
-        "success path should not emit reject events"
-    );
+    assert_eq!(events, vec![InventorySkewEvent::Allowed]);
     assert_eq!(
         inventory_skew_reject_total(InventorySkewRejectReason::InventorySkewReject),
         before

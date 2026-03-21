@@ -597,10 +597,7 @@ fn test_pricer_graybox_success_emits_no_events_or_global_side_effects() {
     }
     assert_eq!(metrics.priced_total(), 1);
     assert_eq!(metrics.reject_total(), 0);
-    assert!(
-        events.is_empty(),
-        "success path should not emit reject events"
-    );
+    assert_eq!(events, vec![PricerEvent::Priced]);
     assert_eq!(
         pricer_reject_total(PricerRejectReason::NetEdgeTooLow),
         before

@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::execution::Side;
+use crate::execution::post_only_guard::post_only_reject_total;
 use crate::execution::{begin_metrics_test, take_execution_metric_lines, with_intent_trace_ids};
 use crate::venue::InstrumentKind;
 
@@ -590,6 +591,56 @@ fn test_preflight_graybox_post_only_non_crossing_emits_no_events_or_global_side_
         preflight_reject_total(PreflightReject::PostOnlyWouldCross),
         before,
         "post-only non-crossing should not emit preflight metrics"
+    );
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_preflight_graybox_post_only_crossing_emits_reject_event_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before_preflight = preflight_reject_total(PreflightReject::PostOnlyWouldCross);
+    let before_post_only = post_only_reject_total();
+    let mut metrics = PreflightMetrics::new();
+    let mut events = Vec::new();
+    let input = PreflightInput {
+        instrument_kind: InstrumentKind::Perpetual,
+        post_only_input: Some(PostOnlyInput {
+            post_only: true,
+            side: Side::Buy,
+            limit_price: 100.0,
+            best_ask: Some(100.0),
+            best_bid: None,
+        }),
+        ..limit_input(InstrumentKind::Perpetual)
+    };
+
+    let result = preflight_intent_with_events(&input, &mut metrics, &mut events);
+
+    assert_eq!(
+        result,
+        PreflightResult::Rejected(PreflightReject::PostOnlyWouldCross)
+    );
+    assert_eq!(metrics.reject_total(), 1);
+    assert_eq!(metrics.post_only_would_cross_total(), 1);
+    assert_eq!(
+        events,
+        vec![PreflightEvent::Reject {
+            reason: PreflightReject::PostOnlyWouldCross
+        }]
+    );
+    assert_eq!(
+        preflight_reject_total(PreflightReject::PostOnlyWouldCross),
+        before_preflight
+    );
+    assert_eq!(
+        post_only_reject_total(),
+        before_post_only,
+        "graybox preflight must not leak post-only wrapper counters"
     );
 
     let lines = take_execution_metric_lines();

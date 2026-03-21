@@ -52,6 +52,20 @@ pub(crate) enum PostOnlyEvent {
     Reject,
 }
 
+struct ObservedPostOnlyEvents<'a, 'b, E> {
+    metrics: &'a mut PostOnlyMetrics,
+    inner: &'b mut E,
+}
+
+impl<E: EventSink<PostOnlyEvent>> EventSink<PostOnlyEvent> for ObservedPostOnlyEvents<'_, '_, E> {
+    fn emit(&mut self, event: PostOnlyEvent) {
+        if matches!(event, PostOnlyEvent::Reject) {
+            self.metrics.record_reject();
+        }
+        self.inner.emit(event);
+    }
+}
+
 struct ProductionPostOnlyEvents;
 
 impl EventSink<PostOnlyEvent> for ProductionPostOnlyEvents {
@@ -136,11 +150,7 @@ fn bump_post_only_reject_inner() {
     tracing::debug!("PostOnlyReject");
 }
 
-fn reject_with_events<E: EventSink<PostOnlyEvent>>(
-    metrics: &mut PostOnlyMetrics,
-    events: &mut E,
-) -> PostOnlyResult {
-    metrics.record_reject();
+fn reject_with_events<E: EventSink<PostOnlyEvent>>(events: &mut E) -> PostOnlyResult {
     events.emit(PostOnlyEvent::Reject);
     PostOnlyResult::Rejected
 }
@@ -164,6 +174,17 @@ pub(crate) fn check_post_only_with_events<E: EventSink<PostOnlyEvent>>(
     metrics: &mut PostOnlyMetrics,
     events: &mut E,
 ) -> PostOnlyResult {
+    let mut observed = ObservedPostOnlyEvents {
+        metrics,
+        inner: events,
+    };
+    check_post_only_inner(input, &mut observed)
+}
+
+fn check_post_only_inner<E: EventSink<PostOnlyEvent>>(
+    input: &PostOnlyInput,
+    events: &mut E,
+) -> PostOnlyResult {
     // If not post_only, no check needed.
     if !input.post_only {
         return PostOnlyResult::Allowed;
@@ -176,7 +197,7 @@ pub(crate) fn check_post_only_with_events<E: EventSink<PostOnlyEvent>>(
         events.emit(PostOnlyEvent::InvalidLimitPrice {
             limit_price: input.limit_price.to_string(),
         });
-        return reject_with_events(metrics, events);
+        return reject_with_events(events);
     }
 
     let would_cross = match input.side {
@@ -187,7 +208,7 @@ pub(crate) fn check_post_only_with_events<E: EventSink<PostOnlyEvent>>(
                     events.emit(PostOnlyEvent::InvalidBestAsk {
                         best_ask: ask.to_string(),
                     });
-                    return reject_with_events(metrics, events);
+                    return reject_with_events(events);
                 }
                 input.limit_price >= ask
             }
@@ -200,7 +221,7 @@ pub(crate) fn check_post_only_with_events<E: EventSink<PostOnlyEvent>>(
                     events.emit(PostOnlyEvent::InvalidBestBid {
                         best_bid: bid.to_string(),
                     });
-                    return reject_with_events(metrics, events);
+                    return reject_with_events(events);
                 }
                 input.limit_price <= bid
             }
@@ -209,7 +230,7 @@ pub(crate) fn check_post_only_with_events<E: EventSink<PostOnlyEvent>>(
     };
 
     if would_cross {
-        reject_with_events(metrics, events)
+        reject_with_events(events)
     } else {
         PostOnlyResult::Allowed
     }

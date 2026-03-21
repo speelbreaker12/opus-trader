@@ -15,11 +15,23 @@ keywords:
 scope_paths:
   - crates/soldier_core/src/execution/build_order_intent.rs
   - crates/soldier_core/src/execution/build_order_intent_gate_ordering_tests.rs
+  - crates/soldier_core/src/execution/dispatch_chokepoint_contract_tests.rs
+  - crates/soldier_core/src/execution/gate.rs
   - crates/soldier_core/src/execution/group.rs
+  - crates/soldier_core/src/execution/inventory_skew.rs
+  - crates/soldier_core/src/execution/inventory_skew_tests.rs
   - crates/soldier_core/src/execution/post_only_guard.rs
   - crates/soldier_core/src/execution/post_only_guard_tests.rs
+  - crates/soldier_core/src/execution/preflight.rs
+  - crates/soldier_core/src/execution/preflight_tests.rs
+  - crates/soldier_core/src/execution/pricer.rs
+  - crates/soldier_core/src/execution/pricer_tests.rs
+  - crates/soldier_core/src/execution/quantize.rs
   - crates/soldier_core/src/execution/routing.rs
+  - crates/soldier_core/src/risk/exposure_budget.rs
   - crates/soldier_core/src/risk/fees.rs
+  - crates/soldier_core/src/risk/margin_gate.rs
+  - crates/soldier_core/src/risk/margin_gate_tests.rs
   - crates/soldier_core/src/risk/pending_exposure.rs
   - docs/codebase/upgrade2_graybox_telemetry_checklist.md
   - plans/lib/rust_gates.sh
@@ -38,12 +50,14 @@ scope_paths:
   - .claude/commands/review-stack.md
   - obsidian/Projects/Upgrade 2 Telemetry Completion.md
   - obsidian/Debriefs/Upgrade 2 Telemetry Completion 2026-03-20.md
+  - obsidian/Debriefs/Upgrade 2 Telemetry Completion 2026-03-21.md
 ---
 
 ## Current State
-Upgrade 2 is complete on branch `upgrade2` and PR #223 is open against `main`. The remaining orchestration telemetry paths were moved behind internal event sinks, the wrapper layer still preserves the existing metrics contract, and the graybox telemetry boundary is now mechanically enforced by a dedicated lint wired into workflow verification. PR #223 review feedback has been folded back into the branch: smoke fixture expectations match the 13-test profile, the graybox lint handles whitespace-trimmed multiline roots plus brace/bracket tracing macros and declaration-only signatures, event payloads no longer carry `f64`, and missing graybox/parity tests were added for the flagged seams. The merge-gate harness follow-ups are also addressed: preflight full mode no longer trips bash-3.2 `set -u` on intentionally empty arrays, the review-stack command wrapper matches the current skill-wrapper contract, and `plans/verify_fork.sh` no longer references the deleted `test_contract_at_wording_drift.sh`. The last substantive PR-page gap was that `graybox_telemetry_lint` existed in `rust_gates.sh` but was not named in the workflow contract or enforced by the verify-gate contract checker; this batch closes that gap with contract text plus a fail-closed regression in `test_verify_gate_contract_check_batching.sh`.
+The previously open Upgrade 2 review gaps are fixed on branch `upgrade2`, but the branch is not ready to be called complete again yet. Preflight now routes post-only through the sink seam, the missing crossing graybox test exists, the remaining leaf seams moved inline instance-metric mutation into observer sinks, routing no longer bypasses the WAL-nonblocking chokepoint sink, and the graybox lint now catches both inline `metrics.record_*()` calls and wrapper-call bypasses. Fresh targeted validation is green (`cargo fmt --all`, `bash plans/lint_graybox_telemetry.sh`, `bash plans/tests/test_lint_graybox_telemetry.sh`, `cargo clippy --workspace --lib -- -D warnings`, `cargo test -p soldier_core --lib -- --nocapture`), but `./plans/verify.sh quick` failed in `wf_test_pr_review_gate_hook` (`artifacts/verify/20260321_100806`), which is outside this slice.
 
 ## Commits
+- `pending` — 2026-03-21 — close the remaining Upgrade 2 review gaps in preflight/post-only, observer-sink telemetry purity, routing WAL no-gate diagnostics, and graybox lint coverage; targeted validation green, quick verify blocked by unrelated workflow hook failure.
 - `240baeaf` — 2026-03-20 — complete Upgrade 2 graybox telemetry migration, preserve wrapper parity and diagnostic context, add graybox telemetry lint plus regression coverage.
 - `1b33802d` — 2026-03-20 — close PR #223 review gaps in graybox lint coverage, smoke fixture accounting, event payload typing, and wrapper/graybox telemetry tests.
 - `d626c5af` — 2026-03-20 — fix `plans/preflight.sh` full-mode empty-array handling so `set -u` does not abort when the serial full-only fixture list is empty.
@@ -52,16 +66,22 @@ Upgrade 2 is complete on branch `upgrade2` and PR #223 is open against `main`. T
 
 ## Key Files
 - `crates/soldier_core/src/execution/build_order_intent.rs`
-- `crates/soldier_core/src/execution/group.rs`
+- `crates/soldier_core/src/execution/gate.rs`
 - `crates/soldier_core/src/execution/post_only_guard.rs`
-- `crates/soldier_core/src/risk/fees.rs`
+- `crates/soldier_core/src/execution/preflight.rs`
+- `crates/soldier_core/src/execution/quantize.rs`
+- `crates/soldier_core/src/execution/pricer.rs`
+- `crates/soldier_core/src/execution/inventory_skew.rs`
+- `crates/soldier_core/src/risk/margin_gate.rs`
 - `crates/soldier_core/src/risk/pending_exposure.rs`
+- `crates/soldier_core/src/risk/exposure_budget.rs`
 - `plans/lint_graybox_telemetry.sh`
 - `plans/tests/test_lint_graybox_telemetry.sh`
 - `docs/codebase/upgrade2_graybox_telemetry_checklist.md`
 
 ## Debriefs
 - [[Upgrade 2 Telemetry Completion 2026-03-20]]
+- [[Upgrade 2 Telemetry Completion 2026-03-21]]
 
 ## PR
 - PR #223: https://github.com/speelbreaker12/opus-trader/pull/223
@@ -88,3 +108,7 @@ Upgrade 2 is complete on branch `upgrade2` and PR #223 is open against `main`. T
 - Audited the live PR #223 GitHub threads/comments instead of relying on local memory, and confirmed the remaining substantive open item was the missing workflow-contract coverage for `graybox_telemetry_lint`.
 - Updated `specs/WORKFLOW_CONTRACT.md` so QUICK explicitly names `graybox_telemetry_lint`, tightened `plans/verify_gate_contract_check.sh` to require the token in both quick/full Rust gate expectations, and extended `plans/tests/test_verify_gate_contract_check_batching.sh` so removing the lint from `rust_gates.sh` fails closed.
 - Re-validated the fix with `bash plans/tests/test_verify_gate_contract_check_batching.sh`, `bash plans/tests/test_rust_gates_smoke_targets.sh`, and `./plans/verify_gate_contract_check.sh`.
+- Closed the still-open Upgrade 2 review gaps by routing preflight post-only checks through `check_post_only_with_events(...)`, adding the missing crossing-reject graybox test, moving remaining leaf instance-metric mutation into observer sinks, and routing `no_gate_configured` WAL visibility through the chokepoint sink instead of direct logging/counter bumps.
+- Tightened `plans/lint_graybox_telemetry.sh` so graybox seams now fail on inline `metrics.record_*()` calls and wrapper-call bypasses such as `check_post_only(...)`, then added regression fixtures proving both patterns fail closed.
+- Re-validated the telemetry slice with `cargo fmt --all`, `bash plans/lint_graybox_telemetry.sh`, `bash plans/tests/test_lint_graybox_telemetry.sh`, `cargo clippy --workspace --lib -- -D warnings`, and `cargo test -p soldier_core --lib -- --nocapture`.
+- Ran `./plans/verify.sh quick`; the Upgrade 2 slice stayed green, but the run failed outside this scope in `wf_test_pr_review_gate_hook` (`artifacts/verify/20260321_100806/FAILED_GATE`) because the workflow test still expects `gh pr create` to hard-block without a review marker while the current hook only warns and allows the command to proceed.

@@ -141,6 +141,7 @@ def find_matching_brace(code: str, open_index: int) -> int:
 
 
 FUNCTION_RE = re.compile(r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*_with_events)\b")
+PLAIN_FUNCTION_RE = re.compile(r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)\b")
 FORBIDDEN = {
     r"\bemit_execution_metric_line\s*\(": "metric-line emission",
     r"\bfetch_add\s*\(": "global counter mutation",
@@ -148,6 +149,7 @@ FORBIDDEN = {
     r"\btake_execution_metric_lines\s*\(": "metric-buffer inspection",
     r"\bMETRICS_TEST_LOCK\b": "shared metrics lock dependency",
     r"\btracing::(?:trace|debug|info|warn|error)!\s*[\(\{\[]": "direct tracing macro",
+    r"\bmetrics\.record_[A-Za-z0-9_]*\s*\(": "instance metric mutation",
     r"(?<!\.)\bbump_[A-Za-z0-9_]*\s*\(": "wrapper-only bump helper call",
     r"(?<!\.)\brecord_(?:[A-Za-z0-9_]*metric[A-Za-z0-9_]*|expected_slippage_sample|gate_sequence_result|wal_nonblocking_allowed)\s*\(": "wrapper-only record helper call",
 }
@@ -177,6 +179,16 @@ for root in roots:
     for path in sorted(root.rglob("*.rs")):
         text = path.read_text(encoding="utf-8")
         code = sanitize(text)
+        plain_function_names = {
+            match.group(1)
+            for match in PLAIN_FUNCTION_RE.finditer(code)
+            if not match.group(1).endswith("_with_events")
+        }
+        wrapper_bases = {
+            match.group(1)[: -len("_with_events")]
+            for match in FUNCTION_RE.finditer(code)
+            if match.group(1)[: -len("_with_events")] in plain_function_names
+        }
         for match in FUNCTION_RE.finditer(code):
             name = match.group(1)
             search_start = match.end()
@@ -196,6 +208,13 @@ for root in roots:
                     line = text[: brace_index + 1 + hit.start()].count("\n") + 1
                     violations.append(
                         f"{path}:{line}: {name} contains forbidden {description}"
+                    )
+            for wrapper_base in wrapper_bases:
+                hit = re.search(rf"(?<!\.)\b{re.escape(wrapper_base)}\s*\(", body)
+                if hit:
+                    line = text[: brace_index + 1 + hit.start()].count("\n") + 1
+                    violations.append(
+                        f"{path}:{line}: {name} contains forbidden wrapper call bypassing sink seam"
                     )
 
 if violations:
