@@ -341,7 +341,8 @@ if [[ -n "$CHAIRMAN" && "$any_failed" -eq 0 ]]; then
       echo "  Chairman: FAILED (exit $chairman_rc)"
     fi
   else
-    echo "WARN: run directory $run_dir not found — skipping chairman" >&2
+    echo "ERROR: run directory $run_dir not found — cannot run chairman synthesis" >&2
+    chairman_rc=1
   fi
 elif [[ -n "$CHAIRMAN" && "$any_failed" -ne 0 ]]; then
   echo

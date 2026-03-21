@@ -199,9 +199,9 @@ echo "Running chairman ($model_id)..."
 start_epoch="$(date +%s)"
 
 set +e
-# Stderr goes to /dev/null to avoid contaminating the artifact
+# Stderr goes to a log file to avoid contaminating the artifact
 # with --verbose CLI metadata, token counts, and warnings.
-claude --model "$model_id" --print --verbose < "$PROMPT_TMP" 2>/dev/null | tee "$TRANSCRIPT_TMP"
+claude --model "$model_id" --print --verbose < "$PROMPT_TMP" 2>"$OUTDIR/chairman_stderr.log" | tee "$TRANSCRIPT_TMP"
 # Capture full PIPESTATUS array on one line — reading PIPESTATUS[0] resets the
 # array in bash 3.2 (macOS), causing PIPESTATUS[1] to be unbound under set -u.
 _ps=("${PIPESTATUS[@]}")

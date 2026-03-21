@@ -42,6 +42,7 @@ the codex exec fallback path has content available.
 - [[chairman-synthesis 2026-03-19 Harden Script]]
 - [[chairman-synthesis 2026-03-19 PIPESTATUS and Parser Fixes]]
 - [[chairman-synthesis 2026-03-21 PR Review Fixes]]
+- [[chairman-synthesis 2026-03-21 Fail-Explicit Fixes]]
 
 ## Log
 ### 2026-03-19
@@ -67,3 +68,5 @@ the codex exec fallback path has content available.
   - Default chairman style changed from `generic` to `enriched` to match parallel_review/review_logged defaults
   - Guard cleanup trap `rm -f` against empty CLEANUP_FILES array
   - Added smoke test `plans/tests/test_chairman_integration.sh` for --chairman integration path
+  - P1: exit non-zero when --chairman requested but run directory missing (was false-green WARN + exit 0)
+  - P2: redirect chairman CLI stderr to `$OUTDIR/chairman_stderr.log` instead of `/dev/null`
