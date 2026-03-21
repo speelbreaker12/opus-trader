@@ -1,15 +1,18 @@
 ---
-status: done
+status: in-progress
 priority: P1
 branch: workflow/obsidian-work-tracking-closeout
 base: main
 pr:
 started: "2026-03-16"
 scope_paths:
+  - .codex/commands/**
+  - .codex/skills/**
   - .claude/commands/**
   - .claude/hooks/**
   - .claude/settings.json
   - .claude/skills/**
+  - .gitignore
   - .githooks/**
   - AGENTS.md
   - SKILLS/**
@@ -26,14 +29,19 @@ scope_paths:
 ---
 
 ## Current State
-The `workflow/obsidian-skills-clean` slice is complete and merged as PR `#217` via merge commit `071e3c84`. No active execution work remains on that merged branch. This closeout branch exists only to normalize the project metadata, leave a final debrief, and retire the stale merged branch ref so any future workflow work starts from a fresh main-based lane.
+The original `workflow/obsidian-skills-clean` slice is complete and merged as PR `#217` via merge commit `071e3c84`, and the repo-tracked Codex regression fix is now staged on this follow-up branch. The Codex mirror coverage and wrapper regression test are green, but the broader `./plans/workflow_verify.sh` run is still blocked by the existing `wf_test_pr_review_gate_hook` failure that expects plain `gh pr create` to exit `2` when the review marker is missing.
 
 ## Commits
 - `071e3c84` — 2026-03-17 — Merge PR #217 (`workflow/obsidian-skills-clean`) into `main`.
-- `pending` — 2026-03-17 — post-commit prints dashboard auto-sync status when `obsidian/Active Projects.md` changed.
-- `pending` — 2026-03-21 — Close out the merged workflow tracking slice and retire the stale `workflow/obsidian-skills-clean` branch ref.
+- `pending` — 2026-03-21 — Track repo-local Codex skill mirrors, command wrappers, and regression coverage so all repo skills stay invokable from Codex worktrees.
 
 ## Key Files
+- .gitignore
+- .codex/commands/commit.md
+- .codex/commands/commit-push-pr.md
+- .codex/skills/commit/SKILL.md
+- .codex/skills/commit-push-pr/SKILL.md
+- plans/tests/test_review_command_wrappers.sh
 - obsidian/Templates/Project.md
 - obsidian/Templates/Debrief.md
 - .claude/hooks/obsidian-context-hook.sh
@@ -45,6 +53,7 @@ The `workflow/obsidian-skills-clean` slice is complete and merged as PR `#217` v
 ## Debriefs
 - [[Obsidian Work Tracking 2026-03-17 Post-Commit Dashboard Sync Notice]]
 - [[Obsidian Work Tracking 2026-03-19 Workflow Skill Split]]
+- [[Obsidian Work Tracking 2026-03-21 Codex Skill Mirrors]]
 - [[Obsidian Work Tracking 2026-03-21 Merge Closeout]]
 
 ## Log
@@ -66,3 +75,9 @@ The `workflow/obsidian-skills-clean` slice is complete and merged as PR `#217` v
 - Confirmed PR #217 merged to `main` as `071e3c84` and that `workflow/obsidian-skills-clean` is no longer an active execution lane.
 - Opened `workflow/obsidian-work-tracking-closeout` only to normalize this project note and add a final debrief after the merge.
 - Retired the stale `origin/workflow/obsidian-skills-clean` branch ref so future workflow work starts from a fresh main-based lane.
+- Mirrored repo-local `.claude/skills/*/SKILL.md` wrappers into tracked `.codex/skills/*/SKILL.md` files so Codex worktrees expose the same repo-defined skill surface.
+- Added tracked `.codex/commands/*.md` wrappers, including alias coverage such as `/6`, `/external-review`, and the deprecated but still invokable `/commit-push-pr`.
+- Tightened `.gitignore` to allow tracked `.codex/skills/**` and `.codex/commands/*.md` while keeping other local Codex state ignored.
+- Expanded `plans/tests/test_review_command_wrappers.sh` to fail when repo-tracked Codex skill mirrors or command wrappers drift from the Claude wrappers.
+- Fixed the staged Codex `/review` alias so it invokes the global `code-review-expert` skill instead of pointing at a nonexistent repo-local skill mirror.
+- Ran `./plans/workflow_verify.sh`; the Codex mirror changes held, but the suite still failed in the existing `wf_test_pr_review_gate_hook` gate on plain `gh pr create` marker enforcement.
