@@ -22,6 +22,16 @@ RUSTC_WRAPPER_BIN="${RUSTC_WRAPPER_BIN:-}"
 RUST_TEST_RUNNER_EFFECTIVE="${RUST_TEST_RUNNER_EFFECTIVE:-cargo}"
 RUST_TEST_RUNNER_FALLBACKS=()
 
+json_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  printf '%s' "$value"
+}
+
 json_string_array() {
   local item
   local first=1
@@ -31,7 +41,7 @@ json_string_array() {
       printf ','
     fi
     first=0
-    printf '"%s"' "$item"
+    printf '"%s"' "$(json_escape "$item")"
   done
   printf ']'
 }
@@ -62,8 +72,8 @@ write_rust_runner_meta() {
     "active": $RUST_SCCACHE_ACTIVE
   },
   "test_runner": {
-    "requested": "$VERIFY_TEST_RUNNER",
-    "effective": "$RUST_TEST_RUNNER_EFFECTIVE",
+    "requested": "$(json_escape "$VERIFY_TEST_RUNNER")",
+    "effective": "$(json_escape "$RUST_TEST_RUNNER_EFFECTIVE")",
     "fallbacks": $fallbacks_json
   }
 }
@@ -118,7 +128,12 @@ ensure_rust_runner_config() {
 
   if [[ "$VERIFY_TEST_RUNNER" == "nextest" ]]; then
     if command -v cargo-nextest >/dev/null 2>&1; then
-      RUST_TEST_RUNNER_EFFECTIVE="nextest"
+      # This repo still requires cargo test for doctests and in-process
+      # shared-state suites guarded by begin_metrics_test()/METRICS_TEST_LOCK.
+      RUST_TEST_RUNNER_EFFECTIVE="cargo"
+      record_rust_test_runner_fallback \
+        "rust_test_runner" \
+        "repo_contract_requires_cargo_doctests_and_shared_state"
     else
       write_rust_runner_meta
       fail "VERIFY_TEST_RUNNER=nextest requires cargo-nextest"
@@ -172,28 +187,23 @@ configure_rust_proptest_cases() {
 }
 
 run_mode_selected_rust_tests() {
-  if [[ "${MODE:-}" == "full" ]]; then
-    if [[ "$RUST_TEST_RUNNER_EFFECTIVE" == "nextest" ]]; then
-      run_rust_logged_or_exit "rust_tests_full" "$RUST_TEST_TIMEOUT" cargo nextest run --workspace --all-features --locked
-    else
-      run_rust_logged_or_exit "rust_tests_full" "$RUST_TEST_TIMEOUT" cargo test --workspace --all-features --locked
-    fi
-  else
-    if [[ "$RUST_TEST_RUNNER_EFFECTIVE" == "nextest" ]]; then
-      run_rust_logged_or_exit "rust_tests_quick" "$RUST_TEST_TIMEOUT" cargo nextest run --workspace --lib --locked
-    else
-      run_rust_logged_or_exit "rust_tests_quick" "$RUST_TEST_TIMEOUT" cargo test --workspace --lib --locked
-    fi
-  fi
+  case "$RUST_TEST_RUNNER_EFFECTIVE" in
+    cargo)
+      if [[ "${MODE:-}" == "full" ]]; then
+        run_rust_logged_or_exit "rust_tests_full" "$RUST_TEST_TIMEOUT" cargo test --workspace --all-features --locked
+      else
+        run_rust_logged_or_exit "rust_tests_quick" "$RUST_TEST_TIMEOUT" cargo test --workspace --lib --locked
+      fi
+      ;;
+    *)
+      fail "Unsupported effective rust test runner: $RUST_TEST_RUNNER_EFFECTIVE"
+      ;;
+  esac
 }
 
 run_smoke_cargo_test_gate() {
   local gate_name="$1"
   shift
-
-  if [[ "$RUST_TEST_RUNNER_EFFECTIVE" == "nextest" ]]; then
-    record_rust_test_runner_fallback "$gate_name" "smoke_suite_requires_cargo_test"
-  fi
 
   run_rust_logged_or_exit "$gate_name" "$RUST_TEST_TIMEOUT" cargo test "$@"
 }

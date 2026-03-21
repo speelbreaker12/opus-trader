@@ -16,6 +16,8 @@ keywords:
 scope_paths:
   - .claude/commands/review-stack.md
   - .claude/hooks/pr-review-gate-hook.sh
+  - .codex/commands/commit.md
+  - .codex/commands/push-pr.md
   - plans/preflight.sh
   - plans/fail_closed_coverage.sh
   - plans/verify_gate_contract_check.sh
@@ -46,7 +48,7 @@ scope_paths:
 ---
 
 ## Current State
-PR #227 is active on `verify` against `main`. The original acceleration tranche is in branch history, and the current follow-up review-fix slice is ready locally. `fail_closed_coverage.sh` now reserves `rc=1` for real coverage findings and uses `rc=2` for setup/infra faults, `verify_scope.sh workflow` now executes the `.claude` PR-review/wrapper regressions it previously skipped, direct `bash plans/lib/rust_gates.sh` execution now bootstraps the shared verify environment before writing runner metadata, and `verify_scope.sh contract` now shares the authoritative CSP strict-mode auto-detection helper instead of silently relaxing when `specs/CONTRACT.md` or `specs/TRACE.yaml` changed. Fresh local evidence for this follow-up slice is green: targeted harness regressions, `./plans/verify_scope.sh workflow`, `./plans/verify_scope.sh contract`, and authoritative `./plans/verify.sh quick` all passed on 2026-03-21.
+PR #227 is active on `verify` against `main`. The original acceleration tranche is in branch history, and the current follow-up review-fix slice is ready locally. `fail_closed_coverage.sh` now reserves `rc=1` for real coverage findings and uses `rc=2` for setup/infra faults, `verify_scope.sh workflow` now executes the `.claude` PR-review/wrapper regressions it previously skipped, direct `bash plans/lib/rust_gates.sh` execution now bootstraps the shared verify environment before writing runner metadata, and `verify_scope.sh contract` now shares the authoritative CSP strict-mode auto-detection helper instead of silently relaxing when `specs/CONTRACT.md` or `specs/TRACE.yaml` changed. The 2026-03-21 review-fix scope also now includes `.codex/commands/commit.md` and `.codex/commands/push-pr.md` so local workflow-wrapper checks remain compatible with the repo-provided Codex command wrappers while the PR comment fixes are verified. Fresh local evidence is green again after the hook parser/cache reduction and Codex wrapper compatibility patch: `bash plans/tests/test_pr_review_gate_hook.sh`, `bash plans/tests/test_review_command_wrappers.sh`, and `./plans/verify.sh quick` all passed on 2026-03-21.
 
 ## Commits
 - `pending` — 2026-03-21 — close PR #227 review findings: fail_closed coverage infra exit taxonomy, workflow-scope `.claude` regressions, direct rust_gates bootstrap, and contract-scope CSP strict parity.
@@ -55,6 +57,8 @@ PR #227 is active on `verify` against `main`. The original acceleration tranche 
 ## Key Files
 - .claude/commands/review-stack.md
 - .claude/hooks/pr-review-gate-hook.sh
+- .codex/commands/commit.md
+- .codex/commands/push-pr.md
 - plans/preflight.sh
 - plans/fail_closed_coverage.sh
 - plans/verify_fork.sh
@@ -89,6 +93,8 @@ PR #227 is active on `verify` against `main`. The original acceleration tranche 
 ## Log
 ### 2026-03-21
 - Fixed the `fail_closed_coverage.sh` exit taxonomy so quick verify only soft-warns on true coverage findings while missing `jq`, missing gate-map state, and other setup faults fail the gate with `rc=2`.
+- Expanded the review-fix slice scope to `.codex/commands/commit.md` and `.codex/commands/push-pr.md`, restoring the canonical wrapper sentence expected by `plans/tests/test_review_command_wrappers.sh` while preserving the repo-local skill resolution logic in those Codex command files.
+- Reworked `.claude/hooks/pr-review-gate-hook.sh` so the PR-create parser reads the tool payload in a single Python pass, lazily resolves repo roots for relative `env -C/--chdir`, caches marker JSON reads, and keeps the single-quoted heredoc form required by the review comment without regressing `wf_test_pr_review_gate_hook` runtime.
 - Added regression coverage for the new fail-closed taxonomy (`plans/tests/test_fail_closed_gate_map_paths.sh`), workflow-scope inclusion of the `.claude` PR-review/wrapper tests (`plans/tests/test_verify_scope.sh`), and standalone `plans/lib/rust_gates.sh` bootstrap behavior (`plans/tests/test_verify_accelerators.sh`).
 - Extended `plans/lib/verify_scope_gates.sh` so `./plans/verify_scope.sh workflow` now runs `plans/tests/test_pr_review_gate_hook.sh` and `plans/tests/test_review_command_wrappers.sh` instead of reporting green without those surfaces.
 - Sourced `plans/lib/verify_env.sh` from `plans/lib/rust_gates.sh`, added a direct-entry bootstrap via `init_verify_env`, and kept sourced-callers fail-closed with an explicit `VERIFY_ARTIFACTS_DIR` requirement.
@@ -116,3 +122,4 @@ PR #227 is active on `verify` against `main`. The original acceleration tranche 
 - Refreshed the project note scope to include the auxiliary `.claude`, preflight, and shared-helper files that were required to close the branch cleanly.
 - Recorded Python overlap as intentionally deferred because authoritative verify in this repo state has no Python gate tranche to overlap.
 - Pushed `verify` to `origin` and opened PR #227 against `main`.
+- Re-ran `bash plans/tests/test_pr_review_gate_hook.sh`, `bash plans/tests/test_review_command_wrappers.sh`, and authoritative `./plans/verify.sh quick` after the review-comment fixes plus the approved local scope expansion for Codex wrapper compatibility; all passed.

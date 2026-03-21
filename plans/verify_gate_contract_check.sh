@@ -232,7 +232,8 @@ done
 rust_full_tokens=(
   'run_rust_logged_or_exit "rust_clippy"'
   'cargo clippy --workspace --all-targets --all-features -- -D warnings'
-  'cargo nextest run --workspace --all-features --locked'
+  'record_rust_test_runner_fallback \'
+  '"repo_contract_requires_cargo_doctests_and_shared_state"'
   'run_smoke_cargo_test_gate "rust_tests_smoke"'
   'run_logged_or_exit "execution_facade_lint"'
 )
@@ -242,6 +243,14 @@ done
 
 if contains_literal_token "$RUST_GATES_CONTENT" 'warn "Skipping clippy in quick mode"'; then
   fail "quick Rust gates must not skip rust_clippy"
+fi
+
+if contains_literal_token "$RUST_GATES_CONTENT" 'cargo nextest run --workspace --all-features --locked'; then
+  fail "rust gates must not treat cargo nextest run as an authoritative full-test path"
+fi
+
+if contains_literal_token "$RUST_GATES_CONTENT" 'cargo nextest run --workspace --lib --locked'; then
+  fail "rust gates must not treat cargo nextest run as an authoritative quick-test path"
 fi
 
 py_tokens=(

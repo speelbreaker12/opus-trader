@@ -5,18 +5,19 @@
 INPUT=$(cat)
 exec </dev/null
 
-inspect_pr_create_command() {
-    local command_text="$1"
+inspect_pr_create_request() {
+    local request_payload="$1"
     local default_cwd="$2"
 
-    python3 - "$command_text" "$default_cwd" <<'PY'
+    python3 - "$request_payload" "$default_cwd" 2>/dev/null <<'PY'
+import json
 import os
 import re
 import shlex
 import subprocess
 import sys
 
-command_text = sys.argv[1]
+request_payload = sys.argv[1]
 workdir = sys.argv[2]
 
 
@@ -25,6 +26,16 @@ def emit(status: str, derived_workdir: str, error: str = '') -> None:
     print(derived_workdir)
     print(error)
     raise SystemExit(0)
+
+
+try:
+    payload = json.loads(request_payload)
+    command_text = payload.get('tool_input', {}).get('command', '')
+except Exception:
+    emit('0', workdir)
+
+if not isinstance(command_text, str) or not command_text:
+    emit('0', workdir)
 
 
 def git_repo_root(path: str) -> str | None:
@@ -58,20 +69,21 @@ def apply_chdir(
         return new_workdir, git_repo_root(new_workdir), None
 
     new_workdir = os.path.abspath(os.path.join(current_workdir, path))
-    if current_repo_root and not path_is_within(current_repo_root, new_workdir):
+    repo_root = current_repo_root or git_repo_root(current_workdir)
+    if repo_root and not path_is_within(repo_root, new_workdir):
         return (
             current_workdir,
-            current_repo_root,
-            f'chdir escaped repository root: {current_repo_root}',
+            repo_root,
+            f'chdir escaped repository root: {repo_root}',
         )
-    return new_workdir, current_repo_root, None
+    return new_workdir, repo_root, None
 
 
 def matches_tokens(tokens: list[str], default_workdir: str) -> tuple[str, str, str]:
     assign_re = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*=.*$')
     index = 0
     current_workdir = default_workdir
-    current_repo_root = git_repo_root(default_workdir)
+    current_repo_root = None
     escaped_chdir_error = ''
 
     while index < len(tokens):
@@ -216,7 +228,7 @@ read_marker_field() {
     local marker_path="$1"
     local field_name="$2"
 
-    python3 -c "
+    python3 - "$marker_path" "$field_name" <<'PY'
 import json
 import sys
 
@@ -233,19 +245,72 @@ value = data.get(field, '')
 if value is None:
     value = ''
 print(str(value))
-" "$marker_path" "$field_name"
+PY
+}
+
+LOADED_MARKER_PATH=""
+LOADED_MARKER_VERDICT=""
+LOADED_MARKER_HEAD=""
+
+load_marker_state() {
+    local marker_path="$1"
+    local marker_payload=""
+
+    if [ "$marker_path" = "$LOADED_MARKER_PATH" ]; then
+        return 0
+    fi
+
+    LOADED_MARKER_PATH="$marker_path"
+    LOADED_MARKER_VERDICT=""
+    LOADED_MARKER_HEAD=""
+
+    if [ ! -f "$marker_path" ]; then
+        return 0
+    fi
+
+    marker_payload="$(
+    python3 - "$marker_path" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+
+try:
+    with open(path) as f:
+        data = json.load(f)
+except Exception:
+    print('')
+    print('')
+    raise SystemExit(0)
+
+verdict = data.get('verdict', '')
+head = data.get('head')
+if head in (None, ''):
+    head = data.get('head_commit', '')
+
+if verdict is None:
+    verdict = ''
+if head is None:
+    head = ''
+
+print(str(verdict))
+print(str(head))
+PY
+    )"
+
+    {
+        IFS= read -r LOADED_MARKER_VERDICT
+        IFS= read -r LOADED_MARKER_HEAD
+    } <<EOF
+$marker_payload
+EOF
 }
 
 read_marker_head() {
     local marker_path="$1"
-    local marker_head=""
+    load_marker_state "$marker_path"
 
-    marker_head="$(read_marker_field "$marker_path" head_commit)"
-    if [ -z "$marker_head" ]; then
-        marker_head="$(read_marker_field "$marker_path" head)"
-    fi
-
-    printf '%s\n' "$marker_head"
+    printf '%s\n' "$LOADED_MARKER_HEAD"
 }
 
 marker_head_matches_current() {
@@ -318,14 +383,16 @@ marker_path_is_current() {
         return 1
     fi
 
+    load_marker_state "$marker_path"
+
     if [ "$require_verdict" = "1" ]; then
-        verdict="$(read_marker_field "$marker_path" verdict)"
+        verdict="$LOADED_MARKER_VERDICT"
         if [ "$verdict" != "PASS" ] && [ "$verdict" != "CONDITIONAL_PASS" ]; then
             return 1
         fi
     fi
 
-    marker_head="$(read_marker_head "$marker_path")"
+    marker_head="$LOADED_MARKER_HEAD"
     if [ -z "$marker_head" ]; then
         return 1
     fi
@@ -333,23 +400,21 @@ marker_path_is_current() {
     marker_head_matches_current "$marker_head" "$head_sha"
 }
 
-COMMAND=$(python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    print(d.get('tool_input', {}).get('command', ''))
-except Exception:
-    print('')
-" <<< "$INPUT" 2>/dev/null || echo "")
-
 # Only fire on gh pr create as an actual command invocation.
 # Split on shell separators and check if any segment invokes gh pr create.
 TRIGGERED=0
 COMMAND_CWD="$PWD"
-segment_inspection="$(inspect_pr_create_command "$COMMAND" "$PWD")"
-INSPECT_STATUS="$(printf '%s\n' "$segment_inspection" | sed -n '1p')"
-INSPECT_CWD="$(printf '%s\n' "$segment_inspection" | sed -n '2p')"
-INSPECT_ERROR="$(printf '%s\n' "$segment_inspection" | sed -n '3p')"
+segment_inspection="$(inspect_pr_create_request "$INPUT" "$PWD")"
+INSPECT_STATUS=""
+INSPECT_CWD=""
+INSPECT_ERROR=""
+{
+    IFS= read -r INSPECT_STATUS
+    IFS= read -r INSPECT_CWD
+    IFS= read -r INSPECT_ERROR
+} <<EOF
+$segment_inspection
+EOF
 
 if [ "$INSPECT_STATUS" = "2" ]; then
     cat >&2 <<EOF
@@ -365,9 +430,18 @@ if [ "$INSPECT_STATUS" = "1" ]; then
 fi
 [ "$TRIGGERED" -eq 1 ] || exit 0
 
-BRANCH=$(git -C "$COMMAND_CWD" rev-parse --abbrev-ref HEAD </dev/null 2>/dev/null || echo "")
-HEAD_SHA=$(git -C "$COMMAND_CWD" rev-parse HEAD </dev/null 2>/dev/null || echo "")
-REPO_ROOT=$(git -C "$COMMAND_CWD" rev-parse --show-toplevel </dev/null 2>/dev/null || echo "")
+BRANCH="$(git -C "$COMMAND_CWD" symbolic-ref --quiet --short HEAD </dev/null 2>/dev/null || echo "")"
+GIT_CONTEXT="$(
+git -C "$COMMAND_CWD" rev-parse HEAD --show-toplevel </dev/null 2>/dev/null || true
+)"
+HEAD_SHA=""
+REPO_ROOT=""
+{
+    IFS= read -r HEAD_SHA
+    IFS= read -r REPO_ROOT
+} <<EOF
+$GIT_CONTEXT
+EOF
 
 # Can't determine branch — don't block
 if [ -z "$BRANCH" ] || [ "$BRANCH" = "HEAD" ]; then
@@ -404,8 +478,9 @@ EOF
     exit 2
 fi
 
-VERDICT="$(read_marker_field "$MARKER" verdict)"
-MARKER_HEAD="$(read_marker_head "$MARKER")"
+load_marker_state "$MARKER"
+VERDICT="$LOADED_MARKER_VERDICT"
+MARKER_HEAD="$LOADED_MARKER_HEAD"
 
 [ -n "$VERDICT" ] || VERDICT="UNKNOWN"
 
@@ -447,7 +522,8 @@ WARNING: /external-review has not been run for branch '${BRANCH}'.
 Recommended for PRs touching crates/. Proceeding anyway.
 EOF
 else
-    EXT_MARKER_HEAD="$(read_marker_head "$EXT_MARKER")"
+    load_marker_state "$EXT_MARKER"
+    EXT_MARKER_HEAD="$LOADED_MARKER_HEAD"
     if [ -z "$EXT_MARKER_HEAD" ]; then
         cat >&2 <<EOF
 WARNING: /external-review marker for branch '${BRANCH}' is missing head/head_commit.

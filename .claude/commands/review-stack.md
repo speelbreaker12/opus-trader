@@ -1,10 +1,18 @@
+# SKILL: /review-stack
+
 Invoke the `review-stack` skill to run the full review stack and collect a single gate artifact.
 
 ## Steps
 
 1. Use the Skill tool with skill name "review-stack" and follow it fully.
 
-2. After the review stack completes with `PASS` or `CONDITIONAL_PASS`, write the PR gate marker:
+2. Capture the reviewed head:
+
+```bash
+git rev-parse HEAD
+```
+
+3. After the review stack completes with `PASS` or `CONDITIONAL_PASS`, write the PR gate marker under `artifacts/pr-review-gate`:
 
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)

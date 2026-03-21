@@ -22,6 +22,14 @@ assert_contains() {
   fi
 }
 
+assert_not_contains() {
+  local file="$1"
+  local needle="$2"
+  if grep -Fq "$needle" "$file"; then
+    fail "unexpected token in ${file##*/}: $needle"
+  fi
+}
+
 extract_fn() {
   local file="$1"
   local fn_name="$2"
@@ -60,9 +68,9 @@ assert_contains "$RUST_GATES" 'RUSTC_WRAPPER'
 assert_contains "$RUST_GATES" 'rust_runner.meta.json'
 assert_contains "$RUST_GATES" 'VERIFY_TEST_RUNNER=nextest requires cargo-nextest'
 assert_contains "$RUST_GATES" 'command -v cargo-nextest'
-assert_contains "$RUST_GATES" 'cargo nextest run'
 assert_contains "$RUST_GATES" 'rust_test_runner_fallbacks.log'
-assert_contains "$RUST_GATES" 'smoke_suite_requires_cargo_test'
+assert_contains "$RUST_GATES" 'repo_contract_requires_cargo_doctests_and_shared_state'
+assert_not_contains "$RUST_GATES" 'cargo nextest run'
 
 assert_contains "$WORKFLOW_VERIFY" 'check_script "plans/lib/verify_env.sh"'
 assert_contains "$WORKFLOW_ALLOWLIST" 'plans/lib/verify_env.sh'
@@ -217,6 +225,7 @@ cp "$VERIFY_UTILS" "$direct_case_root/plans/lib/verify_utils.sh"
 cp "$VERIFY_ENV" "$direct_case_root/plans/lib/verify_env.sh"
 for stub in \
   lint_execution_facade.sh \
+  lint_graybox_telemetry.sh \
   lint_risk_facade.sh \
   lint_venue_facade.sh \
   lint_soldier_infra_facade.sh
@@ -247,5 +256,31 @@ set -e
 [[ "$direct_rc" == "0" ]] || fail "direct rust_gates execution must bootstrap verify env, got rc=$direct_rc"
 assert_contains "$direct_case_root/artifacts/verify/direct_entry_case/rust_runner.meta.json" '"effective": "cargo"'
 assert_contains "$direct_case_root/cargo.log" 'fmt --all -- --check'
+
+cat > "$direct_case_root/bin/cargo-nextest" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$direct_case_root/bin/cargo-nextest"
+rm -f "$direct_case_root/cargo.log"
+
+nextest_stdout="$tmp_dir/rust_direct_entry_nextest.stdout"
+nextest_stderr="$tmp_dir/rust_direct_entry_nextest.stderr"
+set +e
+ROOT="$direct_case_root" \
+PATH="$direct_case_root/bin:$PATH" \
+VERIFY_RUN_ID=nextest_entry_case \
+VERIFY_CONSOLE=quiet \
+VERIFY_TEST_RUNNER=nextest \
+ENABLE_TIMEOUTS=0 \
+bash "$direct_case_root/plans/lib/rust_gates.sh" >"$nextest_stdout" 2>"$nextest_stderr"
+nextest_rc=$?
+set -e
+[[ "$nextest_rc" == "0" ]] || fail "nextest request must fall back to cargo deterministically, got rc=$nextest_rc"
+assert_contains "$direct_case_root/artifacts/verify/nextest_entry_case/rust_runner.meta.json" '"requested": "nextest"'
+assert_contains "$direct_case_root/artifacts/verify/nextest_entry_case/rust_runner.meta.json" '"effective": "cargo"'
+assert_contains "$direct_case_root/artifacts/verify/nextest_entry_case/rust_runner.meta.json" 'repo_contract_requires_cargo_doctests_and_shared_state'
+assert_contains "$direct_case_root/artifacts/verify/nextest_entry_case/rust_test_runner_fallbacks.log" 'rust_test_runner:repo_contract_requires_cargo_doctests_and_shared_state'
+assert_not_contains "$direct_case_root/cargo.log" 'nextest run'
 
 echo "PASS: verify accelerators"

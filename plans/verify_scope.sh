@@ -75,6 +75,16 @@ init_verify_env "verify_scope"
 source "$ROOT/plans/lib/verify_scope_gates.sh"
 source "$ROOT/plans/lib/rust_gates.sh"
 
+verify_scope_json_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  printf '%s' "$value"
+}
+
 write_verify_scope_meta() {
   local status="$1"
   local ended_at="$2"
@@ -89,18 +99,18 @@ write_verify_scope_meta() {
 {
   "schema_version": 1,
   "tool": "verify_scope.sh",
-  "run_id": "$VERIFY_RUN_ID",
+  "run_id": "$(verify_scope_json_escape "$VERIFY_RUN_ID")",
   "mode": "scope",
-  "status": "$status",
-  "base_ref": "$VERIFY_BASE_REF",
-  "started_at": "$VERIFY_STARTED_AT",
-  "ended_at": "$ended_at",
-  "worktree": "$worktree_path",
-  "head_sha": "$head_sha",
-  "failed_gate": "$failed_gate",
+  "status": "$(verify_scope_json_escape "$status")",
+  "base_ref": "$(verify_scope_json_escape "$VERIFY_BASE_REF")",
+  "started_at": "$(verify_scope_json_escape "$VERIFY_STARTED_AT")",
+  "ended_at": "$(verify_scope_json_escape "$ended_at")",
+  "worktree": "$(verify_scope_json_escape "$worktree_path")",
+  "head_sha": "$(verify_scope_json_escape "$head_sha")",
+  "failed_gate": "$(verify_scope_json_escape "$failed_gate")",
   "authoritative": false,
-  "scope": "$VERIFY_SCOPE_SLICE",
-  "run_root": "$VERIFY_RUN_ROOT"
+  "scope": "$(verify_scope_json_escape "$VERIFY_SCOPE_SLICE")",
+  "run_root": "$(verify_scope_json_escape "$VERIFY_RUN_ROOT")"
 }
 META
 }
