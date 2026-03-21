@@ -8,7 +8,7 @@ Create a clean local commit in the assigned worktree. No push, no PR, no merge.
 - include unrelated files
 - call `code_review_expert_attest.sh` without actually running code-review-expert
 
-## Fast path (tier 1: docs, obsidian, scripts, formatting)
+## Fast path (tier 1: docs, scripts)
 
 ```
 1. Confirm worktree + branch (not main)
@@ -28,12 +28,10 @@ Same three steps, plus the pre-commit hook runs scope guard, SSOT lint, contract
 - If scope guard rejects: check project note `scope_paths`
 
 ## Obsidian tracking
-- **Debrief note:** append one log line per commit (hash + what changed). Do not rewrite on every commit.
-- **Project page:** update once per session or at PR boundary (`/push-pr`). Not on every commit.
-- **First commit in review window:** create debrief, link from project note `## Debriefs`.
-- **Follow-up commit:** `OBSIDIAN_REVIEW_FIX=1` skips debrief requirement.
-- **Amend:** auto-detected.
-- **docs_only / obsidian_only / formatting_only:** obsidian gate skipped at commit (enforced at push).
+- **Vault location:** `${OBSIDIAN_VAULT_PATH:-$HOME/Obsidian/opus-trader}`.
+- **Commit boundary:** no Obsidian staging is required at commit time.
+- **Project page + debrief:** update them before push/PR and at end of session, not on every commit.
+- **If push/PR scope checks fail:** fix the external project note metadata (`branch`, `base`, `pr`, `scope_paths`) before retrying.
 
 ## Commit message
 Format: `<area>: <what changed>` — under 72 chars.
