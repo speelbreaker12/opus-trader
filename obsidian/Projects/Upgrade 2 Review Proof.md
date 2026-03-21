@@ -3,7 +3,7 @@ status: in-progress
 priority: P1
 branch: story/upgrade2-review-proof
 base: upgrade2
-pr:
+pr: 232
 started: "2026-03-21"
 aliases:
   - Upgrade 2 Proof
@@ -21,10 +21,11 @@ scope_paths:
 ---
 
 ## Current State
-Companion branch `story/upgrade2-review-proof` was created from `upgrade2` head `912a2efa` so the missing premortem and review-proof artifacts can be added without widening PR #228's declared project scope. The premortem and mutation-grade `/devils-advocate` proof now exist on this branch, and the chosen flow-back path is a companion PR from `story/upgrade2-review-proof` into `upgrade2`. Because `artifacts/story/` is gitignored, that PR also needs the mutation summary mirrored in tracked text or PR prose. Until that PR exists, the remaining blocker is lineage attachment, not proof completeness.
+Companion branch `story/upgrade2-review-proof` was created from `upgrade2` head `912a2efa` so the missing premortem and review-proof artifacts can be added without widening PR #228's declared project scope. The premortem and mutation-grade `/devils-advocate` proof now exist on this branch, and companion PR #232 carries the mutation summary back into the `upgrade2` lineage. Because `artifacts/story/` is gitignored, the PR body is part of the durable proof chain. The remaining work on this branch is metadata hygiene and any later review-marker follow-through, not proof completeness.
 
 ## Commits
-- `pending` — 2026-03-21 — create the companion proof slice for Upgrade 2, add the missing premortem, and rerun review artifacts without touching the runtime PR scope.
+- `ccb5bade` — 2026-03-21 — create the companion proof slice for Upgrade 2, add the missing premortem, and push the branch.
+- `pending` — 2026-03-21 — sync PR #232 metadata into the proof project note/debrief after opening the companion PR.
 
 ## Key Files
 - `reviews/premortems/upgrade2-review-proof_premortem.md`
@@ -42,3 +43,4 @@ Companion branch `story/upgrade2-review-proof` was created from `upgrade2` head 
 - Confirmed the strengthened runtime and lint seams kill the original wrapper-bypass regression plus the rest of the required simpler-wrong mutation checklist; no new tests were needed.
 - Chose the flow-back path: commit this proof-only branch and open a companion PR into `upgrade2` instead of widening PR #228 or silently cherry-picking proof assets without explicit lineage.
 - Confirmed `artifacts/story/` is gitignored, so the companion PR must mirror the mutation summary in tracked files or PR text; the ignored local artifacts alone are not durable lineage.
+- Opened companion PR #232 from `story/upgrade2-review-proof` into `upgrade2` with the mutation summary copied into the PR body so PR #228 can cite durable branch-level proof lineage.
