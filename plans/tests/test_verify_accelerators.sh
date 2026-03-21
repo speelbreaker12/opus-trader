@@ -210,4 +210,42 @@ chmod +x "$runtime_script"
 bash "$runtime_script"
 assert_contains "$runtime_case_dir/rust_runner.meta.json" '"fallbacks": []'
 
+direct_case_root="$tmp_dir/rust_direct_entry_root"
+mkdir -p "$direct_case_root/plans/lib" "$direct_case_root/plans" "$direct_case_root/bin"
+cp "$RUST_GATES" "$direct_case_root/plans/lib/rust_gates.sh"
+cp "$VERIFY_UTILS" "$direct_case_root/plans/lib/verify_utils.sh"
+cp "$VERIFY_ENV" "$direct_case_root/plans/lib/verify_env.sh"
+for stub in \
+  lint_execution_facade.sh \
+  lint_risk_facade.sh \
+  lint_venue_facade.sh \
+  lint_soldier_infra_facade.sh
+do
+  cat > "$direct_case_root/plans/$stub" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$direct_case_root/plans/$stub"
+done
+cat > "$direct_case_root/bin/cargo" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$direct_case_root/cargo.log"
+exit 0
+EOF
+chmod +x "$direct_case_root/bin/cargo"
+direct_stdout="$tmp_dir/rust_direct_entry.stdout"
+direct_stderr="$tmp_dir/rust_direct_entry.stderr"
+set +e
+ROOT="$direct_case_root" \
+PATH="$direct_case_root/bin:$PATH" \
+VERIFY_RUN_ID=direct_entry_case \
+VERIFY_CONSOLE=quiet \
+ENABLE_TIMEOUTS=0 \
+bash "$direct_case_root/plans/lib/rust_gates.sh" >"$direct_stdout" 2>"$direct_stderr"
+direct_rc=$?
+set -e
+[[ "$direct_rc" == "0" ]] || fail "direct rust_gates execution must bootstrap verify env, got rc=$direct_rc"
+assert_contains "$direct_case_root/artifacts/verify/direct_entry_case/rust_runner.meta.json" '"effective": "cargo"'
+assert_contains "$direct_case_root/cargo.log" 'fmt --all -- --check'
+
 echo "PASS: verify accelerators"

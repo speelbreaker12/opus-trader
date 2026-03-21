@@ -1,5 +1,5 @@
 ---
-status: done
+status: in-progress
 priority: P1
 branch: verify
 base: main
@@ -17,6 +17,7 @@ scope_paths:
   - .claude/commands/review-stack.md
   - .claude/hooks/pr-review-gate-hook.sh
   - plans/preflight.sh
+  - plans/fail_closed_coverage.sh
   - plans/verify_gate_contract_check.sh
   - plans/verify_fork.sh
   - plans/verify_scope.sh
@@ -24,6 +25,7 @@ scope_paths:
   - plans/lib/verify_scope_gates.sh
   - plans/lib/rust_gates.sh
   - plans/lib/python_gates.sh
+  - plans/tests/test_fail_closed_gate_map_paths.sh
   - plans/tests/test_preflight_fixture_profiles.sh
   - plans/tests/test_verify_accelerators.sh
   - plans/tests/test_verify_gate_contract_check_batching.sh
@@ -39,18 +41,22 @@ scope_paths:
   - docs/superpowers/plans/2026-03-20-verify-harness-acceleration.md
   - obsidian/Projects/Verify Harness Acceleration.md
   - obsidian/Debriefs/Verify Harness Acceleration 2026-03-20.md
+  - obsidian/Debriefs/Verify Harness Acceleration 2026-03-21 Review Fixes.md
+  - obsidian/Debriefs/Verify Harness Acceleration 2026-03-21 Handoff.md
 ---
 
 ## Current State
-PR #227 is active on `verify` against `main`. The verify-harness acceleration tranche is closed. `verify_fork.sh` uses the shared `verify_env` bootstrap plus shared contract/workflow scope helpers, nonblocking gates distinguish findings from broken harness execution, the Rust runner exposes reusable functions with explicit `sccache` / `nextest` controls and deterministic metadata, `verify_scope.sh` remains a non-authoritative local dispatcher, and parallel failure reporting preserves meaningful wait status plus secondary-failure context. The final closeout also fixed the stale `.claude/commands/review-stack.md` wrapper, hardened `.claude/hooks/pr-review-gate-hook.sh` against stdin-driven hangs, and removed a Bash 3.2 `set -u` empty-array failure in `plans/preflight.sh`. Authoritative `./plans/verify.sh quick` and `./plans/verify.sh full` are green from this worktree. Python-overlap concurrency is explicitly deferred: this repo state does not enter `plans/lib/python_gates.sh` during authoritative verify because there is no `pyproject.toml` or `requirements.txt`, so there is no measured Python slice to justify extra scheduling complexity.
+PR #227 is active on `verify` against `main`. The original acceleration tranche is in branch history, and the current follow-up review-fix slice is ready locally. `fail_closed_coverage.sh` now reserves `rc=1` for real coverage findings and uses `rc=2` for setup/infra faults, `verify_scope.sh workflow` now executes the `.claude` PR-review/wrapper regressions it previously skipped, direct `bash plans/lib/rust_gates.sh` execution now bootstraps the shared verify environment before writing runner metadata, and `verify_scope.sh contract` now shares the authoritative CSP strict-mode auto-detection helper instead of silently relaxing when `specs/CONTRACT.md` or `specs/TRACE.yaml` changed. Fresh local evidence for this follow-up slice is green: targeted harness regressions, `./plans/verify_scope.sh workflow`, `./plans/verify_scope.sh contract`, and authoritative `./plans/verify.sh quick` all passed on 2026-03-21.
 
 ## Commits
+- `pending` — 2026-03-21 — close PR #227 review findings: fail_closed coverage infra exit taxonomy, workflow-scope `.claude` regressions, direct rust_gates bootstrap, and contract-scope CSP strict parity.
 - `7061f36e` — 2026-03-20 — verify harness acceleration tranche landed with fresh authoritative quick/full proof.
 
 ## Key Files
 - .claude/commands/review-stack.md
 - .claude/hooks/pr-review-gate-hook.sh
 - plans/preflight.sh
+- plans/fail_closed_coverage.sh
 - plans/verify_fork.sh
 - plans/verify_gate_contract_check.sh
 - plans/verify_scope.sh
@@ -58,6 +64,7 @@ PR #227 is active on `verify` against `main`. The verify-harness acceleration tr
 - plans/lib/verify_scope_gates.sh
 - plans/lib/rust_gates.sh
 - plans/lib/python_gates.sh
+- plans/tests/test_fail_closed_gate_map_paths.sh
 - plans/tests/test_preflight_fixture_profiles.sh
 - plans/tests/test_verify_accelerators.sh
 - plans/tests/test_verify_gate_contract_check_batching.sh
@@ -74,8 +81,22 @@ PR #227 is active on `verify` against `main`. The verify-harness acceleration tr
 
 ## Debriefs
 - [[Verify Harness Acceleration 2026-03-20]]
+- [[Verify Harness Acceleration 2026-03-21 Review Fixes]]
+
+## Handoffs
+- [[Verify Harness Acceleration 2026-03-21 Handoff]]
 
 ## Log
+### 2026-03-21
+- Fixed the `fail_closed_coverage.sh` exit taxonomy so quick verify only soft-warns on true coverage findings while missing `jq`, missing gate-map state, and other setup faults fail the gate with `rc=2`.
+- Added regression coverage for the new fail-closed taxonomy (`plans/tests/test_fail_closed_gate_map_paths.sh`), workflow-scope inclusion of the `.claude` PR-review/wrapper tests (`plans/tests/test_verify_scope.sh`), and standalone `plans/lib/rust_gates.sh` bootstrap behavior (`plans/tests/test_verify_accelerators.sh`).
+- Extended `plans/lib/verify_scope_gates.sh` so `./plans/verify_scope.sh workflow` now runs `plans/tests/test_pr_review_gate_hook.sh` and `plans/tests/test_review_command_wrappers.sh` instead of reporting green without those surfaces.
+- Sourced `plans/lib/verify_env.sh` from `plans/lib/rust_gates.sh`, added a direct-entry bootstrap via `init_verify_env`, and kept sourced-callers fail-closed with an explicit `VERIFY_ARTIFACTS_DIR` requirement.
+- Shared `compute_csp_strict_changed_files` / `should_enable_csp_strict` into `plans/lib/verify_scope_gates.sh`, removed the silent `declare -F` fallback in `build_csp_trace_cmd auto`, and restored contract-scope CSP strict-mode parity with authoritative verify.
+- Added a red/green regression in `plans/tests/test_verify_scope.sh` that proves contract-scope auto strict mode adds `--strict` for `specs/CONTRACT.md` / `specs/TRACE.yaml` diffs, and updated `plans/tests/test_verify_fork_guardrails.sh` to source the shared helper location.
+- Verified the slice with `bash plans/tests/test_fail_closed_gate_map_paths.sh`, `bash plans/tests/test_verify_scope.sh`, `bash plans/tests/test_verify_accelerators.sh`, `bash plans/tests/test_pr_review_gate_hook.sh`, `bash plans/tests/test_review_command_wrappers.sh`, `bash plans/tests/test_verify_fork_guardrails.sh`, `bash plans/tests/test_rust_gates_smoke_targets.sh`, `bash plans/tests/test_rust_gates_quick_clippy.sh`, `./plans/verify_scope.sh workflow`, `./plans/verify_scope.sh contract`, and `./plans/verify.sh quick`.
+- Updated the Obsidian handoff note to reflect that the contract-scope CSP strict-mode blocker is resolved and the next step is push/CI verification.
+
 ### 2026-03-20
 - Captured the approved design: portable baseline by default, explicit accelerator requests must be deterministic and fail clearly when missing.
 - Split the rollout into two phases: `sccache` and `nextest` first; Python overlap only if timing evidence proves it reduces wall-clock time without destabilizing the harness.

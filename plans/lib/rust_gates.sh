@@ -7,6 +7,7 @@ if [[ -z "${ROOT:-}" ]]; then
 fi
 
 source "$ROOT/plans/lib/verify_utils.sh"
+source "$ROOT/plans/lib/verify_env.sh"
 
 VERIFY_USE_SCCACHE="${VERIFY_USE_SCCACHE:-0}"
 VERIFY_TEST_RUNNER="${VERIFY_TEST_RUNNER:-cargo}"
@@ -81,6 +82,10 @@ record_rust_test_runner_fallback() {
 }
 
 ensure_rust_runner_config() {
+  if [[ -z "${VERIFY_ARTIFACTS_DIR:-}" ]]; then
+    fail "VERIFY_ARTIFACTS_DIR is not set; run init_verify_env first or execute plans/lib/rust_gates.sh directly"
+  fi
+
   if [[ "$RUST_RUNNER_CONFIG_READY" == "1" ]]; then
     return 0
   fi
@@ -250,5 +255,6 @@ run_rust_gates() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  init_verify_env "${VERIFY_RUN_ROOT:-verify}"
   run_rust_gates "$@"
 fi

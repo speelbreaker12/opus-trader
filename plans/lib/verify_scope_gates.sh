@@ -15,6 +15,72 @@ build_contract_crossrefs_cmd() {
   )
 }
 
+compute_csp_strict_changed_files() {
+  local base_ref="$1"
+  local changed=""
+  if ! command -v git >/dev/null 2>&1; then
+    printf '%s\n' "__CSP_STRICT_STATE__:git_unavailable"
+    return 0
+  fi
+
+  if git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
+    changed="$(
+      {
+        git diff --name-only "$base_ref"...HEAD 2>/dev/null || true
+        git diff --name-only --cached 2>/dev/null || true
+        git diff --name-only 2>/dev/null || true
+      } | sed '/^$/d' | sort -u
+    )"
+  else
+    changed="$(
+      {
+        git diff --name-only --cached 2>/dev/null || true
+        git diff --name-only 2>/dev/null || true
+      } | sed '/^$/d' | sort -u
+    )"
+  fi
+
+  if [[ -z "$changed" ]]; then
+    printf '%s\n' "__CSP_STRICT_STATE__:no_changes"
+    return 0
+  fi
+
+  printf '%s\n' "__CSP_STRICT_STATE__:changes_present"
+  printf '%s\n' "$changed"
+}
+
+CSP_STRICT_CHANGED_FILES_CACHE_READY=0
+CSP_STRICT_CHANGED_FILES_CACHE_BASE_REF=""
+CSP_STRICT_CHANGED_FILES_CACHE=""
+
+should_enable_csp_strict() {
+  local base_ref="$1"
+  local cache_state_line=""
+
+  if [[ "$CSP_STRICT_CHANGED_FILES_CACHE_READY" == "0" || "$CSP_STRICT_CHANGED_FILES_CACHE_BASE_REF" != "$base_ref" ]]; then
+    CSP_STRICT_CHANGED_FILES_CACHE="$(compute_csp_strict_changed_files "$base_ref")"
+    CSP_STRICT_CHANGED_FILES_CACHE_BASE_REF="$base_ref"
+    CSP_STRICT_CHANGED_FILES_CACHE_READY=1
+  fi
+
+  if [[ -z "$CSP_STRICT_CHANGED_FILES_CACHE" ]]; then
+    return 1
+  fi
+
+  cache_state_line="${CSP_STRICT_CHANGED_FILES_CACHE%%$'\n'*}"
+  case "$cache_state_line" in
+    "__CSP_STRICT_STATE__:git_unavailable"|"__CSP_STRICT_STATE__:no_changes")
+      return 1
+      ;;
+  esac
+
+  if grep -Eq '(^|/)specs/CONTRACT\.md$|(^|/)specs/TRACE\.yaml$' <<< "$CSP_STRICT_CHANGED_FILES_CACHE"; then
+    return 0
+  fi
+
+  return 1
+}
+
 build_csp_trace_cmd() {
   local strict_mode="${1:-auto}"
 
@@ -26,10 +92,8 @@ build_csp_trace_cmd() {
 
   case "$strict_mode" in
     auto)
-      if declare -F should_enable_csp_strict >/dev/null 2>&1; then
-        if should_enable_csp_strict "$VERIFY_BASE_REF"; then
-          CSP_TRACE_CMD+=(--strict)
-        fi
+      if should_enable_csp_strict "$VERIFY_BASE_REF"; then
+        CSP_TRACE_CMD+=(--strict)
       fi
       ;;
     strict)
@@ -157,6 +221,8 @@ run_workflow_scope_gates() {
   run_workflow_scope_control_surface_checks
   run_workflow_contract_gate
   run_workflow_integration_test_gate "plans/tests/test_workflow_allowlist_coverage.sh"
+  run_workflow_integration_test_gate "plans/tests/test_pr_review_gate_hook.sh"
+  run_workflow_integration_test_gate "plans/tests/test_review_command_wrappers.sh"
   run_workflow_integration_test_gate "plans/tests/test_verify_accelerators.sh"
   run_workflow_integration_test_gate "plans/tests/test_verify_timeout_policy.sh"
   run_workflow_integration_test_gate "plans/tests/test_verify_gate_contract_check_batching.sh"

@@ -81,16 +81,16 @@ assert_contains_line 'cksum)'
 assert_contains_line 'echo "${hash:0:24}"'
 
 # Guardrail: should_enable_csp_strict must cache changed-file set and reuse it.
-assert_contains_line 'compute_csp_strict_changed_files()'
-assert_contains_line 'CSP_STRICT_CHANGED_FILES_CACHE_READY=0'
-assert_contains_line 'if [[ "$CSP_STRICT_CHANGED_FILES_CACHE_READY" == "0" || "$CSP_STRICT_CHANGED_FILES_CACHE_BASE_REF" != "$base_ref" ]]; then'
-assert_contains_line 'CSP_STRICT_CHANGED_FILES_CACHE="$(compute_csp_strict_changed_files "$base_ref")"'
-assert_contains_line '__CSP_STRICT_STATE__:git_unavailable'
-assert_contains_line '__CSP_STRICT_STATE__:no_changes'
-assert_contains_line '__CSP_STRICT_STATE__:changes_present'
-assert_contains_line 'cache_state_line="${CSP_STRICT_CHANGED_FILES_CACHE%%$'"'"'\n'"'"'*}"'
-assert_contains_line '"__CSP_STRICT_STATE__:git_unavailable"|"__CSP_STRICT_STATE__:no_changes"'
-assert_contains_line "grep -Eq '(^|/)specs/CONTRACT\\.md$|(^|/)specs/TRACE\\.yaml$' <<< \"\$CSP_STRICT_CHANGED_FILES_CACHE\""
+assert_scope_gate_contains 'compute_csp_strict_changed_files()'
+assert_scope_gate_contains 'CSP_STRICT_CHANGED_FILES_CACHE_READY=0'
+assert_scope_gate_contains 'if [[ "$CSP_STRICT_CHANGED_FILES_CACHE_READY" == "0" || "$CSP_STRICT_CHANGED_FILES_CACHE_BASE_REF" != "$base_ref" ]]; then'
+assert_scope_gate_contains 'CSP_STRICT_CHANGED_FILES_CACHE="$(compute_csp_strict_changed_files "$base_ref")"'
+assert_scope_gate_contains '__CSP_STRICT_STATE__:git_unavailable'
+assert_scope_gate_contains '__CSP_STRICT_STATE__:no_changes'
+assert_scope_gate_contains '__CSP_STRICT_STATE__:changes_present'
+assert_scope_gate_contains 'cache_state_line="${CSP_STRICT_CHANGED_FILES_CACHE%%$'"'"'\n'"'"'*}"'
+assert_scope_gate_contains '"__CSP_STRICT_STATE__:git_unavailable"|"__CSP_STRICT_STATE__:no_changes"'
+assert_scope_gate_contains "grep -Eq '(^|/)specs/CONTRACT\\.md$|(^|/)specs/TRACE\\.yaml$' <<< \"\$CSP_STRICT_CHANGED_FILES_CACHE\""
 
 # Guardrail: quick-mode fail_closed_coverage must be non-blocking and explicit about timeout behavior.
 assert_contains_line 'run_logged_nonblocking_gate "fail_closed_coverage"'
@@ -169,28 +169,29 @@ assert_line_before 'log "14b) phase0 meta-test"' 'run_logged_or_exit "phase0_met
 
 # Behavior checks: the helpers must be invocable and deterministic where possible.
 extract_fn() {
-  local fn_name="$1"
+  local file="$1"
+  local fn_name="$2"
   awk -v fn="$fn_name" '
     $0 ~ "^" fn "\\(\\)[[:space:]]*\\{" { in_fn=1 }
     in_fn {
       print
       if ($0 == "}") { in_fn=0 }
     }
-  ' "$VERIFY"
+  ' "$file"
 }
 
 tmp_dir="$(mktemp -d)"
 tmp_verify_wrapper_root="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir" "$tmp_verify_wrapper_root"' EXIT
 tmp_fns="$tmp_dir/verify_fork_fns.sh"
-fn_defs="$(extract_fn detect_status_fixture_hash_backend)
-$(extract_fn status_fixture_path_hash)
-$(extract_fn status_fixture_gate_name)
-$(extract_fn run_required_bash_gate)
-$(extract_fn run_logged_nonblocking_gate)
-$(extract_fn compute_csp_strict_changed_files)
-$(extract_fn should_enable_csp_strict)
-$(extract_fn emit_timing_and_warn_summary)"
+fn_defs="$(extract_fn "$VERIFY" detect_status_fixture_hash_backend)
+$(extract_fn "$VERIFY" status_fixture_path_hash)
+$(extract_fn "$VERIFY" status_fixture_gate_name)
+$(extract_fn "$VERIFY" run_required_bash_gate)
+$(extract_fn "$VERIFY" run_logged_nonblocking_gate)
+$(extract_fn "$VERIFY_SCOPE_GATES" compute_csp_strict_changed_files)
+$(extract_fn "$VERIFY_SCOPE_GATES" should_enable_csp_strict)
+$(extract_fn "$VERIFY" emit_timing_and_warn_summary)"
 printf '%s\n' "$fn_defs" > "$tmp_fns"
 
 ENABLE_TIMEOUTS="${ENABLE_TIMEOUTS:-1}"
