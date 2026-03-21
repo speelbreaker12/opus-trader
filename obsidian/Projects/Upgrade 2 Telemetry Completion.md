@@ -3,7 +3,7 @@ status: in-review
 priority: P1
 branch: upgrade2
 base: main
-pr: 223
+pr: 228
 started: "2026-03-20"
 aliases:
   - Upgrade 2 Telemetry
@@ -54,10 +54,10 @@ scope_paths:
 ---
 
 ## Current State
-The previously open Upgrade 2 review gaps are fixed on branch `upgrade2`, but the branch is not ready to be called complete again yet. Preflight now routes post-only through the sink seam, the missing crossing graybox test exists, the remaining leaf seams moved inline instance-metric mutation into observer sinks, routing no longer bypasses the WAL-nonblocking chokepoint sink, and the graybox lint now catches both inline `metrics.record_*()` calls and wrapper-call bypasses. Fresh targeted validation is green (`cargo fmt --all`, `bash plans/lint_graybox_telemetry.sh`, `bash plans/tests/test_lint_graybox_telemetry.sh`, `cargo clippy --workspace --lib -- -D warnings`, `cargo test -p soldier_core --lib -- --nocapture`), but `./plans/verify.sh quick` failed in `wf_test_pr_review_gate_hook` (`artifacts/verify/20260321_100806`), which is outside this slice.
+The previously open Upgrade 2 review gaps are fixed on branch `upgrade2`, and the branch has now been rebased onto `origin/main`, force-pushed, and published as PR #228 against `main`. Preflight now routes post-only through the sink seam, the missing crossing graybox test exists, the remaining leaf seams moved inline instance-metric mutation into observer sinks, routing no longer bypasses the WAL-nonblocking chokepoint sink, and the graybox lint now catches both inline `metrics.record_*()` calls and wrapper-call bypasses. Fresh targeted validation is green (`cargo fmt --all`, `bash plans/lint_graybox_telemetry.sh`, `bash plans/tests/test_lint_graybox_telemetry.sh`, `cargo clippy --workspace --lib -- -D warnings`, `cargo test -p soldier_core --lib -- --nocapture`), but `./plans/verify.sh quick` failed in `wf_test_pr_review_gate_hook` (`artifacts/verify/20260321_100806`), which is outside this slice. Review-stack proof is still missing for this new PR head and must be established before merge.
 
 ## Commits
-- `pending` — 2026-03-21 — close the remaining Upgrade 2 review gaps in preflight/post-only, observer-sink telemetry purity, routing WAL no-gate diagnostics, and graybox lint coverage; targeted validation green, quick verify blocked by unrelated workflow hook failure.
+- `740cda06` — 2026-03-21 — close the remaining Upgrade 2 review gaps in preflight/post-only, observer-sink telemetry purity, routing WAL no-gate diagnostics, and graybox lint coverage; rebased onto `origin/main`, pushed, and published as PR #228 with the unrelated quick-verify blocker still explicit.
 - `240baeaf` — 2026-03-20 — complete Upgrade 2 graybox telemetry migration, preserve wrapper parity and diagnostic context, add graybox telemetry lint plus regression coverage.
 - `1b33802d` — 2026-03-20 — close PR #223 review gaps in graybox lint coverage, smoke fixture accounting, event payload typing, and wrapper/graybox telemetry tests.
 - `d626c5af` — 2026-03-20 — fix `plans/preflight.sh` full-mode empty-array handling so `set -u` does not abort when the serial full-only fixture list is empty.
@@ -84,7 +84,7 @@ The previously open Upgrade 2 review gaps are fixed on branch `upgrade2`, but th
 - [[Upgrade 2 Telemetry Completion 2026-03-21]]
 
 ## PR
-- PR #223: https://github.com/speelbreaker12/opus-trader/pull/223
+- PR #228: https://github.com/speelbreaker12/opus-trader/pull/228
 
 ## Log
 ### 2026-03-20
@@ -112,3 +112,6 @@ The previously open Upgrade 2 review gaps are fixed on branch `upgrade2`, but th
 - Tightened `plans/lint_graybox_telemetry.sh` so graybox seams now fail on inline `metrics.record_*()` calls and wrapper-call bypasses such as `check_post_only(...)`, then added regression fixtures proving both patterns fail closed.
 - Re-validated the telemetry slice with `cargo fmt --all`, `bash plans/lint_graybox_telemetry.sh`, `bash plans/tests/test_lint_graybox_telemetry.sh`, `cargo clippy --workspace --lib -- -D warnings`, and `cargo test -p soldier_core --lib -- --nocapture`.
 - Ran `./plans/verify.sh quick`; the Upgrade 2 slice stayed green, but the run failed outside this scope in `wf_test_pr_review_gate_hook` (`artifacts/verify/20260321_100806/FAILED_GATE`) because the workflow test still expects `gh pr create` to hard-block without a review marker while the current hook only warns and allows the command to proceed.
+- Rebasing the branch onto `origin/main` produced new head `740cda06` without conflicts, and `git push --force-with-lease` succeeded.
+- Opened PR #228 against `main` with the targeted validation listed and the unrelated `wf_test_pr_review_gate_hook` quick-verify blocker called out in the PR body.
+- Confirmed there is no current `artifacts/pr-review-gate/upgrade2.json` marker for the rebased head; because no new story-scoped premortem was present for this post-merge slice, review-stack proof remains an explicit follow-up before merge rather than an implicit claim.
