@@ -16,7 +16,7 @@ type: debrief
 
 ## Handoff
 - Branch: `recover/claude-skill-path-fixes-20260321`
-- Worktree: `/Users/admin/Desktop/opus-trader/Desktop/wt_claude_skill_path_fixes`
+- Worktree: `$WORKTREES/wt_claude_skill_path_fixes`
 - PR: `229`
 - Stop point: branch pushed and PR #229 opened for the isolated two-file recovery slice
 - Next step: wait for review, or investigate the unrelated `workflow_verify.sh` mechanical-verification timeout if full gate proof is needed before merge
