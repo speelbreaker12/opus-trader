@@ -7,7 +7,7 @@ date: "2026-03-20"
 - `240baeaf` — shipped code for Upgrade 2 graybox telemetry completion
 - `1b33802d` — PR #223 review-closure fixes for graybox lint coverage, smoke fixture accounting, event payload typing, and wrapper/graybox telemetry gaps
 - `d626c5af` — preflight full-mode empty-array fix for bash-3.2 `set -u` during merge verification
-- `pending` — workflow harness follow-up fixing the review-stack wrapper contract and stale deleted verify test entry
+- `9c11df57` — workflow harness follow-up fixing the review-stack wrapper contract and stale deleted verify test entry
 
 ## 0) What shipped
 - Feature/behavior: Completed Upgrade 2 graybox telemetry seams across the remaining execution/risk paths, closed the PR #223 review gaps, fixed the preflight full-mode empty-array bash-3.2 bug, then aligned the review-stack wrapper and verify workflow test list with the current harness contract.
