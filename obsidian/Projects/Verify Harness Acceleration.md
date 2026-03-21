@@ -86,11 +86,15 @@ PR #227 is active on `verify` against `main`. The original acceleration tranche 
 ## Debriefs
 - [[Verify Harness Acceleration 2026-03-20]]
 - [[Verify Harness Acceleration 2026-03-21 Review Fixes]]
+- [[Verify Harness Acceleration 2026-03-21 Parallel Gate Invariant]]
 
 ## Handoffs
 - [[Verify Harness Acceleration 2026-03-21 Handoff]]
 
 ## Log
+### 2026-03-21 (parallel gate invariant)
+- Investigated P1 concern about parallel gate wait_rc index alignment when `VERIFY_PARALLEL_JOBS` < group size. Traced the FIFO discipline: `PARALLEL_ACTIVE_PIDS` is appended in gate-insertion order, `parallel_wait_oldest` always pops index 0 (FIFO), and `PARALLEL_WAIT_NEXT_INDEX` increments monotonically — so `WAIT_RCS[i]` always corresponds to `NAMES[i]` regardless of job-limit evictions. Additionally, `finish_parallel_group_or_exit` prefers the `.rc` artifact file as the primary source; `WAIT_RCS` is a fallback only. No bug found. Documented the invariant with a comment block above `parallel_wait_oldest`.
+
 ### 2026-03-21
 - Fixed the `fail_closed_coverage.sh` exit taxonomy so quick verify only soft-warns on true coverage findings while missing `jq`, missing gate-map state, and other setup faults fail the gate with `rc=2`.
 - Expanded the review-fix slice scope to `.codex/commands/commit.md` and `.codex/commands/push-pr.md`, restoring the canonical wrapper sentence expected by `plans/tests/test_review_command_wrappers.sh` while preserving the repo-local skill resolution logic in those Codex command files.
