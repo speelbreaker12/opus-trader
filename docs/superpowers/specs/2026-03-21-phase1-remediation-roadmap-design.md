@@ -9,6 +9,7 @@ The roadmap must:
 - treat the current workflow baseline red state as a precondition, not background noise
 - sequence work by risk and proof burden rather than by audit section order
 - keep each implementation story small enough to land independently
+- keep CONDITIONAL_PASS cleanup separate from core regression remediation
 - preserve the audit branch as evidence and planning, not implementation scope
 
 ## Context
@@ -28,6 +29,8 @@ The audit identifies these shipped Phase 1 regressions:
 - `EMCLOSE-006`
 
 The audit also records a workflow precondition: current `main` is not considered landable for follow-on work until the `wf_test_pr_review_gate_hook` baseline issue is inherited from, or fixed on, the chosen integration base.
+
+The audit's WAL verdict matters to sequencing. `RecordedBeforeDispatch / WAL` is marked `CONDITIONAL_PASS`, production dispatch uses the adapter path, and `WAL-002` is recorded as an operational monitoring concern rather than a must-fix blocker. Those findings remain valid cleanup targets, but they should not sit on the core remediation critical path ahead of real Phase 1 regressions.
 
 ## Approaches Considered
 
@@ -77,9 +80,9 @@ Cons:
 
 ## Recommendation
 
-Use the safety-first mergeable-stories approach.
+Use the safety-first mergeable-stories approach, with a narrow critical path and an explicit cleanup lane.
 
-This is the best match for the repo's actual constraint: mergeable, contract-proven increments matter more than minimizing branch count. Each story should change one behavioral surface or one tightly coupled defect family, with explicit proof tied back to the audit item and contract expectation.
+This is the best match for the repo's actual constraint: mergeable, contract-proven increments matter more than minimizing branch count. Each core story should change one behavioral surface or one tightly coupled defect family, with explicit proof tied back to the audit item and contract expectation. Cleanup from a CONDITIONAL_PASS subsystem should stay optional unless new evidence shows it has become a true landing blocker.
 
 ## Roadmap Structure
 
@@ -94,9 +97,13 @@ Before any remediation story is considered landable, the chosen integration base
 
 This precondition should be treated as story zero or as a branch-base requirement. It must not be mixed into the Phase 1 remediation stories.
 
-### Lane B: Phase 1 remediation
+### Lane B: Core Phase 1 remediation
 
 Once the base is green enough to land work, Phase 1 remediation proceeds as independent stories in risk order.
+
+### Lane C: Optional cleanup
+
+Conditional-pass cleanup that does not block safe landing belongs after the core remediation lane. It can be scheduled once the real Phase 1 regressions are closed or pulled forward only if fresh evidence shows it has become a release blocker.
 
 ## Proposed Story Sequence
 
@@ -159,7 +166,7 @@ Purpose:
 
 Scope:
 
-- reject code presence
+- `MarginHeadroomInputMissing` across the runtime enum, manifests, and generated/codegen-facing surfaces
 - NaN and missing-input handling
 - `account_summary_max_age_ms` wiring
 - required observability counters and logs
@@ -167,6 +174,7 @@ Scope:
 Exit criteria:
 
 - `MarginHeadroomInputMissing` exists and is emitted where required
+- the reject-code registry and generated/codegen-facing surfaces agree with the runtime behavior
 - NaN or missing inputs degrade as required instead of escalating to `Kill`
 - account-summary freshness enforcement uses the contract value
 - required observability is present and test-covered
@@ -175,7 +183,7 @@ Out of scope:
 
 - arithmetic cleanup that does not change missing or stale input semantics
 
-### Story 3: Margin Gate Math Correctness
+### Story 3: Margin Gate Interface, Wiring, and Math Correctness
 
 Audit items:
 
@@ -184,15 +192,17 @@ Audit items:
 
 Purpose:
 
-- align the margin gate's numerical behavior with the audited contract expectations without mixing it into the fail-closed semantic story
+- align the margin gate's required inputs, caller wiring, and numerical behavior with the audited contract expectations without mixing it into the fail-closed semantic story
 
 Scope:
 
-- `initial_margin` consumption and validation
+- `initial_margin` field addition or restoration on `MarginGateInput` and its callers
+- `initial_margin` validation and consumption
 - `mm_util` denominator rule
 
 Exit criteria:
 
+- `MarginGateInput` exposes the contract-required `initial_margin` input through the relevant wiring surfaces
 - `initial_margin` is used or validated as required by the contract
 - `mm_util` uses the contract-safe denominator rule such as `max(equity, epsilon)`
 
@@ -225,7 +235,9 @@ Out of scope:
 
 - implementing PolicyGuard itself
 
-### Story 5: WAL Phase 1 Cleanup
+## Optional Cleanup Lane
+
+### Cleanup Story: WAL Phase 1 Cleanup
 
 Audit items:
 
@@ -236,7 +248,13 @@ Audit items:
 
 Purpose:
 
-- remove production paths that imply WAL approval or gate success without a real durable record
+- remove residual WAL cleanup findings that remain after the core regression lane is complete
+
+Why this is not on the critical path:
+
+- the audit verdict for `RecordedBeforeDispatch / WAL` is `CONDITIONAL_PASS`
+- production uses the adapter path
+- `WAL-002` is recorded as an operational monitoring concern, not a mandatory code-change blocker
 
 Scope:
 
@@ -282,6 +300,7 @@ Recommended commands vary by story, but should stay scoped. Example families:
 - Keep the audit note branch doc-only.
 - Do not widen `project/subsystem-audit-phase1-revalidation` to own remediation code.
 - Base each remediation branch on the clean integration branch that already contains Story 0.
+- Schedule WAL cleanup from the post-remediation base only if it still justifies a dedicated branch.
 - Use one worktree per remediation story.
 - Keep stories mergeable and independently reviewable.
 
@@ -316,8 +335,9 @@ This roadmap does not include:
 The recommended plan is:
 
 1. clear or inherit the workflow baseline fix first
-2. land five mergeable Phase 1 remediation stories in risk order
-3. keep the audit branch as evidence and planning only
-4. demand contract-proven exits for each story instead of one large remediation batch
+2. land four core Phase 1 remediation stories in risk order
+3. treat WAL cleanup as an optional post-remediation lane unless fresh evidence promotes it
+4. keep the audit branch as evidence and planning only
+5. demand contract-proven exits for each story instead of one large remediation batch
 
 This provides the narrowest path to reducing real Phase 1 risk while preserving the repo's verification discipline.

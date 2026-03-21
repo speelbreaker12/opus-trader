@@ -20,10 +20,11 @@ scope_paths:
 
 ## Current State
 
-Dedicated planning branch/worktree for the Phase 1 remediation roadmap spec. The design is approved in chat and captured as a planning-only spec batch without widening the audit-note branch.
+Dedicated planning branch/worktree for the Phase 1 remediation roadmap spec. The initial spec commit is written, and the design is being tightened after user review without widening the audit-note branch.
 
 ## Commits
-- `pending` — 2026-03-21 — write the Phase 1 remediation roadmap spec and supporting Obsidian tracking files.
+- `c72bddc5` — 2026-03-21 — write the initial Phase 1 remediation roadmap spec and supporting Obsidian tracking files.
+- `pending` — 2026-03-21 — incorporate review feedback: move WAL to optional cleanup, widen Story 2 registry/codegen scope, and clarify Story 3 as interface+wiring+math.
 
 ## Key Files
 - docs/superpowers/specs/2026-03-21-phase1-remediation-roadmap-design.md
@@ -37,5 +38,6 @@ Dedicated planning branch/worktree for the Phase 1 remediation roadmap spec. The
 ### 2026-03-21
 - Created a dedicated planning worktree and branch so the roadmap spec can be committed without widening the audit-note branch scope.
 - Captured the approved design for a mergeable, safety-first remediation roadmap for all audited Phase 1 regressions.
-- Chose a hard workflow-baseline precondition plus five follow-on remediation stories in risk order.
+- Chose a hard workflow-baseline precondition, four core remediation stories in risk order, and a separate optional WAL cleanup lane.
 - Confirmed the dedicated planning worktree builds cleanly with `cargo build --workspace`.
+- Incorporated user review that demotes WAL cleanup off the critical path, widens Story 2 to include reject-code surface alignment, and reframes Story 3 as interface+wiring+math work.
