@@ -1,63 +1,39 @@
 ---
-status: in-progress
+status: done
 priority: P1
-branch: workflow/obsidian-fixes
+branch: workflow/obsidian-work-tracking-closeout
 base: main
-pr: 222
+pr:
 started: "2026-03-16"
 scope_paths:
-  - .codex/commands/**
   - .claude/commands/**
   - .claude/hooks/**
-  - .claude/scripts/**
   - .claude/settings.json
   - .claude/skills/**
   - .githooks/**
   - AGENTS.md
   - SKILLS/**
   - docs/skills/index.md
-  - docs/workflow-index.md
   - obsidian/**
-  - plans/code_review_expert_guard.sh
-  - plans/lib/obsidian_frontmatter.py
   - plans/obsidian_commit_guard.sh
-  - plans/post_rebase_frontmatter_check.sh
   - plans/project_scope_guard.sh
   - plans/open_project_pr.sh
   - plans/tests/**
   - plans/verify_fork.sh
-  - plans/worktree_commit_push.sh
   - plans/workflow_files_allowlist.txt
   - plans/workflow_verify.sh
-  - plans/write_review_gate_marker.sh
   - scripts/setup_hooks.sh
 ---
 
 ## Current State
-In progress. Obsidian debrief now acts as the default session handoff for normal project work, and the repo is adding Codex mirrors for `/commit` and `/push-pr` so the same workflow skills are available outside Claude-specific wrappers.
+The `workflow/obsidian-skills-clean` slice is complete and merged as PR `#217` via merge commit `071e3c84`. No active execution work remains on that merged branch. This closeout branch exists only to normalize the project metadata, leave a final debrief, and retire the stale merged branch ref so any future workflow work starts from a fresh main-based lane.
 
 ## Commits
-- `7dbc7742` — 2026-03-19 — fix obsidian hook tests: align with branch-ownership routing, add frontmatter module to test fixtures, fix precommit no-op test
-- `098edb3e` — 2026-03-19 — guard improvements: formatting-only detection, review currency, shared parser, PR gate marker, skill scope refinements
-- `ad96c4bf` — 2026-03-19 — disable redundant Claude Code hooks, context-aware dangerous-command-blocker
-- `c1ec15f0` — 2026-03-19 — block git commit from bare repo root
-- `6875b4f6` — 2026-03-19 — skip cargo verify for non-crate branches, worktree collision check in main-recovery
-- `pending` — 2026-03-19 — add codex commit and push-pr wrappers
-- `e56b088e` — 2026-03-19 — update commit refs and runtime state
-- `6d235f31` — 2026-03-19 — add /merge-cleanup skill, restructure skills index, add workflow index
-- `b007c317` — 2026-03-19 — debrief template upgrade, workspace policy expansion, test fixture alignment
-- `821fabe3` — 2026-03-19 — risk-class commit gates, shared frontmatter parser, context hook warnings
-- `c1207cb2` — 2026-03-20 — publish-boundary guards and push safety fixes
-- `051d9fb8` — 2026-03-20 — disable hook leakage in temp repo fixtures (core.hooksPath=/dev/null)
-- `c3819187` — 2026-03-20 — unset GIT_DIR in all test fixtures to prevent env leakage
-- `9d69e2ac` — 2026-03-20 — update project note with push result and commit refs
-- `d7ed70d7` — 2026-03-20 — shell lint, slim commit skill, SKIP_VERIFY_ONLY fast push, fix skill wrappers
-- `754ca95a` — 2026-03-20 — harden command blocker, obsidian gate in pre-commit, update docs
-- `1c59ee13` — 2026-03-20 — merge-cleanup: remove verify.sh full gate, update obsidian tracking
+- `071e3c84` — 2026-03-17 — Merge PR #217 (`workflow/obsidian-skills-clean`) into `main`.
+- `pending` — 2026-03-17 — post-commit prints dashboard auto-sync status when `obsidian/Active Projects.md` changed.
+- `pending` — 2026-03-21 — Close out the merged workflow tracking slice and retire the stale `workflow/obsidian-skills-clean` branch ref.
 
 ## Key Files
-- .codex/commands/commit.md
-- .codex/commands/push-pr.md
 - obsidian/Templates/Project.md
 - obsidian/Templates/Debrief.md
 - .claude/hooks/obsidian-context-hook.sh
@@ -69,10 +45,7 @@ In progress. Obsidian debrief now acts as the default session handoff for normal
 ## Debriefs
 - [[Obsidian Work Tracking 2026-03-17 Post-Commit Dashboard Sync Notice]]
 - [[Obsidian Work Tracking 2026-03-19 Workflow Skill Split]]
-- [[Obsidian Work Tracking 2026-03-19 Guard Hardening]]
-- [[Obsidian Work Tracking 2026-03-19 Codex Command Mirrors]]
-- [[Obsidian Workflow Fixes 2026-03-19 Guard Improvements]]
-- [[Obsidian Work Tracking 2026-03-19 Test Alignment]]
+- [[Obsidian Work Tracking 2026-03-21 Merge Closeout]]
 
 ## Log
 ### 2026-03-16
@@ -89,12 +62,7 @@ In progress. Obsidian debrief now acts as the default session handoff for normal
 ### 2026-03-17
 - Enabled context7 plugin in .claude/settings.json
 - Expanded AGENTS.md with Warp/Codex build/test/architecture instructions
-### 2026-03-19
-- Mirrored `/commit` and `/push-pr` into `.codex/commands/` so Codex can invoke the same repo-backed skills as Claude.
-- Extended `plans/tests/test_review_command_wrappers.sh` to prove both Claude and Codex command wrappers point at the same `SKILLS/` source files.
-### 2026-03-20
-- Found and fixed GIT_DIR environment leak: pre-push hook's verify.sh inherits GIT_DIR from the parent git process, causing test repos to operate on the parent repo instead of their temp repos. Fixed by adding `core.hooksPath=/dev/null` and `unset GIT_DIR` in all 32 test fixtures.
-- Pushed 3 new commits to PR #222 (branch workflow/obsidian-fixes, now at c3819187).
-- Pushed 2 more commits to PR #222: 9d69e2ac (project note update), d7ed70d7 (shell lint, slim commit skill, SKIP_VERIFY_ONLY fast push, fix skill wrappers). Branch now at d7ed70d7.
-- Pushed 754ca95a to PR #222 (merge not needed — branch already up to date with origin/main). Branch now at 754ca95a. Note: `.githooks/pre-push` overlaps with PR #225.
-- Pushed 1c59ee13 to PR #222 (no merge needed — 0 commits behind origin/main). Branch now at 1c59ee13. 25 commits ahead of main, 73 files changed.
+### 2026-03-21
+- Confirmed PR #217 merged to `main` as `071e3c84` and that `workflow/obsidian-skills-clean` is no longer an active execution lane.
+- Opened `workflow/obsidian-work-tracking-closeout` only to normalize this project note and add a final debrief after the merge.
+- Retired the stale `origin/workflow/obsidian-skills-clean` branch ref so future workflow work starts from a fresh main-based lane.
