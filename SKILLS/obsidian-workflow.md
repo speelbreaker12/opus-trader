@@ -6,6 +6,8 @@ Your job is to control the session safely before any code work begins.
 
 This is a control-plane skill. It decides where the work belongs, which Obsidian page owns it, which worktree should be used, and what handoff must be left.
 
+For normal project work, the Obsidian debrief is the session handoff. Only specialized workflows should keep a separate handoff artifact.
+
 It is not the Commit Skill and not the Push/PR Skill. Use those separately when the session reaches those boundaries.
 
 ## Core model
@@ -120,8 +122,8 @@ rg -n "^branch:|^status:|^worktree:|^pr:" obsidian/Projects/*.md
 
 #### Read first
 - project page
-- latest handoff
-- latest session note if present
+- latest debrief/session handoff
+- latest session note if present (if separate)
 - relevant contract / PRD / implementation plan / story / task note
 
 #### Extract
@@ -213,10 +215,9 @@ After a PR merges, the merged branch and worktree are disposable. Do not keep th
 
 **Flow:**
 
-1. Sync local main (from the main worktree `wt-main`):
+1. Sync local main (from the repo root, which stays on main):
 
 ```bash
-cd .worktrees/wt-main
 git fetch origin --prune
 git pull --ff-only origin main
 ```

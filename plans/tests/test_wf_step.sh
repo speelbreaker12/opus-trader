@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 # Tests for plans/wf_step.sh progress tracker.
 #
@@ -77,6 +79,7 @@ trap cleanup EXIT
 
 cd "$TMPDIR"
 git init -q
+git config core.hooksPath /dev/null
 git config user.email "test@test.com"
 git config user.name "Test"
 
