@@ -1,0 +1,46 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "contract-gap-detector/1.0.0",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "2.2.2 Definition / GREEN criteria",
+      "category": "missing_fail_closed",
+      "severity": "P1",
+      "description": "The definition makes joinability part of the Evidence Chain, but the GREEN criteria never define a not-GREEN condition when WAL, TruthCapsule, and Decision Snapshot artifacts exist but cannot be joined.",
+      "evidence": {
+        "line": 15,
+        "quote": "The following MUST be writable + joinable for every dispatched open-intent:"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an explicit join-integrity condition that forces `EvidenceChainState != GREEN` when required evidence artifacts are present but not joinable."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "2.2.2 AT-414",
+      "category": "gate_interaction_gap",
+      "severity": "P1",
+      "description": "AT-414 requires an OPEN not to dispatch even though the Given clause already says that OPEN filled, so the test is temporally impossible as written.",
+      "evidence": {
+        "line": 79,
+        "quote": "Pass criteria: EvidenceChainState not GREEN; OPEN does not dispatch.",
+        "context": "AT-414 starts with: `Given: an OPEN intent fills and the attribution row is missing or fails to write.`"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Rewrite AT-414 so the attribution failure blocks subsequent OPEN intents after the failure is observed, not the already-filled OPEN."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "2.2.2 Invariant / Acceptance Tests",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "The invariant requires `RiskState::Degraded` under non-CSP profiles when EvidenceChainState is not GREEN, but no acceptance test explicitly verifies that state transition.",
+      "evidence": {
+        "line": 26,
+        "quote": "EvidenceGuard triggers `RiskState::Degraded`; PolicyGuard computes `TradingMode::ReduceOnly`"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an acceptance test that asserts `RiskState::Degraded` for GOP/FULL when `EvidenceChainState != GREEN` and verifies recovery after the cooldown window."
+    }
+  ]
+}

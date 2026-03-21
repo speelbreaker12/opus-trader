@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "phase1",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "2.2.2 EvidenceGuard",
+      "category": "missing_fail_closed",
+      "severity": "P1",
+      "description": "The section defines the evidence chain as writable and joinable, but the GREEN criteria only cover write errors, freshness, and queue pressure. A broken evidence join can therefore stay GREEN and leave OPEN permission fail-open.",
+      "evidence": {
+        "line": 15,
+        "quote": "The following MUST be writable + joinable for every dispatched open-intent:"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an explicit joinability criterion and paired ATs so missing or mismatched evidence links force not-GREEN and block OPEN intents."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "2.2.2 EvidenceGuard",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "The normative text requires GREEN recovery to remain stable for a cooldown window, but the listed ATs only prove a clear path with `evidenceguard_global_cooldown = 0`. There is no paired AT showing a non-zero cooldown keeps GREEN blocked until it expires.",
+      "evidence": {
+        "line": 26,
+        "quote": "until GREEN recovers and remains stable for the cooldown window."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an AT where `evidenceguard_global_cooldown` is non-zero and longer than the clear window, and GREEN stays blocked until the longer timer expires."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "2.2.2 EvidenceGuard",
+      "category": "weak_normative",
+      "severity": "P2",
+      "description": "The permission rule conflates CLOSE/HEDGE/CANCEL handling with the cancel/replace risk-increase qualifier, so it is unclear whether that qualifier applies only to cancel/replace or also to CLOSE/HEDGE.",
+      "evidence": {
+        "line": 24,
+        "quote": "CLOSE / HEDGE / CANCEL intents are allowed only if the cancel/replace is NOT risk-increasing per \u00a72.2.5"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Split this into separate normative bullets for CLOSE/HEDGE/CANCEL permissions and the cancel/replace risk-increase restriction."
+    }
+  ]
+}

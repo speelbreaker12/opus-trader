@@ -1,0 +1,153 @@
+# Contract Proposals
+
+- run_id: `phase2-mar20codexhardened-ec-20260320_212954-8cae5620`
+- proposals_file_hash: `c19a46b21809b6b6a686d599ceece49cd760092c0b9e2d36ef55b742e85df48b`
+- proposal_count: `4`
+
+## P-001
+
+- fixture: `s3_1_emergency_close_latest`
+- source_path: `contract/phase2/outputs/phase2-mar20codexhardened-ec-20260320_212954-8cae5620/s3_1_emergency_close_latest/proposals.json`
+- section: `3.1 Deterministic Emergency Close`
+- source_finding: `F-001`
+- source_finding_category: `missing_fail_closed`
+- change_type: `new_requirement`
+- status: `rejected`
+- dedupe_key: `3.1-emergency-close-residual-exposure-fail-closed`
+
+### Rationale
+
+Step 3 currently allows emergency close to proceed to logging while residual exposure remains after a failed or partially filled hedge. The contract needs an explicit fail-closed consequence so unchanged exposure cannot coexist with new OPEN permissions.
+
+### Proposed Text
+
+```text
+After step 3, add: "If any net exposure remains after the bounded IOC close attempts and any bounded hedge attempt, the system MUST immediately enter a fail-closed state of at least `ReduceOnly` and MUST block new OPEN intents for the affected scope. The open-permission latch MUST remain closed until explicit reconciliation confirms residual exposure is zero. This requirement applies when the hedge is rejected, times out, returns a venue error, or only partially fills."
+```
+
+### Diff Preview
+
+```diff
+--- a/specs/CONTRACT.md
++++ b/specs/CONTRACT.md
+@@ -21,2 +21,4 @@
+ 3. If still exposed after retries: submit **reduce-only perp hedge** to neutralize delta (bounded size). If hedge dispatch fails (rejected, timeout, or venue error), log the failure and proceed to step 4 with exposure unchanged; the system MUST NOT retry the hedge indefinitely. If the hedge is partially filled, treat the partial fill as partial success: account for the filled quantity in exposure reduction and proceed to step 4 with the remaining exposure; MUST NOT retry for the unfilled remainder.
++3a. If any net exposure remains after step 3 or after step 4 records the outcome, the system MUST immediately enter a fail-closed state of at least `ReduceOnly` and MUST block new OPEN intents for the affected scope until explicit reconciliation confirms residual exposure is zero.
++3b. Residual exposure after a failed or partially filled hedge MUST keep the open-permission latch closed for the affected scope; the latch MUST NOT reopen automatically on timer expiry alone.
+ 4. Log `AtomicNakedEvent` with group_id + exposure + time-to-delta-neutral.
+```
+
+## P-002
+
+- fixture: `s3_1_emergency_close_latest`
+- source_path: `contract/phase2/outputs/phase2-mar20codexhardened-ec-20260320_212954-8cae5620/s3_1_emergency_close_latest/proposals.json`
+- section: `3.1 Deterministic Emergency Close / AT-236`
+- source_finding: `F-002`
+- source_finding_category: `gate_interaction_gap`
+- change_type: `new_requirement`
+- status: `proposed`
+- dedupe_key: `3.1-emergency-close-gate-latch-interaction-rule`
+
+### Rationale
+
+AT-236 only exempts Liquidity Gate, leaving the rest of the execution-gate and latch behavior undefined during emergency close. The contract should state which blockers are bypassed for risk-reducing dispatch and which blockers may still stop the path.
+
+### Proposed Text
+
+```text
+Add an explicit emergency-close gate interaction rule: "Emergency-close IOC close attempts and the bounded reduce-only hedge are risk-reducing dispatches. Any execution gate or latch whose normal role is to block new or larger exposure MUST NOT block these dispatches. The contract MUST explicitly list each bypassed gate or latch and each blocker that remains in force during emergency close. Any blocker that remains in force MUST fail closed deterministically, emit exactly one `AtomicNakedEvent` with remaining exposure, and keep OPEN intents blocked until reconciliation confirms residual exposure is zero." Add REQUIRED acceptance tests for each listed bypassed gate or latch and each listed retained blocker.
+```
+
+### Diff Preview
+
+```diff
+--- a/specs/CONTRACT.md
++++ b/specs/CONTRACT.md
+@@ -85,6 +85,10 @@
+ AT-236
+ - Given: Liquidity Gate reject conditions are present.
+ - When: emergency close runs.
+ - Then: emergency close still submits IOC close attempts (Liquidity Gate does NOT block it).
+ - Pass criteria: IOC close attempts are submitted.
+ - Fail criteria: emergency close blocked by Liquidity Gate.
++**Emergency-close gate interaction rule:**
++- Emergency-close IOC close attempts and the bounded reduce-only hedge are risk-reducing dispatches. Any execution gate or latch whose normal role is to block new or larger exposure MUST NOT block these dispatches.
++- The contract MUST explicitly list each bypassed gate or latch and each blocker that remains in force during emergency close.
++- Any blocker that remains in force MUST fail closed deterministically, emit exactly one `AtomicNakedEvent` with remaining exposure, and keep OPEN intents blocked until reconciliation confirms residual exposure is zero.
+```
+
+## P-003
+
+- fixture: `s3_1_emergency_close_latest`
+- source_path: `contract/phase2/outputs/phase2-mar20codexhardened-ec-20260320_212954-8cae5620/s3_1_emergency_close_latest/proposals.json`
+- section: `3.1 Deterministic Emergency Close`
+- source_finding: `F-003`
+- source_finding_category: `missing_at_pair`
+- change_type: `new_requirement`
+- status: `proposed`
+- dedupe_key: `3.1-emergency-close-retry-cap-buffer-schedule-at`
+
+### Rationale
+
+The algorithm makes the three-attempt ceiling and the 1x/2x/4x close-buffer schedule normative, but there is no acceptance test that proves either bound. That gap allows retry-count or buffer-growth regressions to pass unnoticed.
+
+### Proposed Text
+
+```text
+Add a REQUIRED acceptance test: "Given attempt 1 and attempt 2 partially fill while exposure remains. When emergency close schedules retries. Then at most three IOC close attempts are submitted total, including the initial attempt; attempt 1 uses `close_buffer_ticks`, attempt 2 uses `2 * close_buffer_ticks`, and attempt 3 uses `4 * close_buffer_ticks`; no fourth IOC close attempt is permitted. Pass criteria: dispatch records show exactly the `1x`, `2x`, `4x` buffer schedule with a hard cap of three total attempts. Fail criteria: any fourth IOC close attempt occurs, or any retry uses a buffer other than `close_buffer_ticks`, `2 * close_buffer_ticks`, or `4 * close_buffer_ticks`."
+```
+
+### Diff Preview
+
+```diff
+--- a/specs/CONTRACT.md
++++ b/specs/CONTRACT.md
+@@ -64,6 +64,12 @@
+ AT-235
+ - Given: one leg filled and the book thins.
+ - When: emergency close runs.
+ - Then: close attempts run and fallback hedge executes if still exposed; exposure goes to ~0.
+ - Pass criteria: bounded close attempts then hedge fallback if needed; exposure neutralized.
+ - Fail criteria: no close attempts or exposure remains.
++AT-NEW
++- Given: attempt 1 and attempt 2 partially fill while exposure remains.
++- When: emergency close schedules bounded IOC retries.
++- Then: at most three IOC close attempts are submitted total; attempt 1 uses `close_buffer_ticks`, attempt 2 uses `2 * close_buffer_ticks`, and attempt 3 uses `4 * close_buffer_ticks`; no fourth IOC close attempt is permitted.
++- Pass criteria: dispatch records show exactly the `1x`, `2x`, `4x` buffer schedule with a hard cap of three total attempts.
++- Fail criteria: any fourth IOC close attempt occurs, or any retry uses a buffer other than `close_buffer_ticks`, `2 * close_buffer_ticks`, or `4 * close_buffer_ticks`.
+```
+
+## P-004
+
+- fixture: `s3_1_emergency_close_latest`
+- source_path: `contract/phase2/outputs/phase2-mar20codexhardened-ec-20260320_212954-8cae5620/s3_1_emergency_close_latest/proposals.json`
+- section: `3.1 Deterministic Emergency Close / AT-235`
+- source_finding: `F-004`
+- source_finding_category: `weak_normative`
+- change_type: `new_requirement`
+- status: `pending_scope_review`
+- dedupe_key: `3.1-at235-exact-zero-success-criterion`
+
+### Rationale
+
+AT-235 uses `~0`, which leaves room for incompatible residual-exposure tolerances across implementations. The success path should use an exact condition, while non-zero residual outcomes remain covered by the existing hedge-failure and partial-hedge tests.
+
+### Proposed Text
+
+```text
+Replace AT-235 success wording with: "Then: close attempts run and fallback hedge executes if still exposed; successful neutralization requires `exposure_usd_after == 0`. Pass criteria: bounded close attempts then hedge fallback if needed; `exposure_usd_after == 0` at completion. Fail criteria: no close attempts occur, or `exposure_usd_after != 0` after the path completes."
+```
+
+### Diff Preview
+
+```diff
+--- a/specs/CONTRACT.md
++++ b/specs/CONTRACT.md
+@@ -64,3 +64,3 @@
+-- Then: close attempts run and fallback hedge executes if still exposed; exposure goes to ~0.
+-- Pass criteria: bounded close attempts then hedge fallback if needed; exposure neutralized.
+-- Fail criteria: no close attempts or exposure remains.
++- Then: close attempts run and fallback hedge executes if still exposed; successful neutralization requires `exposure_usd_after == 0`.
++- Pass criteria: bounded close attempts then hedge fallback if needed; `exposure_usd_after == 0` at completion.
++- Fail criteria: no close attempts occur, or `exposure_usd_after != 0` after the path completes.
+```

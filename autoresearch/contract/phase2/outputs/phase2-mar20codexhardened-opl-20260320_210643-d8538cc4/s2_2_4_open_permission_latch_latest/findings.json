@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "phase1-findings-v1",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "2.2.4 Open Permission Latch (Reconcile-Required, Sticky Until Cleared) \u2014 CP-001",
+      "category": "cross_ref_broken",
+      "severity": "P1",
+      "description": "The indirect fail-closed enforcement path relies on a section-level pointer to other ATs, but this fixture does not cite explicit AT IDs for that proof obligation, leaving the authoritative cross-reference ambiguous.",
+      "evidence": {
+        "line": 11,
+        "quote": "See \u00a72.2.3.2 SystemIntegrityAxis ATs which MUST verify that `open_permission_blocked_latch == true` feeds `DEGRADED`"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Replace the section-only pointer with explicit \u00a72.2.3.2 AT ID(s) for the latch -> SystemIntegrityAxis -> TradingMode::ReduceOnly path, or add a local AT with a concrete ID."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "2.2.4 Open Permission Latch (Reconcile-Required, Sticky Until Cleared) \u2014 CP-001",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "The fixture specifies deterministic fallback behavior and a startup warning when `reconcile_stall_max_delay_s` is missing or non-positive, but no acceptance test in this fixture proves that startup handling.",
+      "evidence": {
+        "line": 33,
+        "quote": "If `reconcile_stall_max_delay_s` is missing or \u2264 0 at startup, runtime MUST treat it as the default (30s) and emit a startup warning log."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an AT that starts with missing and non-positive `reconcile_stall_max_delay_s` and verifies default-to-30s behavior plus the startup warning log."
+    }
+  ]
+}

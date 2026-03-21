@@ -1,12 +1,26 @@
 ---
 status: in-progress
 priority: P1
-branch: project/contract-autoresearch
-pr: 218
+branch: project/contract-autoresearch-harness-fix
+base: main
+pr: 224
 started: 2026-03-16
+aliases: []
+keywords:
+  - contract autoresearch
+  - codex backend
+scope_paths:
+  - autoresearch/contract/**
+  - autoresearch/skills/harness.sh
+  - autoresearch/tests/test_contract_phase_runs.py
+  - obsidian/Projects/Autoresearch.md
+  - obsidian/Debriefs/Autoresearch *.md
 ---
 
 ## Commits
+- `pending` — 2026-03-20 — Reviewed the hardened Phase 2 proposal packages, wrote review decisions, and rendered accepted-only patch artifacts.
+- `a92bced4` — 2026-03-20 — Hardened Codex wrapper with persistent home + retry/backoff and ran Phase 2 live per-section slices on the tracked backend.
+- `52cf1b15` — 2026-03-20 — Tracked Codex backend support for contract autoresearch; reran Phase 1 and Phase 2 through Codex-backed paths.
 - `54b97205` — 2026-03-19 — Phase 4 remaining sections: 10 new ATs (AT-1272..AT-1281) + 3 mechanical fixes
 - `049b85dd` — 2026-03-19 — Phase 4 LG+OPL patch: 7 new ATs (AT-1265..AT-1271)
 - `120759bc` — 2026-03-18 — Phase 4 section-compatibility fix + gitignore lock
@@ -15,9 +29,12 @@ started: 2026-03-16
 
 ## Current State
 
-Phase 4 COMPLETE (2026-03-19). All 5 sections patched. 17 new ATs total (AT-1265..AT-1281), plus mechanical fixes (AT-222 criteria, AT-918 reason code, SHALL→MUST, cause enum, EG cooldown default, EC partial fill, §2.2.4 cross-ref, reconcile_stall default). 23 findings triaged: 19 accepted, 4 rejected.
+Follow-up branch `project/contract-autoresearch-harness-fix` is active with PR #224 open. Phase 1 reruns completed as `phase1-mar20-20260320_191211-5ccf6c48` and tracked-backend `phase1-mar20codex-20260320_195735-903f0acd`, both with `checks=12/12` and `score=1.000`. Phase 2 rerun completed as `phase2-mar20-20260320_193507-66196f79` with `fixtures=1`, `proposals=2`, `checks=8/8`, and `score=1.000`. The tracked repo-owned Codex backend path now exists via `--backend codex`, and a live smoke run through that path completed as `phase2-mar20codex-20260320_194341-e183cb6b` with `proposals=3`, `checks=8/8`, and `score=1.000`. After hardening `codex_wrapper.py` to use a persistent isolated home plus transient retry/backoff, all five per-section Phase 2 live evals succeeded on the tracked backend: OPL `phase2-mar20codexhardened-opl-20260320_210643-d8538cc4` (`2` proposals), LG `phase2-mar20codexhardened-lg-20260320_211226-33896e77` (`2` proposals), EG `phase2-mar20codexhardened-eg-20260320_211637-c80be6bb` (`3` proposals), TMC `phase2-mar20codexhardened-tmc-20260320_212316-3d06f6e7` (`3` proposals), and EC `phase2-mar20codexhardened-ec-20260320_212954-8cae5620` (`4` proposals), each with `checks=8/8` and `score=1.000`. Manual review is now complete for those five runs: `6` proposals accepted, `7` marked `pending_scope_review`, and `1` rejected; accepted-only patch artifacts were rendered for each run (the OPL patch is intentionally empty because both OPL proposals remained pending).
 
 ## Key Files
+- `autoresearch/contract/README.md`
+- `autoresearch/contract/codex_wrapper.py`
+- `autoresearch/tests/test_contract_phase_runs.py`
 - `autoresearch/contract/render_review.py`
 - `autoresearch/skills/harness.sh`
 - `autoresearch/tests/test_contract_render_review.py`
@@ -26,6 +43,7 @@ Phase 4 COMPLETE (2026-03-19). All 5 sections patched. 17 new ATs total (AT-1265
 - `autoresearch/contract/phase2/`
 
 ## Debriefs
+- [[Autoresearch 2026-03-20 Codex Backend Support]]
 - [[Autoresearch 2026-03-17 Phase3 Gap Detection Run]]
 - [[Autoresearch 2026-03-17 Phase3 Review Decisions]]
 - [[Autoresearch 2026-03-17 Phase3 Patch Applied]]
@@ -94,3 +112,19 @@ Phase 4 COMPLETE (2026-03-19). All 5 sections patched. 17 new ATs total (AT-1265
 - Refreshed context (at_registry, context_manifest, section_index, fixtures, contract_kernel) after CONTRACT.md edits
 - Rebuilt contract_kernel.json (hash mismatch blocked push)
 - Fix: section-compatibility now uses longest common prefix (>= 3 levels for siblings, or exact match). §2.2.3.7 vs §2.2.3.1.1 → True; §1.3 vs §1.4 → False.
+### 2026-03-20
+- Repaired the Codex transport path for contract autoresearch by turning the one-off `/tmp` shim behavior into tracked repo support via `autoresearch/contract/codex_wrapper.py` and `harness.sh contract ... --backend codex`.
+- Documented the tracked backend path and auth expectations in `autoresearch/contract/README.md`.
+- Added a contract phase-run regression that requires the Codex backend to rewrite prompts into the short file-reading form instead of shipping giant inline fixture payloads to `codex exec`.
+- Reran Phase 1 live contract gap detection under Codex `gpt-5.4` + `xhigh`: `phase1-mar20-20260320_191211-5ccf6c48`, 6 fixtures, `checks=12/12`, `score=1.000`.
+- Reran full Phase 1 through the tracked repo-owned backend: `phase1-mar20codex-20260320_195735-903f0acd`, 6 fixtures, `checks=12/12`, `score=1.000`.
+- Reran Phase 2 live proposals under the temporary Codex path: `phase2-mar20-20260320_193507-66196f79`, 1 fixture, 2 proposals, `checks=8/8`, `score=1.000`.
+- Verified the tracked repo-owned backend directly with `--backend codex`: `phase2-mar20codex-20260320_194341-e183cb6b`, 1 fixture, 3 proposals, `checks=8/8`, `score=1.000`.
+- Pushed branch `project/contract-autoresearch-harness-fix` and opened PR #224 against `main`.
+- Attempted full live Phase 2 (`eval_live.json`) twice through the committed backend (`phase2-mar20codexlive-*` and `phase2-mar20codexlive-retry-*`), but both runs failed on Codex upstream `500`/`503` high-demand errors before the first proposal payload completed.
+- Hardened `autoresearch/contract/codex_wrapper.py` again to move its isolated Codex home off `/tmp` and into a persistent wrapper-owned path, and added transient retry/backoff controls for high-demand and websocket-class failures.
+- Added regression coverage proving the hardened wrapper reuses a persistent home and retries a transient Codex failure before Phase 2 succeeds.
+- Re-ran the full `autoresearch.tests.test_contract_phase_runs` module (`19` tests), `autoresearch.tests.test_contract_harness_cli` (`8` tests), `python3 -m py_compile autoresearch/contract/codex_wrapper.py`, and `bash -n autoresearch/skills/harness.sh` after the hardening change.
+- Completed hardened live Phase 2 per-section slices on the tracked backend: OPL `phase2-mar20codexhardened-opl-20260320_210643-d8538cc4` (`2` proposals), LG `phase2-mar20codexhardened-lg-20260320_211226-33896e77` (`2` proposals), EG `phase2-mar20codexhardened-eg-20260320_211637-c80be6bb` (`3` proposals), TMC `phase2-mar20codexhardened-tmc-20260320_212316-3d06f6e7` (`3` proposals), and EC `phase2-mar20codexhardened-ec-20260320_212954-8cae5620` (`4` proposals), each with `checks=8/8` and `score=1.000`.
+- Reviewed the five hardened Phase 2 proposal packages and wrote `REVIEW_DECISIONS_*.json` for each run: accepted `LG:P-002`, `EG:P-002`, `TMC:P-001/P-002/P-003`, and `EC:P-003`; marked `LG:P-001`, `EG:P-001/P-003`, `OPL:P-001/P-002`, and `EC:P-001/P-002` as `pending_scope_review`; rejected `EC:P-004` as over-strict.
+- Rendered accepted-only patch artifacts for all five hardened runs. OPL produced an empty patch because both proposals remained pending; LG, EG, TMC, and EC produced non-empty accepted-only patch files under `autoresearch/contract/phase2/review/`.

@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "1.0",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "2.2.3.1.2",
+      "category": "gate_interaction_gap",
+      "severity": "P1",
+      "description": "The unconfirmed non-capital Kill rule says PolicyGuard MUST compute ReduceOnly, but it does not state that a simultaneous confirmed or capital-critical Kill trigger still wins in final mode resolution.",
+      "evidence": {
+        "line": 55,
+        "quote": "If the primary predicate is true but confirmation fails, PolicyGuard MUST compute `TradingMode = ReduceOnly`"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Clarify that unconfirmed watchdog/disk predicates only downgrade that predicate; final TradingMode still resolves per \u00a72.2.3.3, so any simultaneous Kill-tier trigger keeps `TradingMode == Kill`."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "2.2.3.1.2",
+      "category": "stale_input_unspecified",
+      "severity": "P2",
+      "description": "Disk Kill depends on fresh timestamps, but the fixture does not specify whether stale disk timestamps produce `REDUCEONLY_DISK_KILL_UNCONFIRMED` or generic `REDUCEONLY_INPUT_MISSING_OR_STALE`.",
+      "evidence": {
+        "line": 49,
+        "quote": "with both timestamps fresh per `disk_used_max_age_ms`."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Specify stale or missing disk timestamp handling and the exact reason-code precedence for disk-sample freshness failures."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "2.2.3.5",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "The registry requires all active reasons from the winning tier, but the AT set does not include a parallel multi-Kill case proving completeness and canonical ordering for simultaneous Kill predicates.",
+      "evidence": {
+        "line": 287,
+        "quote": "`mode_reasons` MUST include **all** active reasons from the **computed TradingMode tier** for that tick."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an AT with two simultaneous Kill predicates that verifies all active `KILL_*` reasons are emitted in canonical order and remain tier-pure."
+    }
+  ]
+}

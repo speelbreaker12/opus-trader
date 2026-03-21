@@ -1,0 +1,29 @@
+{
+  "run_id": "phase2-mar20codexhardened-tmc-20260320_212316-3d06f6e7",
+  "reviewed_at": "2026-03-20T22:55:59Z",
+  "contract_file_hash": "09b3885d5af5f1d3ede265940ff2441e8964042cbfb8abe1d9b2af183c76ff55",
+  "proposals_file_hash": "c223b47b2e85b5444c4fbc14b5f885287b21a895aba264437d9bc8fa43792f1f",
+  "decisions": [
+    {
+      "proposal_id": "P-001",
+      "decision": "accepted",
+      "reviewer": "human+codex",
+      "reason_code": "tier_resolution_clarification",
+      "notes": "Narrowly clarifies corroboration downgrade semantics without changing the axis resolver itself."
+    },
+    {
+      "proposal_id": "P-002",
+      "decision": "accepted",
+      "reviewer": "human+codex",
+      "reason_code": "reason_precedence_clarification",
+      "notes": "Makes disk corroboration freshness failures resolve through the existing disk-unconfirmed path instead of competing with the generic stale-input bucket."
+    },
+    {
+      "proposal_id": "P-003",
+      "decision": "accepted",
+      "reviewer": "human+codex",
+      "reason_code": "missing_at_coverage",
+      "notes": "Adds the missing multi-Kill completeness and tier-purity AT for `mode_reasons`."
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+--- a/specs/CONTRACT.md
++++ b/specs/CONTRACT.md
+@@ -118,6 +118,13 @@ AT-422
+ - Given: config overrides are set to `parquet_queue_trip_pct = 0.80`, `parquet_queue_trip_window_s = 5`, `parquet_queue_clear_pct = 0.75`, `queue_clear_window_s = 10`, and `evidenceguard_global_cooldown = 0`, and all other EvidenceGuard criteria are satisfied.
+ - When: `parquet_queue_depth_pct` is 0.85 for 6s, then 0.72 for 9s, then 0.72 for 10s.
+ - Then: after 6s, EvidenceChainState != GREEN and TradingMode == ReduceOnly; after 9s, EvidenceChainState != GREEN; after 10s, EvidenceChainState == GREEN and EvidenceGuard no longer forces ReduceOnly.
+ - Pass criteria: trip/clear behavior follows overridden config values, not defaults.
+ - Fail criteria: no trip, no clear, or behavior matches hard-coded defaults instead of config.
++
++AT-NEW-COOLDOWN
++- Given: `parquet_queue_trip_pct = 0.80`, `parquet_queue_trip_window_s = 5`, `parquet_queue_clear_pct = 0.75`, `queue_clear_window_s = 10`, `evidenceguard_global_cooldown = 120`, and all other EvidenceGuard criteria are satisfied.
++- When: `parquet_queue_depth_pct` is 0.85 for 6s, then 0.72 for 10s, and remains 0.72 through 120s.
++- Then: after 10s EvidenceChainState remains not GREEN because the global cooldown has not expired; only after 120s may EvidenceChainState become GREEN if all criteria remain satisfied.
++- Pass criteria: GREEN stays blocked until `max(queue_clear_window_s, evidenceguard_global_cooldown)` expires.
++- Fail criteria: GREEN clears after only the 10s clear window or otherwise ignores the non-zero cooldown.
