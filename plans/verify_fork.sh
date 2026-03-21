@@ -894,7 +894,9 @@ fi
 
 # Mechanical verification includes a full `cargo test --no-run --workspace`
 # compile gate, so it needs cold-start budget similar to the quick Rust gates.
-MECHANICAL_TIMEOUT="${MECHANICAL_TIMEOUT:-5m}"
+# Observed runtime is typically <4m on CI; we set 10m here to allow ~2.5x headroom
+# for cold caches and host variance while keeping alignment with the quick Rust gates.
+MECHANICAL_TIMEOUT="${MECHANICAL_TIMEOUT:-10m}"
 if [[ -x "$ROOT/plans/verify_mechanical.sh" ]]; then
   log "14f-mech) mechanical verification"
   run_logged_or_exit "mechanical_verification" "$MECHANICAL_TIMEOUT" \
