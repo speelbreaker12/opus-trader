@@ -1,0 +1,15 @@
+--- a/specs/CONTRACT.md
++++ b/specs/CONTRACT.md
+@@ -64,6 +64,12 @@
+ AT-235
+ - Given: one leg filled and the book thins.
+ - When: emergency close runs.
+ - Then: close attempts run and fallback hedge executes if still exposed; exposure goes to ~0.
+ - Pass criteria: bounded close attempts then hedge fallback if needed; exposure neutralized.
+ - Fail criteria: no close attempts or exposure remains.
++AT-NEW
++- Given: attempt 1 and attempt 2 partially fill while exposure remains.
++- When: emergency close schedules bounded IOC retries.
++- Then: at most three IOC close attempts are submitted total; attempt 1 uses `close_buffer_ticks`, attempt 2 uses `2 * close_buffer_ticks`, and attempt 3 uses `4 * close_buffer_ticks`; no fourth IOC close attempt is permitted.
++- Pass criteria: dispatch records show exactly the `1x`, `2x`, `4x` buffer schedule with a hard cap of three total attempts.
++- Fail criteria: any fourth IOC close attempt occurs, or any retry uses a buffer other than `close_buffer_ticks`, `2 * close_buffer_ticks`, or `4 * close_buffer_ticks`.

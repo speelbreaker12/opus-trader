@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "contract-gap-detector/phase1",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "2.2.4 Reconciliation success criteria",
+      "category": "missing_fail_closed",
+      "severity": "P1",
+      "description": "The fixture explicitly fail-closes trade-history lookup failures, but it does not say that open-order or position fetch/parse failures must also fail reconciliation closed. That gap could allow latch clearing on incomplete exchange state.",
+      "evidence": {
+        "line": 28,
+        "quote": "If the REST query fails (network error, timeout, HTTP error, or unparseable response), reconciliation MUST fail closed"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Require any failure to fetch or parse exchange open orders or positions to fail reconciliation closed, and add ATs for both cases."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "2.2.4 Reconciliation stall observability",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "The invalid or missing `reconcile_stall_max_delay_s` fallback is normative, but this fixture has no acceptance test for the 30s defaulting path or the required startup warning.",
+      "evidence": {
+        "line": 33,
+        "quote": "If `reconcile_stall_max_delay_s` is missing or \u2264 0 at startup, runtime MUST treat it as the default (30s) and emit a startup warning log."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an AT covering missing and nonpositive `reconcile_stall_max_delay_s`, asserting 30s defaulting and startup warning emission."
+    }
+  ]
+}

@@ -22,6 +22,7 @@ CONTRACT_DIR="$ROOT/autoresearch/contract"
 CONTRACT_RENDER_PY="$CONTRACT_DIR/render_review.py"
 CONTRACT_RUN_PY="$CONTRACT_DIR/run_phase.py"
 CONTRACT_REFRESH_PY="$CONTRACT_DIR/refresh_context.py"
+CONTRACT_CODEX_WRAPPER_PY="$CONTRACT_DIR/codex_wrapper.py"
 
 # ── Colors ───────────────────────────────────────────────────────────
 RED="${RED:-\033[0;31m}"
@@ -180,11 +181,11 @@ contract_usage() {
 Contract autoresearch commands:
   harness.sh contract scaffold
   harness.sh contract status
-  harness.sh contract phase1 run [--tag TAG] [--model MODEL] [--eval PATH] [--workdir PATH]
-  harness.sh contract phase1 baseline [--tag TAG] [--model MODEL] [--eval PATH] [--workdir PATH]
+  harness.sh contract phase1 run [--tag TAG] [--model MODEL] [--backend BACKEND] [--eval PATH] [--workdir PATH]
+  harness.sh contract phase1 baseline [--tag TAG] [--model MODEL] [--backend BACKEND] [--eval PATH] [--workdir PATH]
   harness.sh contract phase1 eval [--eval PATH] --output-dir PATH
-  harness.sh contract phase2 run [--tag TAG] [--model MODEL] [--eval PATH] [--workdir PATH]
-  harness.sh contract phase2 baseline [--tag TAG] [--model MODEL] [--eval PATH] [--workdir PATH]
+  harness.sh contract phase2 run [--tag TAG] [--model MODEL] [--backend BACKEND] [--eval PATH] [--workdir PATH]
+  harness.sh contract phase2 baseline [--tag TAG] [--model MODEL] [--backend BACKEND] [--eval PATH] [--workdir PATH]
   harness.sh contract phase2 eval [--eval PATH] --output-dir PATH
   harness.sh contract refresh-common
   harness.sh contract refresh-fixtures
@@ -216,9 +217,10 @@ cmd_contract_phase_action() {
   require_contract_tree
   [[ -f "$CONTRACT_RUN_PY" ]] || fail "Missing contract runner: $CONTRACT_RUN_PY"
 
-  local tag model eval_path workdir output_dir
+  local tag model backend eval_path workdir output_dir
   tag="$(today_tag)"
   model="sonnet"
+  backend="${CONTRACT_MODEL_BACKEND:-claude}"
   eval_path="$CONTRACT_DIR/$phase/eval.json"
   workdir=""
   output_dir=""
@@ -233,6 +235,11 @@ cmd_contract_phase_action() {
       --model)
         [[ $# -ge 2 ]] || fail "Missing value for --model"
         model="$2"
+        shift 2
+        ;;
+      --backend)
+        [[ $# -ge 2 ]] || fail "Missing value for --backend"
+        backend="$2"
         shift 2
         ;;
       --eval)
@@ -278,7 +285,18 @@ cmd_contract_phase_action() {
   if [[ -n "$output_dir" ]]; then
     args+=(--output-dir "$output_dir")
   fi
-  python3 "${args[@]}"
+  case "$backend" in
+    claude)
+      python3 "${args[@]}"
+      ;;
+    codex)
+      [[ -f "$CONTRACT_CODEX_WRAPPER_PY" ]] || fail "Missing contract Codex wrapper: $CONTRACT_CODEX_WRAPPER_PY"
+      CLAUDE_BIN="$CONTRACT_CODEX_WRAPPER_PY" python3 "${args[@]}"
+      ;;
+    *)
+      fail "Unknown contract backend: $backend"
+      ;;
+  esac
 }
 
 cmd_contract_refresh() {
@@ -725,8 +743,8 @@ for t in data['tests']:
 
   log "Baseline recorded"
   info "Score: $score ($passed/$total)"
-  if [[ "$eval_exit" -ne 0 ]]; then
-    warn "evaluate.py exited $eval_exit (imperfect baseline score recorded)"
+  if [[ "$evaluator_rc" -ne 0 ]]; then
+    warn "evaluate.py exited $evaluator_rc (imperfect baseline score recorded)"
   fi
 }
 

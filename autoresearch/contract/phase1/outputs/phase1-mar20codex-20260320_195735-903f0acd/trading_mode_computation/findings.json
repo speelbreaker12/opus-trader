@@ -1,0 +1,48 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "phase1-contract-gap-detector/1.0",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "2.2.3.0 Axis Model (Normative)",
+      "category": "cross_ref_broken",
+      "severity": "P1",
+      "description": "The primary-axis rule is contradicted later in the same fixture: `risk_state` and `cortex_override` influence both CapitalRiskAxis and SystemIntegrityAxis, but neither shared use is allowlisted in \u00a72.2.3.1. This breaks the authoritative axis-assignment contract for TradingMode computation.",
+      "evidence": {
+        "line": 18,
+        "quote": "- **Primary assignment rule:** Every PolicyGuard input signal MUST have exactly one primary axis.",
+        "context": "Later, `risk_state` appears in CapitalRiskAxis and SystemIntegrityAxis, and `cortex_override` appears in both axes without a \u00a72.2.3.1 dual-impact entry."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Clarify primary/secondary ownership for `risk_state` and `cortex_override`, or add explicit \u00a72.2.3.1 allowlist entries and axis-derivation rules for their cross-axis use."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "2.2.3.1.2 Kill Trigger Corroboration (Non\u2011Capital)",
+      "category": "cross_ref_broken",
+      "severity": "P1",
+      "description": "The scope guard omits `cortex_override == ForceKill` from the capital-critical triggers excluded from corroboration, even though earlier text and the CapitalRiskAxis rules classify ForceKill as an authoritative capital-critical Kill trigger.",
+      "evidence": {
+        "line": 62,
+        "quote": "**Scope guard:** These corroboration rules do **NOT** apply to capital\u2011critical Kill triggers (`mm_util >= mm_util_kill`, `risk_state == Kill`).",
+        "context": "This conflicts with line 36 and the CapitalRiskAxis `CRITICAL` list, which include `cortex_override == ForceKill`."
+      },
+      "proposed_fix_type": "mechanical",
+      "proposed_fix": "Add `cortex_override == ForceKill` to the scope-guard parenthetical list of capital-critical Kill triggers."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "2.2.3.4.1 Non\u2011Active OPEN Cancellation (CSP, Non\u2011Negotiable)",
+      "category": "gate_interaction_gap",
+      "severity": "P1",
+      "description": "The capital-guard precedence rule is written broadly enough to block cancellation of risk-increasing OPEN orders whenever there are already zero risk-reducing in-flight orders. That conflicts with the cancel-all requirement and can leave risk-increasing OPENs outstanding while TradingMode is non-Active.",
+      "evidence": {
+        "line": 240,
+        "quote": "1. **Capital guard first:** if canceling the order would leave zero risk-reducing in-flight orders while net exposure is non-zero or unknown, the order MUST NOT be canceled.",
+        "context": "As written, this condition can match any candidate order, not just the last risk-reducing in-flight order."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Limit the capital guard to candidate orders that are themselves proven risk-reducing or are the last risk-reducing in-flight order; keep other risk-increasing OPENs cancel-eligible."
+    }
+  ]
+}

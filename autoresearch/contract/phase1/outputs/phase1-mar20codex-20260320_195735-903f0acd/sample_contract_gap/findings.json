@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "1.0",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "Sample Contract Fixture",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "AT-999 is referenced without a paired normative requirement describing the behavior it is supposed to validate.",
+      "evidence": {
+        "line": 3,
+        "quote": "AT-999 is referenced here"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add a concrete requirement statement and explicitly pair AT-999 to that behavior."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "Sample Contract Fixture",
+      "category": "weak_normative",
+      "severity": "P1",
+      "description": "The fail-closed behavior for missing data is stated with SHOULD instead of MUST, making the rejection requirement non-binding.",
+      "evidence": {
+        "line": 4,
+        "quote": "PolicyGuard SHOULD reject when data is missing."
+      },
+      "proposed_fix_type": "mechanical",
+      "proposed_fix": "Replace \"SHOULD reject\" with \"MUST reject\"."
+    }
+  ]
+}

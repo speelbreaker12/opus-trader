@@ -1,0 +1,58 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "1.0.0",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "3.1 Deterministic Emergency Close",
+      "category": "weak_normative",
+      "severity": "P1",
+      "description": "AT-938 fixes venue-band fallback to quantized `max_price`/`min_price`, but the algorithm still applies `best \u00b1 close_buffer_ticks` to every close attempt, leaving venue-band pricing contradictory and potentially outside the stated band.",
+      "evidence": {
+        "line": 99,
+        "quote": "- Then: IOC close attempts are submitted using emergency venue-band fallback pricing (`max_price` for reduce-only BUY, `min_price` for reduce-only SELL), quantized to tick."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Clarify whether venue-band fallback dispatches exactly at `max_price`/`min_price` or uses a capped buffer that cannot cross the band, and align the algorithm and AT text."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "3.1 Deterministic Emergency Close",
+      "category": "weak_normative",
+      "severity": "P2",
+      "description": "`time_to_delta_neutral_ms` is mandatory, but hedge-failure and partial-fill paths explicitly allow `exposure_usd_after` to remain non-zero, so the contract never defines what value to emit when delta neutral is not achieved.",
+      "evidence": {
+        "line": 71,
+        "quote": "- Then: exactly one `AtomicNakedEvent` is emitted with `exposure_usd_after > 0`, `hedge_used == true`, and the system does not retry the hedge indefinitely."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Define the required `time_to_delta_neutral_ms` behavior when exposure remains after emergency close, such as nullable, omitted, or a sentinel value, and add an AT for that path."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "3.1 Deterministic Emergency Close",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "The schema constrains `cause` to a closed enum, but the acceptance tests only require a non-empty string, so invalid `cause` values can still pass.",
+      "evidence": {
+        "line": 33,
+        "quote": "- `cause` (string; non-empty; MUST be one of: `atomic_legging_failure|emergency_close_exhausted|hedge_fallback`)"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add or tighten an AT so `cause` must equal one of the three enumerated values, not just a non-empty string."
+    },
+    {
+      "finding_id": "F-004",
+      "section": "3.1 Deterministic Emergency Close",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "The deterministic retry schedule is not fully test-backed: the fixture specifies max 3 attempts and a 5/10/20 tick progression, but no AT asserts the exact attempt cap and buffer sequence.",
+      "evidence": {
+        "line": 20,
+        "quote": "2. If partial fill: repeat for remaining qty (max 3 total attempts including the initial; buffer doubles each retry: attempt 2 = 10 ticks, attempt 3 = 20 ticks)."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an AT that rejects any fourth attempt and verifies the retry buffers are exactly 5, 10, and 20 ticks."
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "phase1-findings-v1",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "2.2.4 Open Permission Latch (Reconcile-Required, Sticky Until Cleared) \u2014 CP-001",
+      "category": "weak_normative",
+      "severity": "P1",
+      "description": "The fallback for `position_reconcile_epsilon` is stated as a parenthetical default, not a required runtime behavior. A looser implementation fallback could hide position drift and clear the latch early.",
+      "evidence": {
+        "line": 27,
+        "quote": "- Exchange positions match ledger cumulative fills within `position_reconcile_epsilon` (default: instrument's `min_amount` or `1e-6` if undefined)."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Require runtime to MUST use `min_amount`, or `1e-6` when undefined, as the reconciliation fallback epsilon."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "2.2.4 Open Permission Latch (Reconcile-Required, Sticky Until Cleared) \u2014 CP-001",
+      "category": "stale_input_unspecified",
+      "severity": "P1",
+      "description": "The trade-lookback criterion does not specify fail-closed handling for nonpositive or otherwise invalid `reconcile_trade_lookback_sec`. A bad lookback can miss recent trades and unblock OPEN prematurely.",
+      "evidence": {
+        "line": 28,
+        "quote": "No missing trades over the last `reconcile_trade_lookback_sec` (default: 300s) as determined by REST `/get_user_trades` query."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Specify that unset, nonpositive, or invalid lookback values MUST default to 300s or cause reconciliation to fail closed."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "2.2.4 Open Permission Latch (Reconcile-Required, Sticky Until Cleared) \u2014 CP-001",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "The startup fallback and warning for invalid `reconcile_stall_max_delay_s` is normative, but this section has no acceptance test that proves the 30s default and startup warning behavior.",
+      "evidence": {
+        "line": 33,
+        "quote": "- If `reconcile_stall_max_delay_s` is missing or \u2264 0 at startup, runtime MUST treat it as the default (30s) and emit a startup warning log."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an AT covering missing or \u22640 `reconcile_stall_max_delay_s` and verifying 30s fallback plus startup warning emission."
+    }
+  ]
+}

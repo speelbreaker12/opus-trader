@@ -1,0 +1,39 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "phase2",
+  "proposals": [
+    {
+      "proposal_id": "P-001",
+      "source_finding": "F-001",
+      "source_finding_category": "cross_ref_broken",
+      "section": "Acceptance Test References",
+      "change_type": "new_requirement",
+      "rationale": "The clause uses placeholder AT text rather than a concrete authoritative cross-reference, so the requirement cannot be traced deterministically to a real acceptance test.",
+      "status": "proposed",
+      "dedupe_key": "acceptance-test-reference-must-be-concrete",
+      "proposed_text": "This clause MUST cite a concrete acceptance test identifier that directly validates the behavior it defines. Placeholder references such as AT-999 are invalid and MUST be replaced with the authoritative AT for the clause before the contract change is accepted.",
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ -3,1 +3,2 @@\n-AT-999 is referenced here\n+This clause MUST cite a concrete acceptance test identifier that directly validates the behavior it defines.\n+Placeholder references such as AT-999 are invalid and MUST be replaced with the authoritative AT for the clause before the contract change is accepted."
+    },
+    {
+      "proposal_id": "P-002",
+      "source_finding": "F-002",
+      "source_finding_category": "weak_normative",
+      "section": "PolicyGuard",
+      "change_type": "mechanical",
+      "rationale": "The missing-data path is fail-closed behavior and must be mandatory; leaving it as SHOULD weakens enforcement and permits unsafe interpretation.",
+      "status": "pending_scope_review",
+      "dedupe_key": "policyguard-missing-data-must-reject",
+      "mechanical_ok": true,
+      "replace_span": {
+        "start_line": 4,
+        "end_line": 4,
+        "old_text": "PolicyGuard SHOULD reject when data is missing.",
+        "new_text": "PolicyGuard MUST reject when data is missing."
+      },
+      "mechanical_details": "Single-token normative-strength replacement on the exact detector-cited line.",
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ -4,1 +4,1 @@\n-PolicyGuard SHOULD reject when data is missing.\n+PolicyGuard MUST reject when data is missing.",
+      "enforcement_point": "PolicyGuard missing-data rejection requirement",
+      "callsite_evidence": "PolicyGuard SHOULD reject when data is missing."
+    }
+  ]
+}
