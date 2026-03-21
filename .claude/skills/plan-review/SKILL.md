@@ -5,4 +5,4 @@ context: fork
 allowed-tools: ["Read", "Glob", "Grep", "Bash", "Agent"]
 ---
 
-!`cat SKILLS/plan-review.md || echo "ERROR: SKILLS/plan-review.md not found"`
+!`REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "ERROR: plan-review skill: unable to determine repository root."; exit 1; }; FILE="$REPO_ROOT/SKILLS/plan-review.md"; if [ ! -r "$FILE" ]; then echo "ERROR: plan-review skill: markdown file not found at '$FILE'."; exit 1; fi; cat "$FILE"`
