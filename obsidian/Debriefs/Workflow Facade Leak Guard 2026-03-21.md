@@ -5,10 +5,11 @@ date: "2026-03-21"
 
 ## Commits
 - address PR #225 review comments
+- strip strings/comments before pub mod check to prevent false positives
 
 ## 0) What shipped
-- Feature/behavior: Addressed 5 unresolved PR #225 review comments covering stderr capture, allowlist deduplication, python3 availability check, ASCII output, and string-literal false-positive documentation.
-- Value (what problem it solves): Brings the PR to reviewer-accepted quality by fixing reviewer-identified issues around robustness, maintainability, and correctness.
+- Feature/behavior: Addressed 5 unresolved PR #225 review comments covering stderr capture, allowlist deduplication, python3 availability check, ASCII output, and string-literal false-positive documentation. Then replaced the shallow string-prefix heuristic with a full `strip_strings_and_comments()` preprocessor that properly handles multi-line raw strings, byte strings, regular strings, line comments, and block comments before scanning for `pub mod`. Fixed line-number off-by-one.
+- Value (what problem it solves): Eliminates false-positive `pub mod` detections inside string literals and comments, preventing spurious CI/pre-push failures.
 
 ## 1) Constraint (ONE)
 - How it manifested: Duplicated allowlist between bash array and hardcoded awk filter meant adding a new facade required edits in two places.

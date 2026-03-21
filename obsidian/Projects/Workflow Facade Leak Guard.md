@@ -74,3 +74,4 @@ Review-ready on branch `project/workflow-facade-leak-guard-v2` with PR #225 open
 - Refreshed `project/workflow-facade-leak-guard-v2` against `origin/main` with a no-op rebase, pushed the clean branch successfully, and opened PR #225: https://github.com/speelbreaker12/opus-trader/pull/225.
 ### 2026-03-21
 - Addressed 5 unresolved PR #225 review comments: added stderr capture in pre-push hook test, deduplicated facade allowlist to single source of truth, added python3 availability check, replaced non-ASCII checkmark with ASCII, documented `pub mod` string-literal false-positive limitation with mitigation filter.
+- Replaced shallow string-prefix heuristic with full `strip_strings_and_comments()` preprocessor in the facade lint Python script. Now properly handles multi-line raw strings (`r#"..."#`), byte strings, regular strings, line comments, and block comments before scanning for `pub mod`. Fixed line-number off-by-one from regex `^` anchor.
