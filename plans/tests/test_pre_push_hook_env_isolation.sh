@@ -57,7 +57,7 @@ output="$(
   GIT_INDEX_FILE="$repo/.git/index" \
   GIT_OBJECT_DIRECTORY="$repo/.git/objects" \
   GIT_PREFIX="nested/" \
-  bash .git/hooks/pre-push origin https://example.invalid/repo.git <<EOF
+  bash .git/hooks/pre-push origin https://example.invalid/repo.git 2>&1 <<EOF
 refs/heads/feature/pre-push-env $local_sha $remote_ref 0000000000000000000000000000000000000000
 EOF
 )"
