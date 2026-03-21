@@ -5,10 +5,10 @@ type: debrief
 ---
 
 ## Commits
-- pending
+- c49eb256
 
 ## Log
-- `pending` — recovered the two `.claude/skills/*` path fixes onto an isolated branch and switched both wrappers to repo-root-resolved `SKILLS/` paths.
+- `c49eb256` — recovered the two `.claude/skills/*` path fixes onto an isolated branch and switched both wrappers to repo-root-resolved `SKILLS/` paths.
 
 ## Handoff
 - Branch: `recover/claude-skill-path-fixes-20260321`

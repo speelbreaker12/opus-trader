@@ -22,7 +22,7 @@ scope_paths:
 In progress. This branch isolates the only salvageable part of the older recovery stash: two `.claude/skills/*` path fixes that replace CWD-relative `cat` calls with repo-root-resolved paths.
 
 ## Commits
-- `pending` — 2026-03-21 — harden `.claude` skill wrappers to load repo files from the repo root
+- `c49eb256` — 2026-03-21 — harden `.claude` skill wrappers to load repo files from the repo root
 
 ## Key Files
 - .claude/skills/premortem/SKILL.md
