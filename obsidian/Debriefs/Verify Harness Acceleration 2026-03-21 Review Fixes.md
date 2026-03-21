@@ -4,7 +4,7 @@ date: "2026-03-21"
 ---
 
 ## Commits
-- pending
+- 37e64685
 
 ## 0) What shipped
 - Feature/behavior: closed the PR #227 review findings in the verify harness by splitting `fail_closed_coverage.sh` infra/setup exits from soft findings, adding the missing `.claude` regressions to workflow-scope verify, restoring direct-entry bootstrapping for `plans/lib/rust_gates.sh`, sharing CSP strict-mode auto-detection so `./plans/verify_scope.sh contract` matches authoritative verify, reducing `pr-review-gate-hook` runtime with single-pass payload parsing plus cached marker reads, and preserving local `quick` proof by restoring the canonical wrapper sentence in `.codex/commands/commit.md` and `.codex/commands/push-pr.md` while keeping repo-local skill lookup behavior.
