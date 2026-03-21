@@ -1304,3 +1304,10 @@ Commands: cargo test -p soldier_core --lib inventory_skew; cargo fmt --all; carg
 Evidence: crates/soldier_core/src/execution/inventory_skew.rs; crates/soldier_core/src/execution/inventory_skew_tests.rs; docs/codebase/upgrade2_graybox_telemetry_checklist.md.
 Notes: Focused verification is green for this slice. I did not rerun `./plans/verify.sh quick` because the branch still has the previously noted unrelated contract-kernel drift outside the inventory-skew seam.
 Next: Convert `crates/soldier_core/src/execution/preflight.rs` next, then move to the remaining red Upgrade 2A leaves in `risk/margin_gate.rs`, `risk/pending_exposure.rs`, and `risk/exposure_budget.rs`.
+Story: workflow-verify-timeouts
+Date: 2026-03-21
+Summary: Aligned `test_pr_review_gate_hook.sh` with the hook's advisory PR-create contract, confirmed the focused regression test passes in `2:27.68`, and reran `workflow_verify.sh` far enough to prove the old blocker is gone and the next failure is the pre-existing wrapper mismatch in `wf_test_review_command_wrappers`.
+Commands: bash plans/tests/test_pr_review_gate_hook.sh; VERIFY_RUN_ID=debug_pr_gate_fix ./plans/workflow_verify.sh.
+Evidence: plans/tests/test_pr_review_gate_hook.sh; artifacts/verify/debug_pr_gate_fix/wf_test_pr_review_gate_hook.log; artifacts/verify/debug_pr_gate_fix/wf_test_pr_review_gate_hook.rc; artifacts/verify/debug_pr_gate_fix/wf_test_review_command_wrappers.log.
+Notes: Root cause was stale test expectations, not a live hook deadlock. The hook intentionally warns when `gh pr create` runs without a fresh review marker and only blocks at merge-time review proof gates. `workflow_verify.sh` now clears `wf_test_pr_review_gate_hook` and later fails in `wf_test_review_command_wrappers` because `.claude/commands/review-stack.md` on `origin/main` lacks the `# SKILL: /review-stack` header that the wrapper test still requires.
+Next: Commit and push only the `test_pr_review_gate_hook.sh` expectation-alignment slice into PR #230; treat the wrapper mismatch as a separate repo-level cleanup item.
