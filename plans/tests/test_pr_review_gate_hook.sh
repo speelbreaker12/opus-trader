@@ -130,6 +130,7 @@ branch_name="$(git -C "$repo" rev-parse --abbrev-ref HEAD)"
 safe_branch="${branch_name//\//_}"
 marker_dir="$repo/artifacts/pr-review-gate"
 marker_path="$marker_dir/${safe_branch}.json"
+legacy_marker_path="$marker_dir/${safe_branch}.review-stack.json"
 external_marker_path="$marker_dir/${safe_branch}.external.json"
 mkdir -p "$marker_dir"
 
@@ -139,6 +140,24 @@ write_review_marker "$marker_path" "PASS" "head" "$(git -C "$repo" rev-parse --s
   cd "$repo"
   expect_pass "fresh marker permits gh pr create with --repo" "gh --repo owner/repo pr create --title ready"
 )
+
+rm -f "$marker_path"
+write_review_marker "$legacy_marker_path" "PASS" "head" "$(git -C "$repo" rev-parse --short HEAD)"
+
+(
+  cd "$repo"
+  expect_pass "legacy review-stack marker filename still permits gh pr create" "gh pr create --title ready"
+)
+
+write_review_marker "$marker_path" "FAIL" "head" "$(git -C "$repo" rev-parse --short HEAD)"
+
+(
+  cd "$repo"
+  expect_block "canonical marker verdict wins over legacy fallback" "verdict for 'story/S1-pr-gate-hook' is 'FAIL'" "gh pr create --title ready"
+)
+
+rm -f "$legacy_marker_path"
+rm -f "$marker_path"
 
 target_repo="$tmp_dir/target-repo"
 mkdir -p "$target_repo"
@@ -223,7 +242,7 @@ write_review_marker "$marker_path" "CONDITIONAL_PASS" "head_commit" "$(git -C "$
 rm -f "$marker_path"
 (
   cd "$repo"
-  expect_pass_with_output "plain gh pr create warns without marker" "No review-stack result" "gh pr create --title ready"
+  expect_block "plain gh pr create blocks without marker" "No review-stack result" "gh pr create --title ready"
 )
 
 (
@@ -243,47 +262,47 @@ rm -f "$marker_path"
 
 (
   cd "$repo"
-  expect_pass_with_output "gh pr create with title containing help warns when marker missing" "No review-stack result" "gh pr create --title help"
+  expect_block "gh pr create with title containing help still blocks when marker missing" "No review-stack result" "gh pr create --title help"
 )
 
 (
   cd "$repo"
-  expect_pass_with_output "gh pr create with quoted ampersand warns when marker missing" "No review-stack result" "gh pr create --title 'a & b'"
+  expect_block "gh pr create with quoted ampersand still blocks when marker missing" "No review-stack result" "gh pr create --title 'a & b'"
 )
 
 (
   cd "$repo"
-  expect_pass_with_output "gh pr create with quoted pipe warns when marker missing" "No review-stack result" "gh pr create --body 'a | b'"
+  expect_block "gh pr create with quoted pipe still blocks when marker missing" "No review-stack result" "gh pr create --body 'a | b'"
 )
 
 (
   cd "$repo"
-  expect_pass_with_output "gh pr create with quoted semicolon warns when marker missing" "No review-stack result" "gh pr create --body 'a ; b'"
+  expect_block "gh pr create with quoted semicolon still blocks when marker missing" "No review-stack result" "gh pr create --body 'a ; b'"
 )
 
 (
   cd "$repo"
-  expect_pass_with_output "gh pr create with body containing version warns when marker missing" "No review-stack result" "gh pr create --body version"
+  expect_block "gh pr create with body containing version still blocks when marker missing" "No review-stack result" "gh pr create --body version"
 )
 
 (
   cd "$repo"
-  expect_pass_with_output "env -C wrapped gh pr create warns without marker" "No review-stack result" "env -C . GH_TOKEN=test gh pr create --title ready"
+  expect_block "env -C wrapped gh pr create still blocks without marker" "No review-stack result" "env -C . GH_TOKEN=test gh pr create --title ready"
 )
 
 (
   cd "$repo"
-  expect_pass_with_output "env --chdir wrapped gh pr create warns without marker" "No review-stack result" "env --chdir=. GH_TOKEN=test gh pr create --title ready"
+  expect_block "env --chdir wrapped gh pr create still blocks without marker" "No review-stack result" "env --chdir=. GH_TOKEN=test gh pr create --title ready"
 )
 
 (
   cd "$repo"
-  expect_pass_with_output "env -S wrapped gh pr create warns without marker" "No review-stack result" "env -S 'GH_TOKEN=test gh pr create --title ready'"
+  expect_block "env -S wrapped gh pr create still blocks without marker" "No review-stack result" "env -S 'GH_TOKEN=test gh pr create --title ready'"
 )
 
 (
   cd "$repo"
-  expect_pass_with_output "gh global flags still warn without marker" "No review-stack result" "gh -R owner/repo pr create --title ready"
+  expect_block "gh global flags still trigger gate" "No review-stack result" "gh -R owner/repo pr create --title ready"
 )
 
 old_head="$(git -C "$repo" rev-parse --short HEAD)"
@@ -298,7 +317,7 @@ write_review_marker "$marker_path" "PASS" "head" "$old_head"
 (
   cd "$repo"
   # MARKER_HEAD ($old_head) appears as-is; HEAD_SHA is full SHA ($new_head_full)
-  expect_pass_with_output "stale marker warns on current head mismatch" "targets HEAD '$old_head' but current HEAD is '$new_head_full'" "gh pr create --title ready"
+  expect_block "stale marker blocks current head" "targets HEAD '$old_head' but current HEAD is '$new_head_full'" "gh pr create --title ready"
 )
 
 write_review_marker "$marker_path" "PASS" "head_commit" "$new_head_short"
@@ -332,6 +351,7 @@ write_git_wrapper "$mock_git_dir/git" "$real_git" "$new_head_short"
 )
 
 grep -Fq 'git rev-parse HEAD' "$ROOT/.claude/commands/review-stack.md" || fail "review-stack marker writer should use full HEAD SHA"
+grep -Fq 'artifacts/pr-review-gate/${SAFE_BRANCH}.json' "$ROOT/.claude/commands/review-stack.md" || fail "review-stack marker writer should use the canonical PR gate marker path"
 grep -Fq 'git rev-parse HEAD' "$ROOT/.claude/commands/external-review.md" || fail "external-review marker writer should use full HEAD SHA"
 
 echo "test_pr_review_gate_hook.sh: ok"
