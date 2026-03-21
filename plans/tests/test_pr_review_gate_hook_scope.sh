@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HOOK="$ROOT/.claude/hooks/pr-review-gate-hook.sh"
@@ -75,30 +77,62 @@ write_debrief() {
 ---
 project: "[[Scope Test]]"
 date: "2026-03-17"
+type: debrief
 ---
-
-## 0) What shipped
-- Feature/behavior: Added hook scope fixture.
-- Value (what problem it solves): Tests raw `gh pr create` scope blocking.
-
-## 1) Constraint (ONE)
-- How it manifested (2-3 concrete symptoms): Raw PR creation could ignore project scope.
-- Time/token drain it caused: Review churn.
-- Workaround I used this session (exploit): Added a fixture debrief.
-- Next-agent default behavior (subordinate): Keep PR diffs inside scope.
-- Permanent fix proposal (elevate): Run the project scope guard before PR creation.
-- Smallest increment: Reuse the shared guard from the hook.
-- Validation (proof it got better): Raw PR create blocks on out-of-scope files.
-
-## 2) Best follow-up
-- Single best next step: Keep the branch diff scoped.
-- 1-3 upgrades worth considering:
-
-## 3) Enforceable rules
-- Do not open a PR when the branch diff escapes the project note scope.
 
 ## Commits
 - `pending`
+
+## Session Handoff
+
+### Context
+- Project: Scope Test
+- Branch: project/scope-test
+- Worktree: repo fixture
+- PR state:
+- Lifecycle: testing
+
+### State
+- Task: Add hook scope fixture.
+- Goal: Test raw `gh pr create` scope blocking.
+- Stop point: Fixture written before the hook run.
+- Validation: Raw PR create should block on out-of-scope files.
+- Open decisions / blockers: none
+- Resume command: bash plans/tests/test_pr_review_gate_hook_scope.sh
+
+### Touch List
+- Files touched: obsidian/Projects/Scope Test.md, obsidian/Debriefs/Scope Test 2026-03-17.md
+- Tests touched: plans/tests/test_pr_review_gate_hook_scope.sh
+- Contract/docs touched: AGENTS.md Obsidian Project Tracking
+
+### Shipped
+- Feature/behavior: Added hook scope fixture.
+- Value: Tests raw `gh pr create` scope blocking.
+
+### Constraint (ONE)
+- Constraint: Raw PR creation could ignore project scope.
+- Symptoms: Review churn from out-of-scope branch diffs.
+- Workaround: Added a fixture debrief.
+- Permanent fix: Run the project scope guard before PR creation.
+- Smallest increment: Reuse the shared guard from the hook.
+- Proof: Raw PR create blocks on out-of-scope files.
+
+### Best Follow-Up - Project
+- Next step: Keep the branch diff scoped.
+- Upgrades:
+
+### Best Follow-Up - Workflow
+- Issue: Raw PR creation can bypass project-scope expectations.
+- Smallest fix: Reuse the scope guard from the hook.
+
+### Best Follow-Up - Non-Task
+- Issue:
+- Owner/path:
+
+### Rules
+- Rule 1: Do not open a PR when the branch diff escapes the project note scope.
+- Rule 2:
+- Rule 3:
 EOF
 }
 
@@ -109,13 +143,15 @@ trap 'rm -rf "$tmp_dir"' EXIT
 
 repo="$tmp_dir/repo"
 mkdir -p "$repo/obsidian/Projects" "$repo/obsidian/Debriefs" "$repo/src" "$repo/other" "$repo/artifacts/pr-review-gate"
-mkdir -p "$repo/plans"
+mkdir -p "$repo/plans" "$repo/plans/lib"
 git -C "$repo" init -q
 git -C "$repo" config user.name "Test User"
 git -C "$repo" config user.email "test@example.com"
+git -C "$repo" config core.hooksPath /dev/null
 git -C "$repo" checkout -qb "project/scope-test"
 
 cp "$ROOT/plans/project_scope_guard.sh" "$repo/plans/project_scope_guard.sh"
+cp "$ROOT/plans/lib/obsidian_frontmatter.py" "$repo/plans/lib/obsidian_frontmatter.py"
 chmod +x "$repo/plans/project_scope_guard.sh"
 
 echo "seed" >"$repo/src/in_scope.txt"

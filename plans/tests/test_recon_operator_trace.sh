@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TRACE_SCRIPT="$ROOT/plans/recon_trace.sh"
@@ -29,6 +31,7 @@ mkdir -p "$repo/plans/tests" "$repo/specs/schemas/recon"
 git -C "$tmp_dir" init -q repo
 git -C "$repo" config user.email "test@example.com"
 git -C "$repo" config user.name "Test"
+git -C "$repo" config core.hooksPath /dev/null
 
 cp "$TRACE_SCRIPT" "$repo/plans/recon_trace.sh"
 cp "$REPORT_VALIDATOR" "$repo/plans/validate_recon_step_report.py"

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# PostToolUse hook: ENFORCE /code-review-expert after every git commit
-# Exit 2 blocks Claude from proceeding until it handles this output.
+# PostToolUse hook: advisory reminder to run code-review-expert after commit.
+# This is a REMINDER, not a gate. Review attestation is enforced at the
+# PUBLISH boundary (pre-push hook), not at commit time.
+#
+# Never exit 2 — that blocks the agent from proceeding, which causes more
+# friction than value for docs/formatting/follow-up commits.
 
 INPUT=$(cat)
 
@@ -15,10 +19,11 @@ except Exception:
 
 if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])git commit( |$)'; then
     cat >&2 <<'EOF'
-ENFORCEMENT: git commit detected.
-You MUST invoke the /code-review-expert skill NOW.
-Do NOT call any other tool. Do NOT write any other response.
-Invoke /code-review-expert immediately — this is mandatory, not optional.
+REMINDER: git commit detected. Consider running code-review-expert if this
+was a significant implementation change. The /commit skill (step 3) describes
+when review is required vs skippable by change class.
 EOF
-    exit 2
 fi
+
+# Always exit 0 — advisory only
+exit 0

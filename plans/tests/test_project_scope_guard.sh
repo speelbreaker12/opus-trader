@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GUARD="$ROOT/plans/project_scope_guard.sh"
@@ -90,30 +92,62 @@ write_debrief() {
 ---
 project: "[[$project_name]]"
 date: "2026-03-17"
+type: debrief
 ---
-
-## 0) What shipped
-- Feature/behavior: Added a scope debrief.
-- Value (what problem it solves): Leaves a trace for this test fixture.
-
-## 1) Constraint (ONE)
-- How it manifested (2-3 concrete symptoms): Scope drift needed a guard.
-- Time/token drain it caused: Rework.
-- Workaround I used this session (exploit): Added a fixture debrief.
-- Next-agent default behavior (subordinate): Keep one project per branch.
-- Permanent fix proposal (elevate): Add branch and scope guards.
-- Smallest increment: Add a shared guard script.
-- Validation (proof it got better): Guard blocks unrelated files.
-
-## 2) Best follow-up
-- Single best next step: Keep fixture scope small.
-- 1-3 upgrades worth considering:
-
-## 3) Enforceable rules
-- Keep staged files inside the declared scope.
 
 ## Commits
 - \`pending\`
+
+## Session Handoff
+
+### Context
+- Project: $project_name
+- Branch: project/scope-test
+- Worktree: repo fixture
+- PR state:
+- Lifecycle: testing
+
+### State
+- Task: Add a scope debrief fixture.
+- Goal: Leave a trace for this scope-guard test fixture.
+- Stop point: Fixture written and staged.
+- Validation: Guard blocks unrelated files.
+- Open decisions / blockers: none
+- Resume command: bash plans/tests/test_project_scope_guard.sh
+
+### Touch List
+- Files touched: obsidian/Projects/*.md, obsidian/Debriefs/*.md
+- Tests touched: plans/tests/test_project_scope_guard.sh
+- Contract/docs touched: AGENTS.md Obsidian Project Tracking
+
+### Shipped
+- Feature/behavior: Added a scope debrief fixture.
+- Value: Leaves a trace for this test fixture.
+
+### Constraint (ONE)
+- Constraint: Scope drift needed a guard.
+- Symptoms: Branches could stage unrelated files and project notes.
+- Workaround: Added a fixture debrief.
+- Permanent fix: Add branch and scope guards.
+- Smallest increment: Add a shared guard script.
+- Proof: Guard blocks unrelated files.
+
+### Best Follow-Up - Project
+- Next step: Keep fixture scope small.
+- Upgrades:
+
+### Best Follow-Up - Workflow
+- Issue: Project metadata can drift from actual branch scope.
+- Smallest fix: Run the scope guard before commit and PR creation.
+
+### Best Follow-Up - Non-Task
+- Issue:
+- Owner/path:
+
+### Rules
+- Rule 1: Keep staged files inside the declared scope.
+- Rule 2:
+- Rule 3:
 EOF
 }
 
@@ -125,14 +159,17 @@ mkdir -p "$repo"
 git -C "$repo" init -q
 git -C "$repo" config user.name "Test User"
 git -C "$repo" config user.email "test@example.com"
+git -C "$repo" config core.hooksPath /dev/null
 git -C "$repo" checkout -qb "project/scope-test"
 
 mkdir -p \
   "$repo/obsidian/Projects" \
   "$repo/obsidian/Debriefs" \
+  "$repo/plans/lib" \
   "$repo/src" \
   "$repo/notes" \
   "$repo/other"
+cp "$ROOT/plans/lib/obsidian_frontmatter.py" "$repo/plans/lib/obsidian_frontmatter.py"
 echo "seed" >"$repo/src/in_scope.txt"
 echo "seed" >"$repo/other/out_of_scope.txt"
 write_project_note \
