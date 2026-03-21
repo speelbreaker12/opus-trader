@@ -25,7 +25,7 @@ assert_absent_line() {
 
 [[ -f "$RUST_GATES" ]] || fail "missing rust gates script: $RUST_GATES"
 
-assert_contains_line 'run_logged_or_exit "rust_tests_smoke"'
+assert_contains_line 'run_smoke_cargo_test_gate "rust_tests_smoke"'
 assert_contains_line '--test test_execution_facade_public'
 assert_contains_line '--test test_risk_facade_public'
 assert_contains_line '--test test_venue_facade_public'
@@ -36,9 +36,9 @@ assert_contains_line 'run_logged_or_exit "risk_facade_lint"'
 assert_contains_line 'run_logged_or_exit "venue_facade_lint"'
 assert_contains_line 'run_logged_or_exit "soldier_infra_facade_lint"'
 
-line_tests_full="$(grep -nF 'run_logged_or_exit "rust_tests_full"' "$RUST_GATES" | head -n1 | cut -d: -f1)"
+line_tests_full="$(grep -nF 'run_rust_logged_or_exit "rust_tests_full"' "$RUST_GATES" | head -n1 | cut -d: -f1)"
 line_branch_fi="$(awk -v start="$line_tests_full" 'NR > start && $0 ~ /^[[:space:]]*fi$/ { print NR; exit }' "$RUST_GATES")"
-line_smoke="$(grep -nF 'run_logged_or_exit "rust_tests_smoke"' "$RUST_GATES" | head -n1 | cut -d: -f1)"
+line_smoke="$(grep -nF 'run_smoke_cargo_test_gate "rust_tests_smoke"' "$RUST_GATES" | head -n1 | cut -d: -f1)"
 line_facade_lint="$(grep -nF 'run_logged_or_exit "execution_facade_lint"' "$RUST_GATES" | head -n1 | cut -d: -f1)"
 
 [[ -n "$line_tests_full" && -n "$line_branch_fi" && -n "$line_smoke" && -n "$line_facade_lint" ]] \

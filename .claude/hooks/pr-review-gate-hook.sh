@@ -3,6 +3,7 @@
 # Exit 2 blocks the tool call with the error message shown to Claude.
 
 INPUT=$(cat)
+exec </dev/null
 
 inspect_pr_create_command() {
     local command_text="$1"
@@ -215,7 +216,7 @@ read_marker_field() {
     local marker_path="$1"
     local field_name="$2"
 
-    python3 - "$marker_path" "$field_name" <<'PY'
+    python3 -c "
 import json
 import sys
 
@@ -232,7 +233,7 @@ value = data.get(field, '')
 if value is None:
     value = ''
 print(str(value))
-PY
+" "$marker_path" "$field_name"
 }
 
 read_marker_head() {
@@ -364,9 +365,9 @@ if [ "$INSPECT_STATUS" = "1" ]; then
 fi
 [ "$TRIGGERED" -eq 1 ] || exit 0
 
-BRANCH=$(git -C "$COMMAND_CWD" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-HEAD_SHA=$(git -C "$COMMAND_CWD" rev-parse HEAD 2>/dev/null || echo "")
-REPO_ROOT=$(git -C "$COMMAND_CWD" rev-parse --show-toplevel 2>/dev/null || echo "")
+BRANCH=$(git -C "$COMMAND_CWD" rev-parse --abbrev-ref HEAD </dev/null 2>/dev/null || echo "")
+HEAD_SHA=$(git -C "$COMMAND_CWD" rev-parse HEAD </dev/null 2>/dev/null || echo "")
+REPO_ROOT=$(git -C "$COMMAND_CWD" rev-parse --show-toplevel </dev/null 2>/dev/null || echo "")
 
 # Can't determine branch — don't block
 if [ -z "$BRANCH" ] || [ "$BRANCH" = "HEAD" ]; then

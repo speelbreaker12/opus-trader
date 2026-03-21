@@ -176,6 +176,7 @@ required=(
   plans/tests/test_story_review_findings_guard.sh
   plans/tests/test_verify_fork_guardrails.sh
   plans/tests/test_verify_gate_contract_check_batching.sh
+  plans/tests/test_verify_scope.sh
   plans/tests/test_rust_gates_smoke_targets.sh
   plans/tests/test_wf_step_path_signal_scan.sh
   plans/tests/test_wf_step_review_provenance.sh
@@ -185,6 +186,7 @@ required=(
   plans/verify.sh
   plans/verify_day.sh
   plans/verify_gate_contract_check.sh
+  plans/verify_scope.sh
   plans/wf_step.sh
   plans/workflow_contract_gate.sh
   plans/workflow_contract_map.json
@@ -196,7 +198,9 @@ required=(
   plans/lib/python_gates.sh
   plans/lib/rust_gates.sh
   plans/lib/status_reason_codegen_gate.sh
+  plans/lib/verify_env.sh
   plans/lib/verify_checkpoint.sh
+  plans/lib/verify_scope_gates.sh
   plans/ci/requirements-crossref.txt
   plans/ci/requirements-verify.txt
   plans/crossref_burnin_check.sh
