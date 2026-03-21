@@ -12,11 +12,32 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
+use crate::telemetry::EventSink;
+
 use super::tlsm::TlsmState;
 
 static GROUP_LOCK_TIMEOUT_TOTAL: AtomicU64 = AtomicU64::new(0);
 static GROUP_PERSIST_FAIL_TOTAL: AtomicU64 = AtomicU64::new(0);
 static GROUP_MIXED_FAILED_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GroupEvent {
+    LockTimedOut,
+    PersistFailed,
+    EnteredMixedFailed,
+}
+
+struct ProductionGroupEvents;
+
+impl EventSink<GroupEvent> for ProductionGroupEvents {
+    fn emit(&mut self, event: GroupEvent) {
+        match event {
+            GroupEvent::LockTimedOut => bump_group_lock_timeout(),
+            GroupEvent::PersistFailed => bump_group_persist_fail(),
+            GroupEvent::EnteredMixedFailed => bump_group_mixed_failed(),
+        }
+    }
+}
 
 /// Process-lifetime counter for group lock acquisition timeouts.
 ///
@@ -40,18 +61,60 @@ pub fn group_mixed_failed_total() -> u64 {
 }
 
 fn bump_group_lock_timeout() {
+    #[cfg(test)]
+    {
+        crate::execution::with_metrics_update_lock(|| {
+            bump_group_lock_timeout_inner();
+        })
+    }
+
+    #[cfg(not(test))]
+    {
+        bump_group_lock_timeout_inner();
+    }
+}
+
+fn bump_group_persist_fail() {
+    #[cfg(test)]
+    {
+        crate::execution::with_metrics_update_lock(|| {
+            bump_group_persist_fail_inner();
+        })
+    }
+
+    #[cfg(not(test))]
+    {
+        bump_group_persist_fail_inner();
+    }
+}
+
+fn bump_group_mixed_failed() {
+    #[cfg(test)]
+    {
+        crate::execution::with_metrics_update_lock(|| {
+            bump_group_mixed_failed_inner();
+        })
+    }
+
+    #[cfg(not(test))]
+    {
+        bump_group_mixed_failed_inner();
+    }
+}
+
+fn bump_group_lock_timeout_inner() {
     GROUP_LOCK_TIMEOUT_TOTAL.fetch_add(1, Ordering::Relaxed);
     super::emit_execution_metric_line(super::METRIC_GROUP_LOCK_TIMEOUT, "");
     tracing::debug!("GroupLockTimeout");
 }
 
-fn bump_group_persist_fail() {
+fn bump_group_persist_fail_inner() {
     GROUP_PERSIST_FAIL_TOTAL.fetch_add(1, Ordering::Relaxed);
     super::emit_execution_metric_line(super::METRIC_GROUP_PERSIST_FAIL, "");
     tracing::debug!("GroupPersistFail");
 }
 
-fn bump_group_mixed_failed() {
+fn bump_group_mixed_failed_inner() {
     GROUP_MIXED_FAILED_TOTAL.fetch_add(1, Ordering::Relaxed);
     super::emit_execution_metric_line(super::METRIC_GROUP_MIXED_FAILED, "");
     tracing::debug!("GroupMixedFailed");
@@ -274,6 +337,16 @@ impl AtomicGroup {
         result: LegResult,
         config: &GroupConfig,
     ) -> GroupStateTransition {
+        let mut events = ProductionGroupEvents;
+        self.apply_leg_result_with_events(result, config, &mut events)
+    }
+
+    pub(crate) fn apply_leg_result_with_events<E: EventSink<GroupEvent>>(
+        &mut self,
+        result: LegResult,
+        config: &GroupConfig,
+        events: &mut E,
+    ) -> GroupStateTransition {
         self.leg_results.push(result.clone());
 
         // Check for failure condition on this leg
@@ -306,7 +379,7 @@ impl AtomicGroup {
             if self.state == GroupState::Dispatched || self.state == GroupState::New {
                 self.state = GroupState::MixedFailed;
                 self.containment_pending = true;
-                bump_group_mixed_failed();
+                events.emit(GroupEvent::EnteredMixedFailed);
                 return GroupStateTransition::EnteredMixedFailed { reason };
             }
         }
@@ -325,7 +398,7 @@ impl AtomicGroup {
             }
             self.state = GroupState::MixedFailed;
             self.containment_pending = true;
-            bump_group_mixed_failed();
+            events.emit(GroupEvent::EnteredMixedFailed);
             return GroupStateTransition::EnteredMixedFailed { reason };
         }
 
@@ -437,18 +510,27 @@ pub enum GroupError {
 /// with group_lock_max_wait_ms. If not acquired within the bound, the hot loop
 /// MUST NOT block and MUST force ReduceOnly until the lock clears."
 pub fn try_acquire_group_lock(lock: &mut GroupLock, config: &GroupConfig) -> LockAcquisitionResult {
+    let mut events = ProductionGroupEvents;
+    try_acquire_group_lock_with_events(lock, config, &mut events)
+}
+
+pub(crate) fn try_acquire_group_lock_with_events<E: EventSink<GroupEvent>>(
+    lock: &mut GroupLock,
+    config: &GroupConfig,
+    events: &mut E,
+) -> LockAcquisitionResult {
     let max_wait = Duration::from_millis(config.group_lock_max_wait_ms);
 
     // If lock is already held and expired, force ReduceOnly
     if lock.is_held() && lock.is_expired(max_wait) {
-        bump_group_lock_timeout();
+        events.emit(GroupEvent::LockTimedOut);
         return LockAcquisitionResult::TimedOut;
     }
 
     if lock.try_acquire() {
         LockAcquisitionResult::Acquired
     } else {
-        bump_group_lock_timeout();
+        events.emit(GroupEvent::LockTimedOut);
         LockAcquisitionResult::TimedOut
     }
 }
@@ -463,10 +545,19 @@ pub fn persist_before_dispatch(
     group: &AtomicGroup,
     persistence: &mut dyn GroupPersistence,
 ) -> Result<(), GroupError> {
+    let mut events = ProductionGroupEvents;
+    persist_before_dispatch_with_events(group, persistence, &mut events)
+}
+
+pub(crate) fn persist_before_dispatch_with_events<E: EventSink<GroupEvent>>(
+    group: &AtomicGroup,
+    persistence: &mut dyn GroupPersistence,
+    events: &mut E,
+) -> Result<(), GroupError> {
     persistence
         .persist_group_intent(&group.group_id)
         .map_err(|reason| {
-            bump_group_persist_fail();
+            events.emit(GroupEvent::PersistFailed);
             GroupError::PersistenceFailed { reason }
         })
 }
@@ -474,6 +565,9 @@ pub fn persist_before_dispatch(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::execution::{
+        begin_metrics_test, take_execution_metric_lines, with_intent_trace_ids,
+    };
 
     fn filled_leg(idx: u8, qty: f64) -> LegResult {
         LegResult {
@@ -512,10 +606,155 @@ mod tests {
         GroupConfig::default()
     }
 
-    fn metrics_lock() -> std::sync::MutexGuard<'static, ()> {
-        crate::execution::METRICS_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|err| err.into_inner())
+    #[test]
+    fn group_graybox_lock_timeout_emits_event_without_global_side_effects() {
+        let _guard = begin_metrics_test();
+        let before = group_lock_timeout_total();
+        let mut lock = GroupLock::new();
+        let config = default_config();
+        let mut events = Vec::new();
+
+        assert!(lock.try_acquire());
+        let result = try_acquire_group_lock_with_events(&mut lock, &config, &mut events);
+
+        assert_eq!(result, LockAcquisitionResult::TimedOut);
+        assert_eq!(group_lock_timeout_total(), before);
+        assert_eq!(events, vec![GroupEvent::LockTimedOut]);
+        assert!(
+            take_execution_metric_lines().is_empty(),
+            "graybox path must not emit metric lines"
+        );
+    }
+
+    #[test]
+    fn group_wrapper_lock_timeout_preserves_metric_contract() {
+        let _guard = begin_metrics_test();
+        let before = group_lock_timeout_total();
+        let mut lock = GroupLock::new();
+        let config = default_config();
+
+        assert!(lock.try_acquire());
+        let result = with_intent_trace_ids("intent-group-lock-001", "run-group-lock-001", || {
+            try_acquire_group_lock(&mut lock, &config)
+        });
+
+        assert_eq!(result, LockAcquisitionResult::TimedOut);
+        assert_eq!(group_lock_timeout_total(), before + 1);
+        let lines = take_execution_metric_lines();
+        assert!(
+            lines.iter().any(|line| {
+                line.starts_with("group_lock_timeout_total")
+                    && line.contains("intent_id=intent-group-lock-001")
+                    && line.contains("run_id=run-group-lock-001")
+            }),
+            "expected group lock timeout metric line, got {lines:?}"
+        );
+    }
+
+    #[test]
+    fn group_graybox_persist_failure_emits_event_without_global_side_effects() {
+        let _guard = begin_metrics_test();
+        let before = group_persist_fail_total();
+        let group = AtomicGroup::new("grp-persist-graybox".to_string(), 2);
+        let mut persistence = InMemoryGroupPersistence {
+            fail_persist: true,
+            ..InMemoryGroupPersistence::default()
+        };
+        let mut events = Vec::new();
+
+        let result = persist_before_dispatch_with_events(&group, &mut persistence, &mut events);
+
+        assert!(matches!(result, Err(GroupError::PersistenceFailed { .. })));
+        assert_eq!(group_persist_fail_total(), before);
+        assert_eq!(events, vec![GroupEvent::PersistFailed]);
+        assert!(
+            take_execution_metric_lines().is_empty(),
+            "graybox path must not emit metric lines"
+        );
+    }
+
+    #[test]
+    fn group_wrapper_persist_failure_preserves_metric_contract() {
+        let _guard = begin_metrics_test();
+        let before = group_persist_fail_total();
+        let group = AtomicGroup::new("grp-persist-wrapper".to_string(), 2);
+        let mut persistence = InMemoryGroupPersistence {
+            fail_persist: true,
+            ..InMemoryGroupPersistence::default()
+        };
+
+        let result =
+            with_intent_trace_ids("intent-group-persist-001", "run-group-persist-001", || {
+                persist_before_dispatch(&group, &mut persistence)
+            });
+
+        assert!(matches!(result, Err(GroupError::PersistenceFailed { .. })));
+        assert_eq!(group_persist_fail_total(), before + 1);
+        let lines = take_execution_metric_lines();
+        assert!(
+            lines.iter().any(|line| {
+                line.starts_with("group_persist_fail_total")
+                    && line.contains("intent_id=intent-group-persist-001")
+                    && line.contains("run_id=run-group-persist-001")
+            }),
+            "expected group persist fail metric line, got {lines:?}"
+        );
+    }
+
+    #[test]
+    fn group_graybox_mixed_failed_emits_event_without_global_side_effects() {
+        let _guard = begin_metrics_test();
+        let before = group_mixed_failed_total();
+        let config = default_config();
+        let mut group = AtomicGroup::new("grp-graybox-mixed".to_string(), 2);
+        let mut events = Vec::new();
+        group.mark_dispatched().expect("dispatch should succeed");
+
+        let transition =
+            group.apply_leg_result_with_events(rejected_leg(0, 1.0), &config, &mut events);
+
+        assert!(matches!(
+            transition,
+            GroupStateTransition::EnteredMixedFailed { .. }
+        ));
+        assert_eq!(group_mixed_failed_total(), before);
+        assert!(matches!(
+            events.as_slice(),
+            [GroupEvent::EnteredMixedFailed]
+        ));
+        assert!(
+            take_execution_metric_lines().is_empty(),
+            "graybox path must not emit metric lines"
+        );
+    }
+
+    #[test]
+    fn group_wrapper_mixed_failed_preserves_metric_contract() {
+        let _guard = begin_metrics_test();
+        let before = group_mixed_failed_total();
+        let config = default_config();
+        let mut group = AtomicGroup::new("grp-wrapper-mixed".to_string(), 2);
+        group.mark_dispatched().expect("dispatch should succeed");
+
+        let transition =
+            with_intent_trace_ids("intent-group-mixed-001", "run-group-mixed-001", || {
+                group.apply_leg_result(rejected_leg(0, 1.0), &config)
+            });
+
+        assert!(matches!(
+            transition,
+            GroupStateTransition::EnteredMixedFailed { .. }
+        ));
+        assert_eq!(group_mixed_failed_total(), before + 1);
+        let lines = take_execution_metric_lines();
+        assert!(
+            lines.iter().any(|line| {
+                line.starts_with("group_mixed_failed_total")
+                    && line.contains("intent_id=intent-group-mixed-001")
+                    && line.contains("run_id=run-group-mixed-001")
+            }),
+            "expected group mixed failed metric line, got {lines:?}"
+        );
     }
 
     // ─── AT-116: Leg A filled, Leg B rejected → MixedFailed ─────────────
@@ -723,7 +962,7 @@ mod tests {
 
     #[test]
     fn static_counter_lock_timeout_increments() {
-        let _guard = metrics_lock();
+        let _guard = begin_metrics_test();
         let before = group_lock_timeout_total();
         let config = GroupConfig {
             group_lock_max_wait_ms: 0,
@@ -741,7 +980,7 @@ mod tests {
 
     #[test]
     fn static_counter_persist_fail_increments() {
-        let _guard = metrics_lock();
+        let _guard = begin_metrics_test();
         let before = group_persist_fail_total();
         let group = AtomicGroup::new("grp-counter-persist".to_string(), 2);
         let mut store = InMemoryGroupPersistence {
@@ -759,7 +998,7 @@ mod tests {
 
     #[test]
     fn static_counter_mixed_failed_increments() {
-        let _guard = metrics_lock();
+        let _guard = begin_metrics_test();
         let before = group_mixed_failed_total();
         let config = GroupConfig::default();
         let mut group = AtomicGroup::new("grp-counter-mixed".to_string(), 2);

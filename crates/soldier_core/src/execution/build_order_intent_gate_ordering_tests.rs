@@ -15,12 +15,21 @@
 //! **Dispatch causality**: Pipeline-level AT-920 proofs live in
 //! `test_intent_pipeline.rs::test_at920_pipeline_dispatch_consistency_failure_rejected`.
 
-use super::super::{take_execution_metric_lines, with_intent_trace_ids};
+use super::super::{begin_metrics_test, take_execution_metric_lines, with_intent_trace_ids};
 use super::{
-    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults,
-    GateSequenceResult, GateStep, gate_sequence_total,
+    ChokeEvent, ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults,
+    GateSequenceResult, GateStep, RecordedBeforeDispatchGate, WalNonblockingSource,
+    build_order_intent_internal_with_events, gate_sequence_total, wal_nonblocking_allowed_total,
 };
 use crate::risk::RiskState;
+
+struct ErrWalGate(&'static str);
+
+impl RecordedBeforeDispatchGate for ErrWalGate {
+    fn record_before_dispatch(&mut self) -> Result<(), String> {
+        Err(self.0.to_string())
+    }
+}
 
 fn gate_results_all_passing() -> GateResults {
     GateResults {
@@ -84,6 +93,7 @@ fn test_at501_open_all_gates_pass_trace_order() {
 
 #[test]
 fn test_gate_sequence_emits_structured_reject_metric_line() {
+    let _guard = begin_metrics_test();
     let intent_id = "intent-gateseq-001";
     let run_id = "run-gateseq-001";
     let _ = take_execution_metric_lines();
@@ -128,6 +138,219 @@ fn test_gate_sequence_emits_structured_reject_metric_line() {
             .iter()
             .any(|line| line.starts_with("gate_sequence_total")),
         "expected gate sequence metric line, got {lines:?}"
+    );
+}
+
+#[test]
+fn gate_sequence_graybox_reject_emits_event_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = gate_sequence_total(GateSequenceResult::Rejected);
+    let mut metrics = ChokeMetrics::new();
+    let gates = gate_results_all_passing();
+    let mut events = Vec::new();
+
+    let result = build_order_intent_internal_with_events(
+        ChokeIntentClass::Open,
+        RiskState::Degraded,
+        &mut metrics,
+        &gates,
+        None,
+        &mut events,
+    );
+
+    assert!(matches!(
+        result,
+        ChokeResult::Rejected {
+            reason: ChokeRejectReason::RiskStateNotHealthy,
+            ..
+        }
+    ));
+    assert_eq!(gate_sequence_total(GateSequenceResult::Rejected), before);
+    assert_eq!(events, vec![ChokeEvent::GateSequenceRejected]);
+    assert!(
+        take_execution_metric_lines().is_empty(),
+        "graybox path must not emit metric lines"
+    );
+}
+
+#[test]
+fn gate_sequence_wrapper_allowed_preserves_metric_contract() {
+    let _guard = begin_metrics_test();
+    let before = gate_sequence_total(GateSequenceResult::Allowed);
+    let mut metrics = ChokeMetrics::new();
+    let gates = gate_results_all_passing();
+
+    let result = with_intent_trace_ids("intent-gateseq-allow-001", "run-gateseq-allow-001", || {
+        legacy_build_order_intent(
+            ChokeIntentClass::Open,
+            RiskState::Healthy,
+            &mut metrics,
+            &gates,
+        )
+    });
+
+    assert!(matches!(result, ChokeResult::Approved { .. }));
+    assert_eq!(gate_sequence_total(GateSequenceResult::Allowed), before + 1);
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("gate_sequence_total")
+                && line.contains("result=allowed")
+                && line.contains("intent_id=intent-gateseq-allow-001")
+                && line.contains("run_id=run-gateseq-allow-001")
+        }),
+        "expected gate sequence allowed metric line, got {lines:?}"
+    );
+}
+
+#[test]
+fn wal_nonblocking_graybox_emits_event_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = wal_nonblocking_allowed_total();
+    let mut metrics = ChokeMetrics::new();
+    let gates = GateResults {
+        wal_recorded: false,
+        ..gate_results_all_passing()
+    };
+    let mut events = Vec::new();
+
+    let result = build_order_intent_internal_with_events(
+        ChokeIntentClass::Close,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        None,
+        &mut events,
+    );
+
+    assert!(matches!(result, ChokeResult::Approved { .. }));
+    assert_eq!(wal_nonblocking_allowed_total(), before);
+    assert_eq!(
+        events,
+        vec![
+            ChokeEvent::WalNonblockingAllowed {
+                intent_class: ChokeIntentClass::Close,
+                source: WalNonblockingSource::PrecomputedFalse,
+                wal_error: None,
+            },
+            ChokeEvent::GateSequenceAllowed,
+        ]
+    );
+    assert!(
+        take_execution_metric_lines().is_empty(),
+        "graybox path must not emit metric lines"
+    );
+}
+
+#[test]
+fn wal_gate_error_graybox_preserves_error_context_in_event() {
+    let _guard = begin_metrics_test();
+    let before = wal_nonblocking_allowed_total();
+    let mut metrics = ChokeMetrics::new();
+    let gates = gate_results_all_passing();
+    let mut wal_gate = ErrWalGate("disk_full");
+    let mut events = Vec::new();
+
+    let result = build_order_intent_internal_with_events(
+        ChokeIntentClass::Close,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        Some(&mut wal_gate),
+        &mut events,
+    );
+
+    assert!(matches!(result, ChokeResult::Approved { .. }));
+    assert_eq!(wal_nonblocking_allowed_total(), before);
+    assert_eq!(
+        events,
+        vec![
+            ChokeEvent::WalNonblockingAllowed {
+                intent_class: ChokeIntentClass::Close,
+                source: WalNonblockingSource::WalGateError,
+                wal_error: Some("disk_full".to_string()),
+            },
+            ChokeEvent::GateSequenceAllowed,
+        ]
+    );
+    assert!(
+        take_execution_metric_lines().is_empty(),
+        "graybox path must not emit metric lines"
+    );
+}
+
+#[test]
+fn wal_nonblocking_wrapper_preserves_metric_contract() {
+    let _guard = begin_metrics_test();
+    let before = wal_nonblocking_allowed_total();
+    let mut metrics = ChokeMetrics::new();
+    let gates = GateResults {
+        wal_recorded: false,
+        ..gate_results_all_passing()
+    };
+
+    let result = with_intent_trace_ids(
+        "intent-wal-nonblocking-001",
+        "run-wal-nonblocking-001",
+        || {
+            legacy_build_order_intent(
+                ChokeIntentClass::Close,
+                RiskState::Healthy,
+                &mut metrics,
+                &gates,
+            )
+        },
+    );
+
+    assert!(matches!(result, ChokeResult::Approved { .. }));
+    assert_eq!(wal_nonblocking_allowed_total(), before + 1);
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("wal_nonblocking_allowed_total")
+                && line.contains("intent_class=Close")
+                && line.contains("source=precomputed_false")
+                && line.contains("intent_id=intent-wal-nonblocking-001")
+                && line.contains("run_id=run-wal-nonblocking-001")
+        }),
+        "expected WAL nonblocking metric line, got {lines:?}"
+    );
+}
+
+#[test]
+fn wal_gate_error_wrapper_preserves_metric_contract() {
+    let _guard = begin_metrics_test();
+    let before = wal_nonblocking_allowed_total();
+    let mut metrics = ChokeMetrics::new();
+    let gates = gate_results_all_passing();
+    let mut wal_gate = ErrWalGate("disk_full");
+
+    let result = with_intent_trace_ids(
+        "intent-wal-nonblocking-err-001",
+        "run-wal-nonblocking-err-001",
+        || {
+            super::build_order_intent_with_wal_gate(
+                ChokeIntentClass::Close,
+                RiskState::Healthy,
+                &mut metrics,
+                &gates,
+                &mut wal_gate,
+            )
+        },
+    );
+
+    assert!(matches!(result, ChokeResult::Approved { .. }));
+    assert_eq!(wal_nonblocking_allowed_total(), before + 1);
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("wal_nonblocking_allowed_total")
+                && line.contains("intent_class=Close")
+                && line.contains("source=wal_gate_error")
+                && line.contains("intent_id=intent-wal-nonblocking-err-001")
+                && line.contains("run_id=run-wal-nonblocking-err-001")
+        }),
+        "expected WAL nonblocking wal_gate_error metric line, got {lines:?}"
     );
 }
 
