@@ -171,7 +171,13 @@ if not roots:
     print("FAIL: no scan roots provided", file=sys.stderr)
     sys.exit(1)
 
-violations = []
+# --- Pass 1: collect ALL wrapper bases across all files ---
+# A wrapper base is a function name X such that both `fn X(` and `fn X_with_events(`
+# exist (in any file across all scan roots).
+all_plain_function_names: set[str] = set()
+all_with_events_bases: set[str] = set()
+file_cache: list[tuple[pathlib.Path, str, str]] = []  # (path, text, sanitized_code)
+
 for root in roots:
     if not root.exists():
         print(f"FAIL: missing scan root: {root}", file=sys.stderr)
@@ -179,47 +185,47 @@ for root in roots:
     for path in sorted(root.rglob("*.rs")):
         text = path.read_text(encoding="utf-8")
         code = sanitize(text)
-        plain_function_names = {
-            match.group(1)
-            for match in PLAIN_FUNCTION_RE.finditer(code)
-            if not match.group(1).endswith("_with_events")
-        }
-        # TODO: wrapper_bases detection is file-local only; it does not track
-        # wrappers imported cross-module (e.g., a wrapper defined in module A
-        # and called in module B). A full cross-module analysis would require
-        # building a call-graph across crate sources.
-        wrapper_bases = {
-            match.group(1)[: -len("_with_events")]
-            for match in FUNCTION_RE.finditer(code)
-            if match.group(1)[: -len("_with_events")] in plain_function_names
-        }
-        for match in FUNCTION_RE.finditer(code):
-            name = match.group(1)
-            search_start = match.end()
-            next_brace = code.find("{", search_start)
-            next_semi = code.find(";", search_start)
-            if next_semi != -1 and (next_brace == -1 or next_semi < next_brace):
-                continue
-            brace_index = next_brace
-            if brace_index == -1:
-                violations.append(f"{path}: unable to find body for {name}")
-                continue
-            close_index = find_matching_brace(code, brace_index)
-            body = code[brace_index + 1:close_index]
-            for pattern, description in FORBIDDEN.items():
-                hit = re.search(pattern, body)
-                if hit:
-                    line = text[: brace_index + 1 + hit.start()].count("\n") + 1
-                    violations.append(
-                        f"{path}:{line}: {name} contains forbidden {description}"
-                    )
-            for wrapper_base in wrapper_bases:
-                hit = re.search(rf"(?<!\.)\b{re.escape(wrapper_base)}\s*\(", body)
-                if hit:
-                    line = text[: brace_index + 1 + hit.start()].count("\n") + 1
-                    violations.append(
-                        f"{path}:{line}: {name} contains forbidden wrapper call bypassing sink seam"
-                    )
+        file_cache.append((path, text, code))
+        for m in PLAIN_FUNCTION_RE.finditer(code):
+            name = m.group(1)
+            if name.endswith("_with_events"):
+                all_with_events_bases.add(name[: -len("_with_events")])
+            else:
+                all_plain_function_names.add(name)
+
+# Global wrapper bases: functions that have both a plain and _with_events variant
+global_wrapper_bases = all_with_events_bases & all_plain_function_names
+
+# --- Pass 2: check _with_events function bodies ---
+violations = []
+for path, text, code in file_cache:
+    for match in FUNCTION_RE.finditer(code):
+        name = match.group(1)
+        search_start = match.end()
+        next_brace = code.find("{", search_start)
+        next_semi = code.find(";", search_start)
+        if next_semi != -1 and (next_brace == -1 or next_semi < next_brace):
+            continue
+        brace_index = next_brace
+        if brace_index == -1:
+            violations.append(f"{path}: unable to find body for {name}")
+            continue
+        close_index = find_matching_brace(code, brace_index)
+        body = code[brace_index + 1:close_index]
+        for pattern, description in FORBIDDEN.items():
+            hit = re.search(pattern, body)
+            if hit:
+                line = text[: brace_index + 1 + hit.start()].count("\n") + 1
+                violations.append(
+                    f"{path}:{line}: {name} contains forbidden {description}"
+                )
+        for wrapper_base in global_wrapper_bases:
+            hit = re.search(rf"(?<!\.)\b{re.escape(wrapper_base)}\s*\(", body)
+            if hit:
+                line = text[: brace_index + 1 + hit.start()].count("\n") + 1
+                violations.append(
+                    f"{path}:{line}: {name} contains forbidden wrapper call bypassing sink seam"
+                )
 
 if violations:
     print("FAIL: graybox telemetry seams must stay free of direct telemetry calls")
