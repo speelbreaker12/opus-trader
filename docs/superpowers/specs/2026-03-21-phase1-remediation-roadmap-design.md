@@ -20,13 +20,16 @@ This design is based on:
 - `obsidian/Projects/Subsystem Audit Phase 1 Revalidation.md`
 - the current `specs/CONTRACT.md` and `plans/prd.json`
 
-The audit identifies these shipped Phase 1 regressions:
+For roadmap purposes, the audit identifies these core Phase 1 regression findings:
 
 - `EMCLOSE-001`
 - `MARGIN-001` through `MARGIN-006`
 - `RSI-001`, `RSI-002`
-- `WAL-001`, `WAL-002`, `WAL-004`, `WAL-005`
-- `EMCLOSE-006`
+
+The audit separately identifies these non-core findings that should not silently drift back onto the critical path:
+
+- conditional-pass WAL cleanup findings: `WAL-001`, `WAL-002`, `WAL-004`, `WAL-005`
+- a Phase 1 proof gap: `EMCLOSE-006`
 
 The audit also records a workflow precondition: current `main` is not considered landable for follow-on work until the `wf_test_pr_review_gate_hook` baseline issue is inherited from, or fixed on, the chosen integration base.
 
@@ -86,7 +89,7 @@ This is the best match for the repo's actual constraint: mergeable, contract-pro
 
 ## Roadmap Structure
 
-The roadmap has two lanes, but only one is on the critical path.
+The roadmap has three lanes, with one core remediation lane and only the workflow precondition plus that core lane on the critical path.
 
 ### Lane A: workflow precondition
 
@@ -131,7 +134,6 @@ Out of scope:
 Audit items:
 
 - `EMCLOSE-001`
-- `EMCLOSE-006`
 
 Purpose:
 
@@ -139,17 +141,17 @@ Purpose:
 
 Scope:
 
-- `execution/base_gates.rs`
-- emergency-close tests and chokepoint coverage
+- `crates/soldier_core/src/execution/base_gates.rs`
+- targeted execution tests under `crates/soldier_core/src/execution/` that prove stale fee state does not block risk-reducing intents
 
 Exit criteria:
 
 - `Close`, `Hedge`, and `Cancel` cannot be blocked by stale fee gating
-- explicit regression proof exists for `Close/Hedge` under `RiskState::Kill`
 
 Out of scope:
 
 - full emergency close algorithm work from Phase 2
+- `EMCLOSE-006` when it requires standalone chokepoint proof beyond the stale-fee behavioral surface touched by Story 1
 
 ### Story 2: Margin Gate Input Semantics
 
@@ -166,10 +168,10 @@ Purpose:
 
 Scope:
 
-- `MarginHeadroomInputMissing` across the runtime enum, manifests, and generated/codegen-facing surfaces
-- NaN and missing-input handling
-- `account_summary_max_age_ms` wiring
-- required observability counters and logs
+- `crates/soldier_core/src/risk/margin_gate.rs`
+- `crates/soldier_core/src/execution/reject_reason.rs`
+- `crates/soldier_core/src/execution/reject_reason_generated.rs`
+- NaN and missing-input handling, `account_summary_max_age_ms` wiring, and required observability counters/logs
 
 Exit criteria:
 
@@ -196,15 +198,16 @@ Purpose:
 
 Scope:
 
-- `initial_margin` field addition or restoration on `MarginGateInput` and its callers
-- `initial_margin` validation and consumption
-- `mm_util` denominator rule
+- `crates/soldier_core/src/risk/margin_gate.rs`
+- the `MarginGateInput` caller wiring under `crates/soldier_core/src/execution/`
+- `initial_margin` field addition or restoration, validation, and consumption
+- the exact contract rule `mm_util = maintenance_margin / max(equity, epsilon)`
 
 Exit criteria:
 
 - `MarginGateInput` exposes the contract-required `initial_margin` input through the relevant wiring surfaces
 - `initial_margin` is used or validated as required by the contract
-- `mm_util` uses the contract-safe denominator rule such as `max(equity, epsilon)`
+- `mm_util` uses the exact contract rule `maintenance_margin / max(equity, epsilon)`
 
 Out of scope:
 
@@ -223,7 +226,8 @@ Purpose:
 
 Scope:
 
-- authoritative `RiskState`
+- `crates/soldier_core/src/risk/state.rs`
+- `crates/soldier_core/src/status_codes_generated.rs`
 - generated vs. runtime `ModeReasonCode` alignment
 
 Exit criteria:
@@ -285,7 +289,8 @@ Every remediation story should produce the same evidence shape:
 Per-story proof should include:
 
 - audit item reference
-- contract or PRD reference
+- required contract reference
+- optional PRD reference only as supporting context when it does not conflict with the contract
 - focused command output
 - final green targeted tests
 
@@ -334,10 +339,11 @@ This roadmap does not include:
 
 The recommended plan is:
 
-1. clear or inherit the workflow baseline fix first
+1. clear Story 0, or inherit a base where Story 0 is already green
 2. land four core Phase 1 remediation stories in risk order
 3. treat WAL cleanup as an optional post-remediation lane unless fresh evidence promotes it
-4. keep the audit branch as evidence and planning only
-5. demand contract-proven exits for each story instead of one large remediation batch
+4. treat `EMCLOSE-006` as a separate proof task unless Story 1 naturally proves the same touched surface
+5. keep the audit branch as evidence and planning only
+6. demand contract-proven exits for each story instead of one large remediation batch
 
 This provides the narrowest path to reducing real Phase 1 risk while preserving the repo's verification discipline.
