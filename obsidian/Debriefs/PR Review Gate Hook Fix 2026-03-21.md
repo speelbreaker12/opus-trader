@@ -4,7 +4,7 @@ date: "2026-03-21"
 ---
 
 ## Commits
-- pending
+- `06f033a3`
 
 ## 0) What shipped
 - Feature/behavior: Restored fail-closed `gh pr create` review-stack enforcement in `.claude/hooks/pr-review-gate-hook.sh` and aligned `/review-stack` marker docs/tests to the canonical `${SAFE_BRANCH}.json` path, while keeping backward-compatible support for legacy `.review-stack.json` markers.

@@ -27,7 +27,7 @@ scope_paths:
 In progress on branch `workflow/pr-review-gate-hook-fix` in worktree `/Users/admin/Desktop/opus-trader/.git/Desktop/wt_pr_review_gate_hook_fix`. The hook now fail-closes PR creation when the canonical review-stack marker is missing, invalid, or stale, while still honoring legacy `.review-stack.json` markers only when no canonical marker exists. Local focused verification passed via direct hook invocations plus syntax/diff checks; the full long-running shell fixture remains noisy in this Codex session because unrelated background harnesses in other worktrees keep re-spawning the same hook test.
 
 ## Commits
-- `pending` — 2026-03-21 — restore blocking PR review gate behavior for missing/stale review-stack markers and align the command doc with the live marker path.
+- `06f033a3` — 2026-03-21 — restore blocking PR review gate behavior for missing/stale review-stack markers, preserve legacy marker fallback safely, and align the command doc with the live marker path.
 
 ## Key Files
 - .claude/hooks/pr-review-gate-hook.sh
