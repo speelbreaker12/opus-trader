@@ -474,7 +474,7 @@ fn test_inventory_skew_graybox_emits_reject_event_without_global_side_effects() 
 }
 
 #[test]
-fn test_inventory_skew_graybox_success_emits_no_events_or_global_side_effects() {
+fn test_inventory_skew_graybox_success_emits_allowed_event_without_global_side_effects() {
     let _guard = begin_metrics_test();
     let before = inventory_skew_reject_total(InventorySkewRejectReason::InventorySkewReject);
     let mut metrics = InventorySkewMetrics::new();
