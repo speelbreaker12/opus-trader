@@ -41,6 +41,7 @@ the codex exec fallback path has content available.
 - [[chairman-synthesis 2026-03-19 Pipeline Integration]]
 - [[chairman-synthesis 2026-03-19 Harden Script]]
 - [[chairman-synthesis 2026-03-19 PIPESTATUS and Parser Fixes]]
+- [[chairman-synthesis 2026-03-21 PR Review Fixes]]
 
 ## Log
 ### 2026-03-19
@@ -60,3 +61,9 @@ the codex exec fallback path has content available.
 - Added error handling for canonical artifact read failure in sidecar parser
 - Added zero-findings warning when chairman output does not match expected format
 - parallel_review.sh: chairman failure now returns distinct exit code 4, dry-run reports chairman intent
+
+### 2026-03-21
+- Address PR #221 review comments:
+  - Default chairman style changed from `generic` to `enriched` to match parallel_review/review_logged defaults
+  - Guard cleanup trap `rm -f` against empty CLEANUP_FILES array
+  - Added smoke test `plans/tests/test_chairman_integration.sh` for --chairman integration path

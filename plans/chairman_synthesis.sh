@@ -17,7 +17,7 @@ set -euo pipefail
 #
 # Options:
 #   --tool TOOL      Chairman model: sonnet or opus (default: opus)
-#   --style STYLE    Which prompt-style artifacts to read: generic or enriched (default: generic)
+#   --style STYLE    Which prompt-style artifacts to read: generic or enriched (default: enriched)
 #   --dry-run        Print prompt to stdout without calling the model
 #
 # Exit codes:
@@ -40,7 +40,7 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not in a git repo"
 RUN_DIR_ARG="$1"; shift
 
 CHAIRMAN_TOOL="opus"
-STYLE="generic"
+STYLE="enriched"
 DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
@@ -108,9 +108,9 @@ cleanup() {
     for f in "${CLEANUP_FILES[@]}"; do
       [[ "$f" != "$PROMPT_TMP" ]] && filtered+=("$f")
     done
-    rm -f "${filtered[@]}" 2>/dev/null || true
+    [[ ${#filtered[@]} -gt 0 ]] && rm -f "${filtered[@]}" 2>/dev/null || true
   else
-    rm -f "${CLEANUP_FILES[@]}" 2>/dev/null || true
+    [[ ${#CLEANUP_FILES[@]} -gt 0 ]] && rm -f "${CLEANUP_FILES[@]}" 2>/dev/null || true
   fi
 }
 trap cleanup EXIT
