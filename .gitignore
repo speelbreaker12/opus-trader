@@ -16,7 +16,11 @@ __pycache__/
 evals/
 
 # Local Codex config
-.codex/
+.codex/*
+!.codex/commands/
+!.codex/commands/*.md
+!.codex/skills/
+!.codex/skills/**
 
 # Local IDE/Agent state
 .claude/*
