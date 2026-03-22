@@ -5,4 +5,4 @@ context: fork
 allowed-tools: ["Read", "Glob", "Grep", "Bash", "Agent"]
 ---
 
-!`cat SKILLS/ralph-loop.md || echo "ERROR: SKILLS/ralph-loop.md not found"`
+!`REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "ERROR: ralph-loop skill: unable to determine repository root."; exit 1; }; FILE="$REPO_ROOT/SKILLS/ralph-loop.md"; if [ ! -r "$FILE" ]; then echo "ERROR: ralph-loop skill: markdown file not found at '$FILE'."; exit 1; fi; cat "$FILE"`

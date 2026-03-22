@@ -5,4 +5,4 @@ context: fork
 allowed-tools: ["Read", "Glob", "Grep", "Bash"]
 ---
 
-!`cat SKILLS/premortem.md || echo "ERROR: SKILLS/premortem.md not found"`
+!`REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "ERROR: premortem skill: unable to determine repository root."; exit 1; }; FILE="$REPO_ROOT/SKILLS/premortem.md"; if [ ! -r "$FILE" ]; then echo "ERROR: premortem skill: markdown file not found at '$FILE'."; exit 1; fi; cat "$FILE"`

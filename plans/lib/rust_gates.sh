@@ -248,11 +248,11 @@ run_rust_smoke_and_facade_lints_gate() {
     -p soldier_infra --locked \
     --test test_soldier_infra_facade_public
 
-  run_logged_or_exit "execution_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_execution_facade.sh
-  run_logged_or_exit "risk_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_risk_facade.sh
-  run_logged_or_exit "venue_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_venue_facade.sh
-  run_logged_or_exit "soldier_infra_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_soldier_infra_facade.sh
-}
+run_logged_or_exit "execution_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_execution_facade.sh
+run_logged_or_exit "facade_public_modules_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_facade_public_modules.sh
+run_logged_or_exit "risk_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_risk_facade.sh
+run_logged_or_exit "venue_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_venue_facade.sh
+run_logged_or_exit "soldier_infra_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_soldier_infra_facade.sh
 
 run_rust_gates() {
   ensure_rust_runner_config

@@ -5,4 +5,4 @@ context: fork
 allowed-tools: ["Read", "Glob", "Grep", "Bash", "Agent"]
 ---
 
-!`cat SKILLS/grill.md || echo "ERROR: SKILLS/grill.md not found"`
+!`REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "ERROR: grill skill: unable to determine repository root."; exit 1; }; FILE="$REPO_ROOT/SKILLS/grill.md"; if [ ! -r "$FILE" ]; then echo "ERROR: grill skill: markdown file not found at '$FILE'."; exit 1; fi; cat "$FILE"`

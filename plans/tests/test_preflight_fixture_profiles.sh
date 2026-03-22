@@ -159,6 +159,8 @@ assert_list_contains "$smoke_list" "plans/tests/test_verify_timeout_policy.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_fail_closed_gate_map_paths.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_rust_gates_quick_clippy.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_rust_gates_smoke_targets.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_lint_facade_public_modules.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_pre_push_hook_env_isolation.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_lint_execution_facade.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_lint_risk_facade.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_lint_venue_facade.sh"
@@ -178,6 +180,16 @@ workflow_verify_list="$(extract_array "WORKFLOW_INTEGRATION_TESTS" "$VERIFY_FORK
 full_mode_workflow_verify_list="$(extract_array "FULL_MODE_WORKFLOW_INTEGRATION_TESTS" "$VERIFY_FORK")"
 [[ -n "$workflow_verify_list" ]] || fail "WORKFLOW_INTEGRATION_TESTS is empty"
 [[ -n "$full_mode_workflow_verify_list" ]] || fail "FULL_MODE_WORKFLOW_INTEGRATION_TESTS is empty"
+
+while IFS= read -r workflow_test; do
+  [[ -n "$workflow_test" ]] || continue
+  [[ -f "$ROOT/$workflow_test" ]] || fail "workflow integration test missing on disk: $workflow_test"
+done <<< "$workflow_verify_list"
+
+while IFS= read -r workflow_test; do
+  [[ -n "$workflow_test" ]] || continue
+  [[ -f "$ROOT/$workflow_test" ]] || fail "full-mode workflow integration test missing on disk: $workflow_test"
+done <<< "$full_mode_workflow_verify_list"
 
 assert_list_contains "$full_mode_workflow_verify_list" "plans/tests/test_preflight_fixture_timeout_controls.sh"
 assert_list_contains "$full_mode_workflow_verify_list" "plans/tests/test_recon_operator_runner.sh"
@@ -293,7 +305,7 @@ serial_overlap="$(
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_serial_count="$(printf '%s\n' "$full_only_serial_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "12" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 12)"
+[[ "$smoke_count" == "14" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 14)"
 [[ "$full_only_count" == "9" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 9)"
 [[ "$full_only_serial_count" == "0" ]] || fail "unexpected full-only serial fixture count: $full_only_serial_count (expected 0)"
 

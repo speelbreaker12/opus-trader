@@ -5,4 +5,4 @@ context: fork
 allowed-tools: ["Read", "Glob", "Grep", "Bash"]
 ---
 
-!`cat SKILLS/main-recovery.md || echo "ERROR: SKILLS/main-recovery.md not found"`
+!`REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "ERROR: main-recovery skill: unable to determine repository root."; exit 1; }; FILE="$REPO_ROOT/SKILLS/main-recovery.md"; if [ ! -r "$FILE" ]; then echo "ERROR: main-recovery skill: markdown file not found at '$FILE'."; exit 1; fi; cat "$FILE"`

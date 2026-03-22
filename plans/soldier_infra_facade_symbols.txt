@@ -41,6 +41,7 @@ build_created_intent_record
 build_created_intent_record_from_input
 build_gate_config_from_raw
 durable_append
+infra_bootstrapped
 map_deribit_kind_to_input
 param_name
 reduce_only_from_lifecycle_intent

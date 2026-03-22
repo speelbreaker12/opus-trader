@@ -23,6 +23,17 @@ assert_contains_line() {
 
 assert_contains_line 'source "$ROOT/plans/lib/verify_env.sh"' "$VERIFY"
 assert_contains_line 'init_verify_env "verify"' "$VERIFY"
+assert_contains_line 'PREFLIGHT_TIMEOUT_WAS_SET=0'
+assert_contains_line 'if [[ -n "${PREFLIGHT_TIMEOUT:-}" ]]; then'
+assert_contains_line 'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-600s}"'
+assert_contains_line 'if [[ "$MODE" == "full" && "$PREFLIGHT_TIMEOUT_WAS_SET" -eq 0 ]]; then'
+assert_contains_line 'PREFLIGHT_TIMEOUT="1800s"'
+assert_contains_line 'if [[ "$MODE" == "quick" ]]; then'
+assert_contains_line 'RUST_CLIPPY_TIMEOUT="${RUST_CLIPPY_TIMEOUT:-5m}"'
+assert_contains_line 'RUST_CLIPPY_TIMEOUT="${RUST_CLIPPY_TIMEOUT:-15m}"'
+assert_contains_line 'RUST_TEST_TIMEOUT="${RUST_TEST_TIMEOUT:-5m}"'
+assert_contains_line 'RUST_TEST_TIMEOUT="${RUST_TEST_TIMEOUT:-45m}"'
+assert_contains_line 'MECHANICAL_TIMEOUT="${MECHANICAL_TIMEOUT:-10m}"'
 
 assert_contains_line 'local preflight_timeout_was_set=0' "$VERIFY_ENV"
 assert_contains_line 'if [[ -n "${PREFLIGHT_TIMEOUT:-}" ]]; then' "$VERIFY_ENV"
