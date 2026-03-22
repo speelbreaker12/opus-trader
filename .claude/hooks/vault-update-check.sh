@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Warn if committing or pushing without updating the external Obsidian vault project page.
-# Soft gate — warns but does not block (exit 0 always).
+# Block commit or push if the external Obsidian vault project page is stale.
+# Hard gate — exit 2 blocks the tool call.
 
 INPUT="$(cat)"
 COMMAND="$(echo "$INPUT" | grep -o '"command":"[^"]*"' | head -1 | sed 's/"command":"//;s/"$//' 2>/dev/null || true)"
@@ -18,7 +18,7 @@ $IS_COMMIT || $IS_PUSH || exit 0
 VAULT="${OBSIDIAN_VAULT_PATH:-$HOME/Desktop/obsidian}"
 ACTIVE_FILE="$VAULT/index/ACTIVE_PROJECT.md"
 
-# If no active project pointer, skip
+# If no active project pointer, skip (no project to enforce)
 [ -f "$ACTIVE_FILE" ] || exit 0
 
 # Extract project name from wikilink: [[projects/Foo Bar]] -> Foo Bar
@@ -35,13 +35,13 @@ FILE_DATE="$(stat -f '%Sm' -t '%Y-%m-%d' "$PROJECT_FILE" 2>/dev/null || stat -c 
 if [[ "$FILE_DATE" != "$TODAY" ]]; then
   if $IS_COMMIT; then
     ACTION="committing"
-    HINT="Update ## Log and ## Commits in the project page."
+    HINT="Update ## Log and ## Commits in the project page, then retry."
   else
     ACTION="pushing"
-    HINT="Update ## Log, ## Commits, and ## Current State before pushing."
+    HINT="Update ## Log, ## Commits, and ## Current State in the project page, then retry."
   fi
   echo ""
-  echo "WARNING: Obsidian project page not updated today."
+  echo "BLOCKED: Obsidian project page not updated today."
   echo "  Project: $PROJECT_NAME"
   echo "  File:    $PROJECT_FILE"
   echo "  Last modified: $FILE_DATE"
@@ -49,6 +49,7 @@ if [[ "$FILE_DATE" != "$TODAY" ]]; then
   echo "  You are $ACTION but the project page is stale."
   echo "  $HINT"
   echo ""
+  exit 2
 fi
 
 exit 0
