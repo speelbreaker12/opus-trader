@@ -69,7 +69,7 @@ run_logged_or_exit "soldier_infra_facade_smoke" "$RUST_TEST_TIMEOUT" \
     --test test_soldier_infra_facade_public
 
 run_logged_or_exit "execution_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_execution_facade.sh
-run_logged_or_exit "graybox_telemetry_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_graybox_telemetry.sh
+run_logged_or_exit "facade_public_modules_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_facade_public_modules.sh
 run_logged_or_exit "risk_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_risk_facade.sh
 run_logged_or_exit "venue_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_venue_facade.sh
 run_logged_or_exit "soldier_infra_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_soldier_infra_facade.sh

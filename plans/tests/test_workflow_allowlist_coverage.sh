@@ -63,12 +63,13 @@ required=(
   plans/fork_attestation_remediation_verify.sh
   plans/init.sh
   plans/legacy_layout_guard.sh
-  plans/lib/obsidian_vault.sh
+  plans/lint_facade_public_modules.sh
   plans/lint_execution_facade.sh
   plans/lint_risk_facade.sh
   plans/lint_venue_facade.sh
   plans/lint_soldier_infra_facade.sh
   plans/live_enable_preflight.sh
+  plans/obsidian_commit_guard.sh
   plans/open_project_pr.sh
   plans/lib/adversarial_gate.sh
   plans/lib/hash_utils.sh
@@ -129,13 +130,17 @@ required=(
   plans/tests/test_guard_no_command_substitution.sh
   plans/tests/test_fork_attestation_mirror.sh
   plans/tests/test_fork_attestation_remediation_verify.sh
+  plans/tests/test_lint_facade_public_modules.sh
   plans/tests/test_lint_execution_facade.sh
   plans/tests/test_lint_risk_facade.sh
   plans/tests/test_lint_venue_facade.sh
   plans/tests/test_lint_soldier_infra_facade.sh
+  plans/tests/test_obsidian_commit_guard.sh
   plans/tests/test_obsidian_context_hook.sh
   plans/tests/test_obsidian_context_hook_branch_guard.sh
+  plans/tests/test_obsidian_precommit_hook.sh
   plans/tests/test_open_project_pr.sh
+  plans/tests/test_pre_push_hook_env_isolation.sh
   plans/tests/test_pr_gate.sh
   plans/tests/test_pr_review_gate_hook_scope.sh
   plans/tests/test_prd_cache.sh
