@@ -55,7 +55,7 @@ fn test_margin_gate_graybox_reject_emits_event_without_global_side_effects() {
 }
 
 #[test]
-fn test_margin_gate_graybox_allow_emits_no_events_or_global_side_effects() {
+fn test_margin_gate_graybox_allow_emits_allowed_event_without_global_side_effects() {
     let _guard = begin_metrics_test();
     let before = margin_gate_reject_total();
     let mut metrics = MarginGateMetrics::new();

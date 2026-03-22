@@ -59,7 +59,7 @@ struct ObservedPostOnlyEvents<'a, 'b, E> {
 
 impl<E: EventSink<PostOnlyEvent>> EventSink<PostOnlyEvent> for ObservedPostOnlyEvents<'_, '_, E> {
     fn emit(&mut self, event: PostOnlyEvent) {
-        if matches!(event, PostOnlyEvent::Reject) {
+        if matches!(&event, PostOnlyEvent::Reject) {
             self.metrics.record_reject();
         }
         self.inner.emit(event);

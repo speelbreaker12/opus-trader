@@ -184,6 +184,10 @@ for root in roots:
             for match in PLAIN_FUNCTION_RE.finditer(code)
             if not match.group(1).endswith("_with_events")
         }
+        # TODO: wrapper_bases detection is file-local only; it does not track
+        # wrappers imported cross-module (e.g., a wrapper defined in module A
+        # and called in module B). A full cross-module analysis would require
+        # building a call-graph across crate sources.
         wrapper_bases = {
             match.group(1)[: -len("_with_events")]
             for match in FUNCTION_RE.finditer(code)

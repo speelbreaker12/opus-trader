@@ -299,7 +299,7 @@ pub fn wal_nonblocking_allowed_total() -> u64 {
     WAL_NONBLOCKING_ALLOWED_TOTAL.load(Ordering::Relaxed)
 }
 
-pub(crate) fn emit_wal_nonblocking_allowed(
+pub(super) fn emit_wal_nonblocking_allowed(
     intent_class: ChokeIntentClass,
     source: WalNonblockingSource,
 ) {
