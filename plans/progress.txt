@@ -258,7 +258,14 @@ Summary: Fixed OPEN runtime reject-code attribution so malformed net-edge inputs
 Commands: cargo test -p soldier_core engine_open_preserves_initial_net_edge_code_when_inventory_skew_rejects --lib; cargo test -p soldier_core engine_open_preserves_initial_net_edge_code_when_delta_limit_missing_also_rejects --lib; cargo test -p soldier_core engine_open_inventory_skew_delta_limit_missing_maps_code_and_step --lib; cargo test -p soldier_core test_runtime_wiring_delta_limit_missing_degrades_even_if_net_edge_fails_first --lib.
 Evidence: crates/soldier_core/src/execution/open_runtime.rs; crates/soldier_core/src/execution/routing.rs; crates/soldier_core/src/execution/engine_decision_tests.rs.
 Notes: I did not merge the `auto-review` worktree because it bundled unrelated `soldier_infra` and facade-lint changes; I implemented the execution-path fix directly after reproducing the failing case locally.
-Next: If a clean worktree or CI run is available for this branch, run `./plans/verify.sh full` to produce final clean-checkout verification evidence for merge.
+Story: workflow-maintenance
+Date: 2026-03-21
+Summary: Reproduced the workflow timeout on clean `main` in `.worktrees/verify-mechanical-timeout-fix` and isolated it to `MECHANICAL_TIMEOUT` being too low for the current `verify_mechanical.sh` compile footprint. A direct timed run of `bash plans/verify_mechanical.sh --strict` passed in `247.54s`, so `plans/verify_fork.sh` now raises `MECHANICAL_TIMEOUT` from `240s` to `5m` and `plans/tests/test_verify_timeout_policy.sh` was updated red-to-green to lock the new policy. `VERIFY_RUN_ID=debug_timeout_fix ./plans/workflow_verify.sh` now passes `mechanical_verification` (`mechanical_verification.rc=0`) and surfaces the next downstream timeout at `wf_test_pr_review_gate_hook` (`rc=137`).
+Commands: cargo build --workspace; /usr/bin/time -p bash plans/verify_mechanical.sh --strict; bash plans/tests/test_verify_timeout_policy.sh; VERIFY_RUN_ID=debug_timeout_fix ./plans/workflow_verify.sh; git diff --check.
+Evidence: plans/verify_fork.sh; plans/tests/test_verify_timeout_policy.sh; artifacts/verify/debug_timeout_fix/mechanical_verification.log; artifacts/verify/debug_timeout_fix/mechanical_verification.rc; artifacts/verify/debug_timeout_fix/wf_test_pr_review_gate_hook.log; artifacts/verify/debug_timeout_fix/wf_test_pr_review_gate_hook.rc.
+Next:
+  - Commit and publish the timeout-budget fix, then investigate `wf_test_pr_review_gate_hook` as the next workflow blocker.
+  - If a clean worktree or CI run is available for this branch, run `./plans/verify.sh full` to produce final clean-checkout verification evidence for merge.
 Story: workflow-maintenance
 Date: 2026-03-15 17:34:00 UTC
 Summary: Fixed `plans/review_logged.sh` so `codex review --base` no longer receives the Rust fintech review prompt as an unsupported positional argument, while `--commit` and `--uncommitted` still inject the custom rules. Added fixture coverage proving files-mode prompt literalization still works and base-mode argv no longer contains the prompt payload.
@@ -1312,6 +1319,13 @@ Commands: cargo test -p soldier_core --lib inventory_skew; cargo fmt --all; carg
 Evidence: crates/soldier_core/src/execution/inventory_skew.rs; crates/soldier_core/src/execution/inventory_skew_tests.rs; docs/codebase/upgrade2_graybox_telemetry_checklist.md.
 Notes: Focused verification is green for this slice. I did not rerun `./plans/verify.sh quick` because the branch still has the previously noted unrelated contract-kernel drift outside the inventory-skew seam.
 Next: Convert `crates/soldier_core/src/execution/preflight.rs` next, then move to the remaining red Upgrade 2A leaves in `risk/margin_gate.rs`, `risk/pending_exposure.rs`, and `risk/exposure_budget.rs`.
+Story: workflow-verify-timeouts
+Date: 2026-03-21
+Summary: Aligned `test_pr_review_gate_hook.sh` with the hook's advisory PR-create contract, confirmed the focused regression test passes in `2:27.68`, and reran `workflow_verify.sh` far enough to prove the old blocker is gone and the next failure is the pre-existing wrapper mismatch in `wf_test_review_command_wrappers`.
+Commands: bash plans/tests/test_pr_review_gate_hook.sh; VERIFY_RUN_ID=debug_pr_gate_fix ./plans/workflow_verify.sh.
+Evidence: plans/tests/test_pr_review_gate_hook.sh; artifacts/verify/debug_pr_gate_fix/wf_test_pr_review_gate_hook.log; artifacts/verify/debug_pr_gate_fix/wf_test_pr_review_gate_hook.rc; artifacts/verify/debug_pr_gate_fix/wf_test_review_command_wrappers.log.
+Notes: Root cause was stale test expectations, not a live hook deadlock. The hook intentionally warns when `gh pr create` runs without a fresh review marker and only blocks at merge-time review proof gates. `workflow_verify.sh` now clears `wf_test_pr_review_gate_hook` and later fails in `wf_test_review_command_wrappers` because `.claude/commands/review-stack.md` on `origin/main` lacks the `# SKILL: /review-stack` header that the wrapper test still requires.
+Next: Commit and push only the `test_pr_review_gate_hook.sh` expectation-alignment slice into PR #230; treat the wrapper mismatch as a separate repo-level cleanup item.
 - Story: workflow-facade-leak-guard
   Date: 2026-03-20 18:32:01 UTC
   Summary: Added repo-wide facade public-module lint, wired it into live rust gates, expanded regression coverage for attribute-prefixed/multiline/inline `pub mod` forms, fixed stale workflow verification references uncovered during validation, and restored runtime snapshot metadata after verify.
