@@ -99,6 +99,12 @@ Route shared_hotfix as follows:
 
 ## Obsidian routing rules
 
+Resolve the vault root first:
+
+```bash
+export OBSIDIAN_VAULT_PATH="${OBSIDIAN_VAULT_PATH:-$HOME/Obsidian/opus-trader}"
+```
+
 Default destinations:
 - existing / new project work -> project page under the project area
 - maintenance -> maintenance / queue note
@@ -116,8 +122,8 @@ Do not spread one session across multiple "owner" pages.
 #### Discovery
 
 ```bash
-ls obsidian/Projects/*.md
-rg -n "^branch:|^status:|^worktree:|^pr:" obsidian/Projects/*.md
+ls "$OBSIDIAN_VAULT_PATH"/Projects/*.md
+rg -n "^branch:|^status:|^worktree:|^pr:" "$OBSIDIAN_VAULT_PATH"/Projects/*.md
 ```
 
 #### Read first
@@ -138,7 +144,7 @@ rg -n "^branch:|^status:|^worktree:|^pr:" obsidian/Projects/*.md
 
 #### Propose
 - project slug
-- page path: `obsidian/Projects/<Project Name>.md`
+- page path: `$OBSIDIAN_VAULT_PATH/Projects/<Project Name>.md`
 - branch naming family: `<domain>/<slug>`
 - worktree name: `.worktrees/wt-<domain>-<slug>`
 
@@ -149,7 +155,7 @@ Then wait for confirmation before creating anything.
 Create the project page from the template:
 
 ```bash
-cp obsidian/Templates/Project.md "obsidian/Projects/<Project Name>.md"
+cp "$OBSIDIAN_VAULT_PATH/Templates/Project.md" "$OBSIDIAN_VAULT_PATH/Projects/<Project Name>.md"
 ```
 
 Required frontmatter fields:

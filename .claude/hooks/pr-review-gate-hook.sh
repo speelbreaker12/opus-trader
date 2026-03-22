@@ -390,19 +390,24 @@ EOF
 fi
 
 SAFE_BRANCH="${BRANCH//\//_}"
-MARKER="$(resolve_marker_path "${SAFE_BRANCH}.json" "$REPO_ROOT" "$COMMAND_CWD" "$HEAD_SHA" 1)"
+PRIMARY_MARKER="$(resolve_marker_path "${SAFE_BRANCH}.json" "$REPO_ROOT" "$COMMAND_CWD" "$HEAD_SHA" 1)"
+LEGACY_MARKER="$(resolve_marker_path "${SAFE_BRANCH}.review-stack.json" "$REPO_ROOT" "$COMMAND_CWD" "$HEAD_SHA" 1)"
+if [ -f "$PRIMARY_MARKER" ]; then
+    MARKER="$PRIMARY_MARKER"
+elif [ -f "$LEGACY_MARKER" ]; then
+    MARKER="$LEGACY_MARKER"
+else
+    MARKER="$PRIMARY_MARKER"
+fi
 EXT_MARKER="$(resolve_marker_path "${SAFE_BRANCH}.external.json" "$REPO_ROOT" "$COMMAND_CWD" "$HEAD_SHA" 0)"
 
-# ── review-stack gate (ADVISORY at PR creation, BLOCKING at merge) ────────
-# Per WORKFLOW_V2: first draft PR creation should not require final-merge proof.
-# Review-stack proof is checked before merge by /merge-cleanup (step 1b).
-# At PR creation, we only warn if the marker is missing or stale.
+# ── review-stack gate (BLOCKING at PR creation) ────────────────────────────
 if [ ! -f "$MARKER" ]; then
     cat >&2 <<EOF
-WARNING: No review-stack result for branch '${BRANCH}'.
-Run /review-stack before merging. Expected marker: ${MARKER}
-Proceeding with PR creation — review proof is required before merge, not before draft.
+GATE BLOCKED: No review-stack result for branch '${BRANCH}'.
+Run /review-stack before creating the PR. Expected marker: ${MARKER}
 EOF
+    exit 2
 else
     VERDICT="$(read_marker_field "$MARKER" verdict)"
     MARKER_HEAD="$(read_marker_head "$MARKER")"
@@ -411,16 +416,26 @@ else
 
     if [ "$VERDICT" != "PASS" ] && [ "$VERDICT" != "CONDITIONAL_PASS" ]; then
         cat >&2 <<EOF
-WARNING: review-stack verdict for '${BRANCH}' is '${VERDICT}'.
-Fix findings and re-run /review-stack before merging.
+GATE BLOCKED: review-stack verdict for '${BRANCH}' is '${VERDICT}'.
+Fix findings and re-run /review-stack before creating the PR.
 EOF
+        exit 2
     fi
 
-    if [ -n "$MARKER_HEAD" ] && ! marker_head_matches_current "$MARKER_HEAD" "$HEAD_SHA"; then
+    if [ -z "$MARKER_HEAD" ]; then
         cat >&2 <<EOF
-WARNING: review-stack marker for '${BRANCH}' targets HEAD '${MARKER_HEAD}' but current HEAD is '${HEAD_SHA}'.
-Re-run /review-stack on the current head before merging.
+GATE BLOCKED: review-stack marker for '${BRANCH}' is missing head/head_commit.
+Re-run /review-stack on the current head before creating the PR.
 EOF
+        exit 2
+    fi
+
+    if ! marker_head_matches_current "$MARKER_HEAD" "$HEAD_SHA"; then
+        cat >&2 <<EOF
+GATE BLOCKED: review-stack marker for '${BRANCH}' targets HEAD '${MARKER_HEAD}' but current HEAD is '${HEAD_SHA}'.
+Re-run /review-stack on the current head before creating the PR.
+EOF
+        exit 2
     fi
 fi
 

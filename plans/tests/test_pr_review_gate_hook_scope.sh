@@ -15,14 +15,15 @@ expect_block() {
   local label="$1"
   local pattern="$2"
   local repo="$3"
-  local command_text="$4"
+  local vault="$4"
+  local command_text="$5"
 
   local output=""
   set +e
   output="$(
     cd "$repo" &&
     python3 -c "import json,sys; print(json.dumps({'tool_input':{'command':sys.argv[1]}}))" \
-      "$command_text" | bash "$HOOK" 2>&1
+      "$command_text" | OBSIDIAN_VAULT_PATH="$vault" bash "$HOOK" 2>&1
   )"
   local rc=$?
   set -e
@@ -142,7 +143,8 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
 repo="$tmp_dir/repo"
-mkdir -p "$repo/obsidian/Projects" "$repo/obsidian/Debriefs" "$repo/src" "$repo/other" "$repo/artifacts/pr-review-gate"
+vault="$tmp_dir/vault"
+mkdir -p "$vault/Projects" "$vault/Debriefs" "$repo/src" "$repo/other" "$repo/artifacts/pr-review-gate"
 mkdir -p "$repo/plans" "$repo/plans/lib"
 git -C "$repo" init -q
 git -C "$repo" config user.name "Test User"
@@ -152,11 +154,12 @@ git -C "$repo" checkout -qb "project/scope-test"
 
 cp "$ROOT/plans/project_scope_guard.sh" "$repo/plans/project_scope_guard.sh"
 cp "$ROOT/plans/lib/obsidian_frontmatter.py" "$repo/plans/lib/obsidian_frontmatter.py"
+cp "$ROOT/plans/lib/obsidian_vault.sh" "$repo/plans/lib/obsidian_vault.sh"
 chmod +x "$repo/plans/project_scope_guard.sh"
 
 echo "seed" >"$repo/src/in_scope.txt"
-write_project_note "$repo/obsidian/Projects/Scope Test.md"
-write_debrief "$repo/obsidian/Debriefs/Scope Test 2026-03-17.md"
+write_project_note "$vault/Projects/Scope Test.md"
+write_debrief "$vault/Debriefs/Scope Test 2026-03-17.md"
 git -C "$repo" add .
 git -C "$repo" commit -qm "seed"
 git -C "$repo" branch -q main HEAD
@@ -173,6 +176,7 @@ expect_block \
   "raw gh pr create blocks when project scope guard fails" \
   "OUTSIDE PROJECT SCOPE" \
   "$repo" \
+  "$vault" \
   "gh pr create --title ready"
 
 echo "test_pr_review_gate_hook_scope.sh: ok"
