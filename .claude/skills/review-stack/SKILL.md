@@ -5,4 +5,4 @@ context: fork
 allowed-tools: ["Read", "Glob", "Grep", "Bash", "Agent"]
 ---
 
-!`cat "$(git rev-parse --show-toplevel)/SKILLS/review-stack.md"`
+!`root_dir="$(git rev-parse --show-toplevel 2>/dev/null)" && cat "$root_dir/SKILLS/review-stack.md" || echo "Error: Could not locate SKILLS/review-stack.md; ensure you're in a git worktree with that file present."`
