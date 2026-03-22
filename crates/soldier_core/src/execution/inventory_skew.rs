@@ -67,7 +67,30 @@ pub enum InventorySkewResult {
 /// Internal inventory skew observability events used for graybox testing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum InventorySkewEvent {
+    Allowed,
     Reject { reason: InventorySkewRejectReason },
+}
+
+struct ObservedInventorySkewEvents<'a, 'b, E> {
+    metrics: &'a mut InventorySkewMetrics,
+    inner: &'b mut E,
+}
+
+impl<E: EventSink<InventorySkewEvent>> EventSink<InventorySkewEvent>
+    for ObservedInventorySkewEvents<'_, '_, E>
+{
+    fn emit(&mut self, event: InventorySkewEvent) {
+        match &event {
+            InventorySkewEvent::Allowed => self.metrics.record_allowed(),
+            InventorySkewEvent::Reject { reason } => match reason {
+                InventorySkewRejectReason::InventorySkewDeltaLimitMissing => {
+                    self.metrics.record_reject_delta_limit_missing()
+                }
+                InventorySkewRejectReason::InventorySkewReject => self.metrics.record_reject(),
+            },
+        }
+        self.inner.emit(event);
+    }
 }
 
 struct ProductionInventorySkewEvents;
@@ -75,6 +98,7 @@ struct ProductionInventorySkewEvents;
 impl EventSink<InventorySkewEvent> for ProductionInventorySkewEvents {
     fn emit(&mut self, event: InventorySkewEvent) {
         match event {
+            InventorySkewEvent::Allowed => {}
             InventorySkewEvent::Reject { reason } => bump_inventory_skew_reject(reason),
         }
     }
@@ -159,10 +183,8 @@ fn reject_with_events<E: EventSink<InventorySkewEvent>>(
     bias_ticks: Option<u8>,
     adjusted_min_edge_usd: Option<f64>,
     adjusted_limit_price: Option<f64>,
-    metrics: &mut InventorySkewMetrics,
     events: &mut E,
 ) -> InventorySkewResult {
-    metrics.record_reject();
     events.emit(InventorySkewEvent::Reject { reason });
     InventorySkewResult::Rejected {
         reason,
@@ -174,10 +196,8 @@ fn reject_with_events<E: EventSink<InventorySkewEvent>>(
 }
 
 fn reject_missing_delta_limit_with_events<E: EventSink<InventorySkewEvent>>(
-    metrics: &mut InventorySkewMetrics,
     events: &mut E,
 ) -> InventorySkewResult {
-    metrics.record_reject_delta_limit_missing();
     events.emit(InventorySkewEvent::Reject {
         reason: InventorySkewRejectReason::InventorySkewDeltaLimitMissing,
     });
@@ -215,9 +235,20 @@ pub(crate) fn evaluate_inventory_skew_with_events<E: EventSink<InventorySkewEven
     metrics: &mut InventorySkewMetrics,
     events: &mut E,
 ) -> InventorySkewResult {
+    let mut observed = ObservedInventorySkewEvents {
+        metrics,
+        inner: events,
+    };
+    evaluate_inventory_skew_inner(input, &mut observed)
+}
+
+fn evaluate_inventory_skew_inner<E: EventSink<InventorySkewEvent>>(
+    input: &InventorySkewInput,
+    events: &mut E,
+) -> InventorySkewResult {
     let delta_limit = match input.delta_limit {
         Some(v) if v.is_finite() && v > 0.0 => v,
-        _ => return reject_missing_delta_limit_with_events(metrics, events),
+        _ => return reject_missing_delta_limit_with_events(events),
     };
 
     if !input.current_delta.is_finite()
@@ -237,7 +268,6 @@ pub(crate) fn evaluate_inventory_skew_with_events<E: EventSink<InventorySkewEven
             None,
             None,
             None,
-            metrics,
             events,
         );
     }
@@ -279,12 +309,11 @@ pub(crate) fn evaluate_inventory_skew_with_events<E: EventSink<InventorySkewEven
             Some(bias_ticks),
             Some(adjusted_min_edge_usd),
             Some(adjusted_limit_price),
-            metrics,
             events,
         );
     }
 
-    metrics.record_allowed();
+    events.emit(InventorySkewEvent::Allowed);
     InventorySkewResult::Allowed {
         inventory_bias,
         bias_ticks,

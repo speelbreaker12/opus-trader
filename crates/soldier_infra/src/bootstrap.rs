@@ -297,6 +297,11 @@ pub fn bootstrap_full(config: &FullBootstrapConfig) -> io::Result<FullBootstrapR
     })
 }
 
+/// Compile-time/boot check proving the infra crate is linked against the core facade.
+pub fn infra_bootstrapped() -> bool {
+    soldier_core::crate_bootstrapped()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

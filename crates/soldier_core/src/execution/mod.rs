@@ -4,8 +4,20 @@
 //! labeling, group atomicity, TLSM, emergency-close selection, and
 //! execution decisions at the dispatch chokepoint.
 //!
-//! Public API lives in `api.rs`.
-//! All other child modules are intentionally private implementation details.
+//! **Public:** execution engine + inputs, side, gate steps, reject reason
+//! registry, group atomicity, TLSM + transitions, label encoding,
+//! emergency-close selection, `RecordedBeforeDispatchGate`.
+//!
+//! **Private:** `base_gates`, `build_order_intent`, `dispatch_map`,
+//! `domain_model`, `emergency_close`, `engine`, `gate`, `gate_outcome`,
+//! `gates`, `group`, `intent_assembly`, `inventory_skew`, `label`,
+//! `open_runtime`, `order_size`, `pipeline`, `post_only_guard`,
+//! `preflight`, `pricer`, `quantize`, `reject_reason`, `routing`,
+//! `tlsm`, `wal_gate`.
+//!
+//! **Tests:** unit tests alongside implementation files; facade completeness
+//! in `facade_completeness_contract_tests.rs`; integration tests under
+//! `tests/` covering the public execution surface.
 
 use std::cell::RefCell;
 use std::collections::VecDeque;

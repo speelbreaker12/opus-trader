@@ -299,14 +299,36 @@ pub fn wal_nonblocking_allowed_total() -> u64 {
     WAL_NONBLOCKING_ALLOWED_TOTAL.load(Ordering::Relaxed)
 }
 
-/// Increment the global WAL-nonblocking-allowed counter.
-///
-/// Called by `engine::decide_pipeline` when the WAL gate is absent for a
-/// Close/Hedge intent (H-4: no_gate_configured case). This wrapper preserves
-/// the legacy counter and metric-line contract while keeping graybox logic
-/// sink-only.
-pub(super) fn bump_wal_nonblocking_allowed_total(intent_class: ChokeIntentClass) {
-    record_wal_nonblocking_allowed(intent_class, WalNonblockingSource::NoGateConfigured)
+pub(super) fn emit_wal_nonblocking_allowed(
+    intent_class: ChokeIntentClass,
+    source: WalNonblockingSource,
+) {
+    let mut events = ProductionChokeEvents;
+    emit_wal_nonblocking_allowed_with_events(intent_class, source, None, &mut events);
+}
+
+fn emit_wal_nonblocking_allowed_with_events<E: EventSink<ChokeEvent>>(
+    intent_class: ChokeIntentClass,
+    source: WalNonblockingSource,
+    wal_error: Option<String>,
+    events: &mut E,
+) {
+    events.emit(ChokeEvent::WalNonblockingAllowed {
+        intent_class,
+        source,
+        wal_error,
+    });
+}
+
+fn finish_wal_nonblocking_allowed<E: EventSink<ChokeEvent>>(
+    metrics: &mut ChokeMetrics,
+    intent_class: ChokeIntentClass,
+    source: WalNonblockingSource,
+    wal_error: Option<String>,
+    events: &mut E,
+) {
+    metrics.record_wal_nonblocking_allowed();
+    emit_wal_nonblocking_allowed_with_events(intent_class, source, wal_error, events);
 }
 
 fn finish_approved<E: EventSink<ChokeEvent>>(
@@ -645,17 +667,12 @@ fn build_order_intent_internal_with_events<E: EventSink<ChokeEvent>>(
             );
         }
         // CSP.3.2: WAL failure does not block Close/Hedge, but log for visibility.
-        metrics.record_wal_nonblocking_allowed();
         let source = if wal_error.is_some() {
             WalNonblockingSource::WalGateError
         } else {
             WalNonblockingSource::PrecomputedFalse
         };
-        events.emit(ChokeEvent::WalNonblockingAllowed {
-            intent_class,
-            source,
-            wal_error,
-        });
+        finish_wal_nonblocking_allowed(metrics, intent_class, source, wal_error, events);
     }
 
     finish_approved(metrics, trace, events)

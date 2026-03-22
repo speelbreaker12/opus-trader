@@ -4,9 +4,15 @@
 //! (WAL ledger and trade-ID registry), Deribit adapter types, and
 //! legacy WAL durability helpers.
 //!
-//! Primary public API lives in `api.rs`; crate root additionally
-//! exposes `infra_bootstrapped()`.
-//! All other child modules are intentionally private implementation details.
+//! **Public:** bootstrap + storage init, `infra_bootstrapped()`, gate/config
+//! resolution, WAL ledger + trade-ID registry, Deribit adapter types,
+//! legacy WAL durability helpers.
+//!
+//! **Private:** `bootstrap`, `config`, `deribit`, `store`, `wal`.
+//!
+//! **Tests:** unit tests alongside implementation files; facade completeness
+//! in `facade_completeness_contract_tests.rs`; integration tests under
+//! `tests/` covering the public infra surface.
 
 #![forbid(unsafe_code)]
 
@@ -21,7 +27,3 @@ mod wal;
 mod facade_completeness_contract_tests;
 
 pub use api::*;
-
-pub fn infra_bootstrapped() -> bool {
-    soldier_core::crate_bootstrapped()
-}

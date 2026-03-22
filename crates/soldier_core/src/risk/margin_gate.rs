@@ -46,7 +46,25 @@ fn bump_margin_gate_reject_inner(reason: MarginGateRejectReason) {
 /// Internal margin gate events for graybox testing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MarginGateEvent {
+    Allowed,
     Reject { reason: MarginGateRejectReason },
+}
+
+struct ObservedMarginGateEvents<'a, 'b, E> {
+    metrics: &'a mut MarginGateMetrics,
+    inner: &'b mut E,
+}
+
+impl<E: EventSink<MarginGateEvent>> EventSink<MarginGateEvent>
+    for ObservedMarginGateEvents<'_, '_, E>
+{
+    fn emit(&mut self, event: MarginGateEvent) {
+        match &event {
+            MarginGateEvent::Allowed => self.metrics.record_allowed(),
+            MarginGateEvent::Reject { .. } => self.metrics.record_reject(),
+        }
+        self.inner.emit(event);
+    }
 }
 
 struct ProductionMarginGateEvents;
@@ -54,6 +72,7 @@ struct ProductionMarginGateEvents;
 impl EventSink<MarginGateEvent> for ProductionMarginGateEvents {
     fn emit(&mut self, event: MarginGateEvent) {
         match event {
+            MarginGateEvent::Allowed => {}
             MarginGateEvent::Reject { reason } => bump_margin_gate_reject(reason),
         }
     }
@@ -149,11 +168,21 @@ pub(crate) fn evaluate_margin_headroom_gate_with_events<E: EventSink<MarginGateE
     metrics: &mut MarginGateMetrics,
     events: &mut E,
 ) -> MarginGateDecision {
+    let mut observed = ObservedMarginGateEvents {
+        metrics,
+        inner: events,
+    };
+    evaluate_margin_headroom_gate_inner(input, &mut observed)
+}
+
+fn evaluate_margin_headroom_gate_inner<E: EventSink<MarginGateEvent>>(
+    input: &MarginGateInput,
+    events: &mut E,
+) -> MarginGateDecision {
     if !freshness_is_current(input) {
         return reject_with_events(
             MarginGateRejectReason::MarginHeadroomInputStale,
             None,
-            metrics,
             events,
         );
     }
@@ -170,7 +199,6 @@ pub(crate) fn evaluate_margin_headroom_gate_with_events<E: EventSink<MarginGateE
         return reject_with_events(
             MarginGateRejectReason::MarginHeadroomRejectOpens,
             None,
-            metrics,
             events,
         );
     }
@@ -181,22 +209,19 @@ pub(crate) fn evaluate_margin_headroom_gate_with_events<E: EventSink<MarginGateE
         return reject_with_events(
             MarginGateRejectReason::MarginHeadroomRejectOpens,
             Some(mm_util),
-            metrics,
             events,
         );
     }
 
-    metrics.record_allowed();
+    events.emit(MarginGateEvent::Allowed);
     MarginGateDecision::Allowed { mm_util }
 }
 
 fn reject_with_events<E: EventSink<MarginGateEvent>>(
     reason: MarginGateRejectReason,
     mm_util: Option<f64>,
-    metrics: &mut MarginGateMetrics,
     events: &mut E,
 ) -> MarginGateDecision {
-    metrics.record_reject();
     events.emit(MarginGateEvent::Reject { reason });
     MarginGateDecision::Rejected { reason, mm_util }
 }

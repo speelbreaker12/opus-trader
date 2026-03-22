@@ -143,6 +143,32 @@ pub(crate) enum LiquidityGateEvent {
     ExpectedSlippageSample,
 }
 
+struct ObservedLiquidityGateEvents<'a, 'b, E> {
+    metrics: &'a mut LiquidityGateMetrics,
+    inner: &'b mut E,
+}
+
+impl<E: EventSink<LiquidityGateEvent>> EventSink<LiquidityGateEvent>
+    for ObservedLiquidityGateEvents<'_, '_, E>
+{
+    fn emit(&mut self, event: LiquidityGateEvent) {
+        match &event {
+            LiquidityGateEvent::Allowed => self.metrics.record_allowed(),
+            LiquidityGateEvent::Reject { reason } => match reason {
+                LiquidityGateRejectReason::LiquidityGateNoL2 => self.metrics.record_reject_no_l2(),
+                LiquidityGateRejectReason::ExpectedSlippageTooHigh => {
+                    self.metrics.record_reject_slippage()
+                }
+                LiquidityGateRejectReason::InsufficientDepthWithinBudget => {
+                    self.metrics.record_reject_depth_shortfall()
+                }
+            },
+            LiquidityGateEvent::ExpectedSlippageSample => {}
+        }
+        self.inner.emit(event);
+    }
+}
+
 // --- Metrics -------------------------------------------------------------
 
 /// Observability metrics for the Liquidity Gate.
@@ -488,7 +514,6 @@ fn compute_reject_diagnostics(
 }
 
 fn reject_with_events<E: EventSink<LiquidityGateEvent>>(
-    metrics: &mut LiquidityGateMetrics,
     events: &mut E,
     reason: LiquidityGateRejectReason,
     wap: Option<f64>,
@@ -496,13 +521,6 @@ fn reject_with_events<E: EventSink<LiquidityGateEvent>>(
     fillable_qty: Option<f64>,
     allowed_qty: Option<f64>,
 ) -> LiquidityGateResult {
-    match reason {
-        LiquidityGateRejectReason::LiquidityGateNoL2 => metrics.record_reject_no_l2(),
-        LiquidityGateRejectReason::ExpectedSlippageTooHigh => metrics.record_reject_slippage(),
-        LiquidityGateRejectReason::InsufficientDepthWithinBudget => {
-            metrics.record_reject_depth_shortfall()
-        }
-    }
     events.emit(LiquidityGateEvent::Reject { reason });
     LiquidityGateResult {
         decision: LiquidityGateDecision::Rejected { reason },
@@ -531,9 +549,19 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
     metrics: &mut LiquidityGateMetrics,
     events: &mut E,
 ) -> LiquidityGateResult {
+    let mut observed = ObservedLiquidityGateEvents {
+        metrics,
+        inner: events,
+    };
+    evaluate_liquidity_gate_inner(input, &mut observed)
+}
+
+fn evaluate_liquidity_gate_inner<E: EventSink<LiquidityGateEvent>>(
+    input: &LiquidityGateInput,
+    events: &mut E,
+) -> LiquidityGateResult {
     // CANCEL-only intents are always allowed (AT-421)
     if input.intent_class == GateIntentClass::CancelOnly {
-        metrics.record_allowed();
         events.emit(LiquidityGateEvent::Allowed);
         return LiquidityGateResult {
             decision: LiquidityGateDecision::Allowed,
@@ -553,7 +581,6 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
         || input.max_slippage_bps < 0.0
     {
         return reject_with_events(
-            metrics,
             events,
             LiquidityGateRejectReason::ExpectedSlippageTooHigh,
             None,
@@ -567,7 +594,6 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
     let snapshot = match &input.l2_snapshot {
         None => {
             return reject_with_events(
-                metrics,
                 events,
                 LiquidityGateRejectReason::LiquidityGateNoL2,
                 None,
@@ -582,7 +608,6 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
                 || (input.now_ms - snap.timestamp_ms) > input.l2_book_snapshot_max_age_ms
             {
                 return reject_with_events(
-                    metrics,
                     events,
                     LiquidityGateRejectReason::LiquidityGateNoL2,
                     None,
@@ -604,7 +629,6 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
 
     if levels.is_empty() {
         return reject_with_events(
-            metrics,
             events,
             LiquidityGateRejectReason::LiquidityGateNoL2,
             None,
@@ -618,7 +642,6 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
     let best_price = levels[0].price;
     if !best_price.is_finite() || best_price <= 0.0 {
         return reject_with_events(
-            metrics,
             events,
             LiquidityGateRejectReason::LiquidityGateNoL2,
             None,
@@ -633,7 +656,6 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
             Ok(values) => values,
             Err(FillableDepthError::InvalidBook) => {
                 return reject_with_events(
-                    metrics,
                     events,
                     LiquidityGateRejectReason::LiquidityGateNoL2,
                     None,
@@ -658,7 +680,6 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
                     GateIntentClass::CancelOnly => unreachable!("handled above"),
                 };
                 return reject_with_events(
-                    metrics,
                     events,
                     reject_reason,
                     wap,
@@ -678,7 +699,6 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
                     events.emit(LiquidityGateEvent::ExpectedSlippageSample);
                 }
                 return reject_with_events(
-                    metrics,
                     events,
                     LiquidityGateRejectReason::InsufficientDepthWithinBudget,
                     wap,
@@ -693,7 +713,6 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
             let clamped = fillable_qty.min(input.order_qty);
             if clamped <= 0.0 || !clamped.is_finite() {
                 return reject_with_events(
-                    metrics,
                     events,
                     LiquidityGateRejectReason::ExpectedSlippageTooHigh,
                     None,
@@ -712,7 +731,6 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
         Some(result) => result,
         None => {
             return reject_with_events(
-                metrics,
                 events,
                 LiquidityGateRejectReason::LiquidityGateNoL2,
                 None,
@@ -729,7 +747,6 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
     let slippage_bps = ((wap - best_price) / best_price * 10_000.0).abs();
     if !slippage_bps.is_finite() {
         return reject_with_events(
-            metrics,
             events,
             LiquidityGateRejectReason::ExpectedSlippageTooHigh,
             Some(wap),
@@ -748,7 +765,6 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
             LiquidityGateRejectReason::ExpectedSlippageTooHigh
         };
         return reject_with_events(
-            metrics,
             events,
             reject_reason,
             Some(wap),
@@ -758,7 +774,6 @@ pub(crate) fn evaluate_liquidity_gate_with_events<E: EventSink<LiquidityGateEven
         );
     }
 
-    metrics.record_allowed();
     events.emit(LiquidityGateEvent::Allowed);
     LiquidityGateResult {
         decision: LiquidityGateDecision::Allowed,

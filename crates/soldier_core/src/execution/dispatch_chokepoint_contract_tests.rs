@@ -166,6 +166,21 @@ fn test_dispatch_chokepoint_approval_sentinel_present() {
     );
 }
 
+#[test]
+fn test_routing_no_gate_configured_uses_chokepoint_event_sink() {
+    let routing_path = src_dir().join("execution/routing.rs");
+    let content = read_file_or_panic(&routing_path, "read routing source");
+
+    assert!(
+        !content.contains("bump_wal_nonblocking_allowed_total("),
+        "routing.rs must not bypass the chokepoint WAL-nonblocking sink; route through build_order_intent event emission instead",
+    );
+    assert!(
+        !content.contains("source = \"no_gate_configured\""),
+        "routing.rs must not log the no_gate_configured WAL path directly; the chokepoint sink owns that diagnostic",
+    );
+}
+
 // ─── Test: No direct exchange dispatch usage outside approved boundary ──
 
 #[test]
