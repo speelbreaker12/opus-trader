@@ -15,12 +15,15 @@ run_hook() {
   local repo="$1"
   local session_id="$2"
   local message="$3"
+  local vault_path="${4:-}"
 
   (
     cd "$repo"
     python3 -c 'import json,sys; print(json.dumps({"session_id": sys.argv[1], "message": sys.argv[2]}))' \
       "$session_id" "$message" | \
-      OBSIDIAN_CONTEXT_STATE_DIR="$repo/.tmp/obsidian-context-state" bash "$HOOK"
+      OBSIDIAN_CONTEXT_STATE_DIR="$repo/.tmp/obsidian-context-state" \
+      OBSIDIAN_VAULT_PATH="$vault_path" \
+      bash "$HOOK"
   )
 }
 
@@ -82,8 +85,11 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
 repo="$tmp_dir/repo"
-mkdir -p "$repo/obsidian/Projects" "$repo/.tmp" "$repo/plans/lib"
+vault="$tmp_dir/vault"
+mkdir -p "$repo/.tmp" "$repo/plans/lib"
+mkdir -p "$vault/Projects" "$vault/Debriefs"
 cp "$ROOT/plans/lib/obsidian_frontmatter.py" "$repo/plans/lib/"
+cp "$ROOT/plans/lib/obsidian_vault.sh" "$repo/plans/lib/"
 
 # Initialize a git repo so the hook can detect the current branch
 git -C "$repo" init -q
@@ -100,7 +106,7 @@ git -C "$repo" commit -qm "seed"
 git -C "$repo" checkout -qb "feature/facade-refactor"
 
 write_project \
-  "$repo/obsidian/Projects/Execution Facade Refactor.md" \
+  "$vault/Projects/Execution Facade Refactor.md" \
   "in-progress" \
   "feature/facade-refactor" \
   "Telemetry event seams are landing in execution and fee gate refactors." \
@@ -108,7 +114,7 @@ write_project \
   "Typed execution telemetry pilots are in progress."
 
 write_project \
-  "$repo/obsidian/Projects/Obsidian Work Tracking.md" \
+  "$vault/Projects/Obsidian Work Tracking.md" \
   "done" \
   "workflow/obsidian-fixes" \
   "Obsidian hook routing and debrief guard work is complete." \
@@ -116,14 +122,14 @@ write_project \
   "Tracking hooks and debrief enforcement landed."
 
 write_project \
-  "$repo/obsidian/Projects/Unrelated Project.md" \
+  "$vault/Projects/Unrelated Project.md" \
   "in-progress" \
   "feature/other-work" \
   "Some other work." \
   "src/other.rs" \
   "Other project started."
 
-single_output="$(run_hook "$repo" "session-single" "Please continue the execution telemetry refactor.")"
+single_output="$(run_hook "$repo" "session-single" "Please continue the execution telemetry refactor." "$vault")"
 expect_contains "branch match project" "$single_output" "Matched existing project: Execution Facade Refactor"
 expect_contains "branch match branch name" "$single_output" "Branch: feature/facade-refactor"
 expect_contains "active projects listed" "$single_output" "OBSIDIAN PROJECT CONTEXT"
@@ -132,7 +138,7 @@ expect_contains "continue instruction" "$single_output" "Continue in this projec
 
 # --- Test 2: Session dedup ---
 # Second prompt in the same session should be silent
-repeat_output="$(run_hook "$repo" "session-single" "Second prompt in the same session should not re-route.")"
+repeat_output="$(run_hook "$repo" "session-single" "Second prompt in the same session should not re-route." "$vault")"
 if [[ -n "$repeat_output" ]]; then
   fail "repeat prompt should not emit router output, got: $repeat_output"
 fi
@@ -141,7 +147,7 @@ fi
 # Switch to a branch that no project owns
 git -C "$repo" checkout -qb "feature/unknown-work"
 
-no_match_output="$(run_hook "$repo" "session-no-match" "Please help me with something unrelated.")"
+no_match_output="$(run_hook "$repo" "session-no-match" "Please help me with something unrelated." "$vault")"
 expect_contains "no match routing" "$no_match_output" "No branch-owned project matched."
 expect_contains "no match skill ref" "$no_match_output" "Read SKILLS/obsidian-workflow.md to route this task."
 
@@ -149,14 +155,13 @@ expect_contains "no match skill ref" "$no_match_output" "Read SKILLS/obsidian-wo
 # Switch to the branch owned by the "done" project
 git -C "$repo" checkout -qb "workflow/obsidian-fixes"
 
-done_output="$(run_hook "$repo" "session-done" "Continue obsidian work.")"
+done_output="$(run_hook "$repo" "session-done" "Continue obsidian work." "$vault")"
 # Branch ownership match should still work even for done projects.
 expect_contains "done project matched" "$done_output" "Matched existing project: Obsidian Work Tracking"
 
 # --- Test 5: Recent debriefs ---
 # Create a debriefs directory with a file
-mkdir -p "$repo/obsidian/Debriefs"
-cat >"$repo/obsidian/Debriefs/Test Debrief 2026-03-19.md" <<'EOF'
+cat >"$vault/Debriefs/Test Debrief 2026-03-19.md" <<'EOF'
 ---
 project: "[[Execution Facade Refactor]]"
 ---
@@ -165,8 +170,12 @@ EOF
 
 git -C "$repo" checkout -q "feature/facade-refactor"
 
-debrief_output="$(run_hook "$repo" "session-debrief" "Check debrief state.")"
+debrief_output="$(run_hook "$repo" "session-debrief" "Check debrief state." "$vault")"
 expect_contains "debrief listed" "$debrief_output" "Recent debriefs"
 expect_contains "debrief file" "$debrief_output" "Test Debrief 2026-03-19"
+
+# --- Test 6: Missing external vault warns and exits cleanly ---
+missing_vault_output="$(run_hook "$repo" "session-missing-vault" "Warn when the external vault is missing." "$tmp_dir/missing-vault")"
+expect_contains "missing vault warning" "$missing_vault_output" "WARNING: Obsidian vault not found"
 
 echo "test_obsidian_context_hook.sh: ok"

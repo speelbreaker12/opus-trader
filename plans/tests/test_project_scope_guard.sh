@@ -19,7 +19,7 @@ expect_block() {
 
   local output=""
   set +e
-  output="$(cd "$repo" && bash "$GUARD" "$@" 2>&1)"
+  output="$(cd "$repo" && OBSIDIAN_VAULT_PATH="$repo/obsidian" bash "$GUARD" "$@" 2>&1)"
   local rc=$?
   set -e
 
@@ -38,7 +38,7 @@ expect_pass() {
 
   local output=""
   set +e
-  output="$(cd "$repo" && bash "$GUARD" "$@" 2>&1)"
+  output="$(cd "$repo" && OBSIDIAN_VAULT_PATH="$repo/obsidian" bash "$GUARD" "$@" 2>&1)"
   local rc=$?
   set -e
 
@@ -170,6 +170,7 @@ mkdir -p \
   "$repo/notes" \
   "$repo/other"
 cp "$ROOT/plans/lib/obsidian_frontmatter.py" "$repo/plans/lib/obsidian_frontmatter.py"
+cp "$ROOT/plans/lib/obsidian_vault.sh" "$repo/plans/lib/obsidian_vault.sh"
 echo "seed" >"$repo/src/in_scope.txt"
 echo "seed" >"$repo/other/out_of_scope.txt"
 write_project_note \
