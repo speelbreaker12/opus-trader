@@ -13,9 +13,18 @@ trap 'rm -f "$input_file"' EXIT
 cat >"$input_file"
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)"
-PROJECTS_DIR="$ROOT/obsidian/Projects"
+source "$ROOT/plans/lib/obsidian_vault.sh"
+
+PROJECTS_DIR=""
+if resolve_obsidian_vault_path advisory; then
+  PROJECTS_DIR="${OBSIDIAN_VAULT_PATH_RESOLVED}/Projects"
+else
+  printf '%s\n' "$(obsidian_vault_missing_message advisory "$(obsidian_vault_configured_path)")"
+  exit 0
+fi
 
 if [[ ! -d "$PROJECTS_DIR" ]]; then
+  printf '%s\n' "$(obsidian_vault_missing_message advisory "$PROJECTS_DIR")"
   exit 0
 fi
 

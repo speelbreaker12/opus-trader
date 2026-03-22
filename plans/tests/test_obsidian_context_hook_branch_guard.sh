@@ -25,12 +25,15 @@ run_hook() {
   local repo="$1"
   local session_id="$2"
   local message="$3"
+  local vault_path="$4"
 
   (
     cd "$repo"
     python3 -c 'import json,sys; print(json.dumps({"session_id": sys.argv[1], "message": sys.argv[2]}))' \
       "$session_id" "$message" | \
-      OBSIDIAN_CONTEXT_STATE_DIR="$repo/.tmp/obsidian-context-state" bash "$HOOK"
+      OBSIDIAN_CONTEXT_STATE_DIR="$repo/.tmp/obsidian-context-state" \
+      OBSIDIAN_VAULT_PATH="$vault_path" \
+      bash "$HOOK"
   )
 }
 
@@ -74,8 +77,10 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
 repo="$tmp_dir/repo"
-mkdir -p "$repo/obsidian/Projects" "$repo/.tmp" "$repo/src" "$repo/plans/lib"
+vault="$tmp_dir/vault"
+mkdir -p "$repo/.tmp" "$repo/src" "$repo/plans/lib" "$vault/Projects"
 cp "$ROOT/plans/lib/obsidian_frontmatter.py" "$repo/plans/lib/"
+cp "$ROOT/plans/lib/obsidian_vault.sh" "$repo/plans/lib/"
 git -C "$repo" init -q
 git -C "$repo" config user.name "Test User"
 git -C "$repo" config user.email "test@example.com"
@@ -88,18 +93,18 @@ git -C "$repo" add src/current.txt
 git -C "$repo" commit -qm "seed"
 
 write_project \
-  "$repo/obsidian/Projects/Current Note.md" \
+  "$vault/Projects/Current Note.md" \
   "project/current-note" \
   "Current branch fixture." \
   "src/current.txt"
 write_project \
-  "$repo/obsidian/Projects/Other Note.md" \
+  "$vault/Projects/Other Note.md" \
   "project/other-note" \
   "Scope guard follow-up lives on the other branch." \
   "src/other.txt"
 
 # --- Test 1: Branch ownership matches Current Note (deterministic) ---
-output="$(run_hook "$repo" "branch-ownership" "Please continue the scope guard follow-up.")"
+output="$(run_hook "$repo" "branch-ownership" "Please continue the scope guard follow-up." "$vault")"
 expect_contains "branch ownership matches current" "$output" "Matched existing project: Current Note"
 expect_contains "branch name shown" "$output" "Branch: project/current-note"
 expect_contains "routing decision present" "$output" "Routing decision:"
@@ -110,7 +115,7 @@ expect_contains "other note listed" "$output" "Other Note (in-progress)"
 
 # --- Test 3: Switch to unowned branch -> no match ---
 git -C "$repo" checkout -qb "feature/unowned"
-no_match_output="$(run_hook "$repo" "branch-unowned" "Any message.")"
+no_match_output="$(run_hook "$repo" "branch-unowned" "Any message." "$vault")"
 expect_contains "no branch match" "$no_match_output" "No branch-owned project matched."
 
 echo "test_obsidian_context_hook_branch_guard.sh: ok"
