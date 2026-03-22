@@ -1,10 +1,12 @@
 # Upgrade 2 Graybox Telemetry Coverage Checklist
 
-Status: Upgrade 2 PASS
+Status: Upgrade 2 checklist rows PASS; branch verification still blocked outside this checklist
 
 This checklist is the Upgrade 2 acceptance gate.
 Upgrade 2 is complete only when both Upgrade 2A and Upgrade 2B are complete.
 Upgrade 2A remains a useful sub-checklist, but the repo-level status is driven by both tables.
+
+As of 2026-03-21, the previously open review gaps are closed: preflight now routes post-only through the sink seam, the missing preflight crossing graybox test exists, the remaining leaf seams moved inline instance-metric mutation into observer sinks, the routing `no_gate_configured` WAL visibility path uses the chokepoint sink, and the graybox lint now forbids both inline `metrics.record_*()` calls and wrapper-call bypasses. Fresh targeted evidence is green (`cargo clippy --workspace --lib -- -D warnings`, `cargo test -p soldier_core --lib -- --nocapture`, `bash plans/lint_graybox_telemetry.sh`, `bash plans/tests/test_lint_graybox_telemetry.sh`), but `./plans/verify.sh quick` failed in `wf_test_pr_review_gate_hook` (`artifacts/verify/20260321_100806/FAILED_GATE`), which is outside Upgrade 2 scope.
 
 ## Scope Rule
 
@@ -54,18 +56,18 @@ This is the active rollout scope for Upgrade 2.
 
 | Module | Status | Evidence | Notes |
 | --- | --- | --- | --- |
-| liquidity | PASS | `crates/soldier_core/src/execution/gate.rs:328`, `crates/soldier_core/src/execution/gate.rs:554` | `ProductionLiquidityGateEvents` adapts the sink path back into metrics. |
+| liquidity | PASS | `crates/soldier_core/src/execution/gate.rs` | `ObservedLiquidityGateEvents` keeps the graybox seam sink-only while `ProductionLiquidityGateEvents` preserves the wrapper metrics/tracing contract. |
 | net-edge | PASS | `crates/soldier_core/src/execution/gates.rs:194`, `crates/soldier_core/src/execution/gates.rs:251` | `ProductionNetEdgeEvents` adapts the sink path back into metrics. |
 | fee staleness | PASS | `crates/soldier_core/src/risk/fees.rs:89`, `crates/soldier_core/src/risk/fees.rs:177` | `ProductionFeeEvents` adapts the sink path back into metrics. |
-| expected slippage | PASS | `crates/soldier_core/src/execution/gate.rs:147`, `crates/soldier_core/src/execution/gate.rs:352`, `crates/soldier_core/src/execution/gate.rs:666` | Covered inside `execution/gate.rs`, not as a separate module. |
-| quantize | PASS | `crates/soldier_core/src/execution/quantize.rs:315`, `crates/soldier_core/src/execution/quantize.rs:385`, `crates/soldier_core/src/execution/quantize_tests.rs:763`, `crates/soldier_core/src/execution/quantize_tests.rs:833` | `ProductionQuantizeEvents` adapts the sink path back into metrics. |
-| pricer | PASS | `crates/soldier_core/src/execution/pricer.rs:83`, `crates/soldier_core/src/execution/pricer.rs:199`, `crates/soldier_core/src/execution/pricer_tests.rs:540`, `crates/soldier_core/src/execution/pricer_tests.rs:617` | `ProductionPricerEvents` adapts the sink path back into metrics, with graybox and wrapper parity tests proving the seam preserves the legacy metrics contract. |
-| inventory skew | PASS | `crates/soldier_core/src/execution/inventory_skew.rs:73`, `crates/soldier_core/src/execution/inventory_skew.rs:213` | `ProductionInventorySkewEvents` adapts the sink path back into metrics. |
-| post-only | PASS | `crates/soldier_core/src/execution/post_only_guard.rs:45`, `crates/soldier_core/src/execution/post_only_guard.rs:130`, `crates/soldier_core/src/execution/post_only_guard_tests.rs:320`, `crates/soldier_core/src/execution/post_only_guard_tests.rs:367` | `ProductionPostOnlyEvents` adapts the sink path back into metrics. |
-| margin | PASS | `crates/soldier_core/src/risk/margin_gate.rs`, `crates/soldier_core/src/risk/margin_gate_tests.rs` | `evaluate_margin_headroom_gate_with_events` funnels reject paths through `ProductionMarginGateEvents`, with graybox tests proving `evaluate_margin_headroom_gate_with_events` stays side-effect free and wrapper tests preserving metric line behavior. |
-| pending exposure | PASS | `crates/soldier_core/src/risk/pending_exposure.rs:56`, `crates/soldier_core/src/risk/pending_exposure.rs:461` | `ProductionPendingExposureEvents` adapts the sink path back into metrics. |
-| exposure budget | PASS | `crates/soldier_core/src/risk/exposure_budget.rs:78`, `crates/soldier_core/src/risk/exposure_budget.rs:187` | `ProductionExposureBudgetEvents` adapts the sink path back into metrics. |
-| preflight | PASS | `crates/soldier_core/src/execution/preflight.rs:218`, `crates/soldier_core/src/execution/preflight.rs:249`, `crates/soldier_core/src/execution/preflight_tests.rs:531`, `crates/soldier_core/src/execution/preflight_tests.rs:567` | `ProductionPreflightEvents` adapts the sink path back into metrics. |
+| expected slippage | PASS | `crates/soldier_core/src/execution/gate.rs` | Covered inside `execution/gate.rs`; the observer sink pattern keeps both slippage sampling and reject accounting out of the graybox body. |
+| quantize | PASS | `crates/soldier_core/src/execution/quantize.rs`, `crates/soldier_core/src/execution/quantize_tests.rs` | `ObservedQuantizeEvents` owns instance-metric mutation while `ProductionQuantizeEvents` preserves the wrapper contract. |
+| pricer | PASS | `crates/soldier_core/src/execution/pricer.rs`, `crates/soldier_core/src/execution/pricer_tests.rs` | `ObservedPricerEvents` keeps pricing metrics in the observer adapter, with graybox and wrapper parity tests proving the legacy metrics contract still holds. |
+| inventory skew | PASS | `crates/soldier_core/src/execution/inventory_skew.rs`, `crates/soldier_core/src/execution/inventory_skew_tests.rs` | `ObservedInventorySkewEvents` keeps allow/reject metrics out of the graybox body while `ProductionInventorySkewEvents` preserves wrapper behavior. |
+| post-only | PASS | `crates/soldier_core/src/execution/post_only_guard.rs`, `crates/soldier_core/src/execution/post_only_guard_tests.rs` | `ObservedPostOnlyEvents` owns local metric mutation, and preflight now routes through `check_post_only_with_events(...)` instead of the wrapper. |
+| margin | PASS | `crates/soldier_core/src/risk/margin_gate.rs`, `crates/soldier_core/src/risk/margin_gate_tests.rs` | `ObservedMarginGateEvents` keeps allow/reject accounting in the observer sink while wrapper parity still preserves the metric-line contract. |
+| pending exposure | PASS | `crates/soldier_core/src/risk/pending_exposure.rs` | `ObservedPendingExposureEvents` owns reserve success/reject metrics, including idempotent-hit accounting, while wrapper parity keeps the legacy metric contract intact. |
+| exposure budget | PASS | `crates/soldier_core/src/risk/exposure_budget.rs` | `ObservedExposureBudgetEvents` keeps allow/reject accounting out of the graybox body while the production wrapper still emits the legacy metrics/tracing shape. |
+| preflight | PASS | `crates/soldier_core/src/execution/preflight.rs`, `crates/soldier_core/src/execution/preflight_tests.rs` | `ObservedPreflightEvents` owns preflight metrics, and the crossing-reject graybox test proves post-only wrapper counters no longer leak through preflight. |
 
 ## Upgrade 2B — Orchestration Telemetry Decoupling
 
@@ -83,7 +85,7 @@ This is a non-blocking sibling checklist for Upgrade 2A, but Upgrade 2 stays ope
 | --- | --- | --- | --- |
 | group | PASS | `crates/soldier_core/src/execution/group.rs`, `crates/soldier_core/src/execution/group.rs` tests | `apply_leg_result_with_events`, `try_acquire_group_lock_with_events`, and `persist_before_dispatch_with_events` keep the state-machine graybox path sink-only while the legacy wrappers still emit the exact contract counters and metric lines. |
 | gate sequence | PASS | `crates/soldier_core/src/execution/build_order_intent.rs`, `crates/soldier_core/src/execution/build_order_intent_gate_ordering_tests.rs` | `build_order_intent_internal_with_events` emits typed `ChokeEvent` values; wrapper paths adapt them back into the legacy `gate_sequence_total` contract. |
-| WAL-nonblocking | PASS | `crates/soldier_core/src/execution/build_order_intent.rs`, `crates/soldier_core/src/execution/build_order_intent_gate_ordering_tests.rs` | Graybox chokepoint evaluation reports WAL-nonblocking visibility via `ChokeEvent::WalNonblockingAllowed`; wrapper helpers preserve the exact legacy metric line tails for both `precomputed_false` and `no_gate_configured`. |
+| WAL-nonblocking | PASS | `crates/soldier_core/src/execution/build_order_intent.rs`, `crates/soldier_core/src/execution/routing.rs`, `crates/soldier_core/src/execution/dispatch_chokepoint_contract_tests.rs` | Graybox chokepoint evaluation reports WAL-nonblocking visibility via `ChokeEvent::WalNonblockingAllowed`; `routing.rs` now routes the `no_gate_configured` path through `emit_wal_nonblocking_allowed(...)` so the chokepoint sink owns both the metric and diagnostic. |
 
 ## Quick Census Command
 

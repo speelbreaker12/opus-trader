@@ -71,8 +71,27 @@ fn bump_exposure_budget_reject_inner(reason: ExposureBudgetStaticRejectReason) {
 /// Internal exposure budget events for graybox testing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ExposureBudgetEvent {
+    Allowed,
     RejectLimitMissing,
     RejectBudgetExceeded,
+}
+
+struct ObservedExposureBudgetEvents<'a, 'b, E> {
+    metrics: &'a mut ExposureBudgetMetrics,
+    inner: &'b mut E,
+}
+
+impl<E: EventSink<ExposureBudgetEvent>> EventSink<ExposureBudgetEvent>
+    for ObservedExposureBudgetEvents<'_, '_, E>
+{
+    fn emit(&mut self, event: ExposureBudgetEvent) {
+        match &event {
+            ExposureBudgetEvent::Allowed => self.metrics.record_allowed(),
+            ExposureBudgetEvent::RejectLimitMissing => self.metrics.record_reject_limit_missing(),
+            ExposureBudgetEvent::RejectBudgetExceeded => self.metrics.record_reject(),
+        }
+        self.inner.emit(event);
+    }
 }
 
 struct ProductionExposureBudgetEvents;
@@ -80,6 +99,7 @@ struct ProductionExposureBudgetEvents;
 impl EventSink<ExposureBudgetEvent> for ProductionExposureBudgetEvents {
     fn emit(&mut self, event: ExposureBudgetEvent) {
         match event {
+            ExposureBudgetEvent::Allowed => {}
             ExposureBudgetEvent::RejectLimitMissing => {
                 bump_exposure_budget_reject(ExposureBudgetStaticRejectReason::LimitMissing)
             }
@@ -189,10 +209,20 @@ pub(crate) fn evaluate_global_exposure_budget_with_events<E: EventSink<ExposureB
     metrics: &mut ExposureBudgetMetrics,
     events: &mut E,
 ) -> ExposureBudgetResult {
+    let mut observed = ObservedExposureBudgetEvents {
+        metrics,
+        inner: events,
+    };
+    evaluate_global_exposure_budget_inner(input, &mut observed)
+}
+
+fn evaluate_global_exposure_budget_inner<E: EventSink<ExposureBudgetEvent>>(
+    input: &ExposureBudgetInput,
+    events: &mut E,
+) -> ExposureBudgetResult {
     let limit = match input.global_delta_limit_usd {
         Some(v) if v.is_finite() && v > 0.0 => v,
         _ => {
-            metrics.record_reject_limit_missing();
             events.emit(ExposureBudgetEvent::RejectLimitMissing);
             return ExposureBudgetResult::Rejected {
                 reason: ExposureBudgetRejectReason::GlobalExposureBudgetExceeded,
@@ -212,7 +242,6 @@ pub(crate) fn evaluate_global_exposure_budget_with_events<E: EventSink<ExposureB
         || !input.pending_alts_delta_usd.is_finite()
         || !input.candidate_delta_usd.is_finite()
     {
-        metrics.record_reject();
         events.emit(ExposureBudgetEvent::RejectBudgetExceeded);
         return ExposureBudgetResult::Rejected {
             reason: ExposureBudgetRejectReason::GlobalExposureBudgetExceeded,
@@ -234,7 +263,6 @@ pub(crate) fn evaluate_global_exposure_budget_with_events<E: EventSink<ExposureB
 
     let portfolio = conservative_corr_magnitude(combined_btc, combined_eth, combined_alts);
     if !portfolio.is_finite() || portfolio > limit {
-        metrics.record_reject();
         events.emit(ExposureBudgetEvent::RejectBudgetExceeded);
         return ExposureBudgetResult::Rejected {
             reason: ExposureBudgetRejectReason::GlobalExposureBudgetExceeded,
@@ -245,7 +273,7 @@ pub(crate) fn evaluate_global_exposure_budget_with_events<E: EventSink<ExposureB
         };
     }
 
-    metrics.record_allowed();
+    events.emit(ExposureBudgetEvent::Allowed);
     ExposureBudgetResult::Allowed {
         portfolio_delta_usd: portfolio,
         combined_btc_delta_usd: combined_btc,

@@ -474,7 +474,7 @@ fn test_inventory_skew_graybox_emits_reject_event_without_global_side_effects() 
 }
 
 #[test]
-fn test_inventory_skew_graybox_success_emits_no_events_or_global_side_effects() {
+fn test_inventory_skew_graybox_success_emits_allowed_event_without_global_side_effects() {
     let _guard = begin_metrics_test();
     let before = inventory_skew_reject_total(InventorySkewRejectReason::InventorySkewReject);
     let mut metrics = InventorySkewMetrics::new();
@@ -507,10 +507,7 @@ fn test_inventory_skew_graybox_success_emits_no_events_or_global_side_effects() 
             && (adjusted_limit_price - 100.0).abs() < 1e-9
     ));
     assert_eq!(metrics.allowed_total(), 1);
-    assert!(
-        events.is_empty(),
-        "success path should not emit reject events"
-    );
+    assert_eq!(events, vec![InventorySkewEvent::Allowed]);
     assert_eq!(
         inventory_skew_reject_total(InventorySkewRejectReason::InventorySkewReject),
         before

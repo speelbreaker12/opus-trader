@@ -55,9 +55,42 @@ pub(crate) enum PendingExposureEvent {
         existing_instrument: String,
         attempted_instrument: String,
     },
+    ReserveSucceeded {
+        idempotent_hit: bool,
+    },
     ReserveRejected {
         reason: PendingExposureRejectReason,
     },
+}
+
+struct ObservedPendingExposureEvents<'a, 'b, E> {
+    metrics: &'a mut PendingExposureMetrics,
+    inner: &'b mut E,
+}
+
+impl<E: EventSink<PendingExposureEvent>> EventSink<PendingExposureEvent>
+    for ObservedPendingExposureEvents<'_, '_, E>
+{
+    fn emit(&mut self, event: PendingExposureEvent) {
+        match &event {
+            PendingExposureEvent::CrossInstrumentReservationCollision { .. } => {}
+            PendingExposureEvent::ReserveSucceeded { idempotent_hit } => {
+                if *idempotent_hit {
+                    self.metrics.record_reserve_idempotent_hit();
+                }
+                self.metrics.record_reserve_success();
+            }
+            PendingExposureEvent::ReserveRejected { reason } => match reason {
+                PendingExposureRejectReason::InstrumentNotRegistered => {
+                    self.metrics.record_reserve_instrument_not_registered()
+                }
+                PendingExposureRejectReason::PendingExposureBudgetExceeded => {
+                    self.metrics.record_reserve_reject()
+                }
+            },
+        }
+        self.inner.emit(event);
+    }
 }
 
 struct ProductionPendingExposureEvents;
@@ -75,6 +108,7 @@ impl EventSink<PendingExposureEvent> for ProductionPendingExposureEvents {
                 attempted = %attempted_instrument,
                 "cross-instrument ReservationId collision — rejecting to prevent budget leak"
             ),
+            PendingExposureEvent::ReserveSucceeded { .. } => {}
             PendingExposureEvent::ReserveRejected { reason } => {
                 bump_pending_exposure_reject(reason)
             }
@@ -484,11 +518,32 @@ impl PendingExposureBook {
         metrics: &mut PendingExposureMetrics,
         events: &mut E,
     ) -> PendingExposureResult {
+        let mut observed = ObservedPendingExposureEvents {
+            metrics,
+            inner: events,
+        };
+        self.reserve_with_sink(
+            reservation_id,
+            instrument_id,
+            current_delta,
+            delta_impact_est,
+            &mut observed,
+        )
+    }
+
+    fn reserve_with_sink<E: EventSink<PendingExposureEvent>>(
+        &self,
+        reservation_id: &ReservationId,
+        instrument_id: &str,
+        current_delta: f64,
+        delta_impact_est: f64,
+        events: &mut E,
+    ) -> PendingExposureResult {
         let mut inner = self.inner.borrow_mut();
 
         // 1. Check instrument is registered.
         if !inner.instruments.contains_key(instrument_id) {
-            return Self::reject_reserve_instrument_not_registered_with_events(metrics, events);
+            return Self::reject_reserve_instrument_not_registered_with_events(events);
         }
 
         // 2. Cross-instrument ReservationId collision check.
@@ -508,7 +563,6 @@ impl PendingExposureBook {
             return Self::reject_reserve_budget_exceeded_with_events(
                 PendingExposureRejectReason::PendingExposureBudgetExceeded,
                 pending,
-                metrics,
                 events,
             );
         }
@@ -522,7 +576,6 @@ impl PendingExposureBook {
             return Self::reject_reserve_budget_exceeded_with_events(
                 PendingExposureRejectReason::PendingExposureBudgetExceeded,
                 book.pending_total,
-                metrics,
                 events,
             );
         };
@@ -537,7 +590,6 @@ impl PendingExposureBook {
             return Self::reject_reserve_budget_exceeded_with_events(
                 PendingExposureRejectReason::PendingExposureBudgetExceeded,
                 book.pending_total,
-                metrics,
                 events,
             );
         }
@@ -571,7 +623,6 @@ impl PendingExposureBook {
             return Self::reject_reserve_budget_exceeded_with_events(
                 PendingExposureRejectReason::PendingExposureBudgetExceeded,
                 book.pending_total,
-                metrics,
                 events,
             );
         }
@@ -587,7 +638,6 @@ impl PendingExposureBook {
                 return Self::reject_reserve_budget_exceeded_with_events(
                     PendingExposureRejectReason::PendingExposureBudgetExceeded,
                     book.pending_total,
-                    metrics,
                     events,
                 );
             }
@@ -627,11 +677,9 @@ impl PendingExposureBook {
             .reservation_instrument
             .insert(reservation_id.clone(), instrument_id.to_owned());
 
-        // Metrics.
-        if old_delta.is_some() {
-            metrics.record_reserve_idempotent_hit();
-        }
-        metrics.record_reserve_success();
+        events.emit(PendingExposureEvent::ReserveSucceeded {
+            idempotent_hit: old_delta.is_some(),
+        });
 
         #[cfg(debug_assertions)]
         {
@@ -652,10 +700,8 @@ impl PendingExposureBook {
     fn reject_reserve_budget_exceeded_with_events<E: EventSink<PendingExposureEvent>>(
         reason: PendingExposureRejectReason,
         pending_total: f64,
-        metrics: &mut PendingExposureMetrics,
         events: &mut E,
     ) -> PendingExposureResult {
-        metrics.record_reserve_reject();
         events.emit(PendingExposureEvent::ReserveRejected { reason });
         PendingExposureResult::Rejected {
             reason,
@@ -664,10 +710,8 @@ impl PendingExposureBook {
     }
 
     fn reject_reserve_instrument_not_registered_with_events<E: EventSink<PendingExposureEvent>>(
-        metrics: &mut PendingExposureMetrics,
         events: &mut E,
     ) -> PendingExposureResult {
-        metrics.record_reserve_instrument_not_registered();
         events.emit(PendingExposureEvent::ReserveRejected {
             reason: PendingExposureRejectReason::InstrumentNotRegistered,
         });
@@ -1101,7 +1145,12 @@ mod tests {
             &mut initial_events,
         );
         assert!(matches!(initial, PendingExposureResult::Reserved { .. }));
-        assert!(initial_events.is_empty());
+        assert_eq!(
+            initial_events,
+            vec![PendingExposureEvent::ReserveSucceeded {
+                idempotent_hit: false,
+            }]
+        );
 
         let mut events = Vec::new();
         let result =
