@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 repo_hooks="$repo_root/.githooks"
+source "$repo_root/plans/lib/obsidian_vault.sh"
 
 if ! command -v git >/dev/null 2>&1; then
   echo "ERROR: git not found." >&2
@@ -31,5 +32,9 @@ if [ -d "$repo_hooks" ]; then
   chmod +x "$repo_hooks"/* || true
 fi
 
+vault_root="$(obsidian_vault_configured_path)"
+mkdir -p "$vault_root/Projects" "$vault_root/Debriefs" "$vault_root/Templates"
+
 echo "Hooks installed to $repo_hooks"
+echo "Obsidian vault ready at $vault_root"
 echo "Run this again after moving the repository or creating detached verification worktrees."

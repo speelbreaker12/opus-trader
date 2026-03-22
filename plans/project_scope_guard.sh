@@ -71,6 +71,12 @@ esac
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 [[ -n "$ROOT" ]] || die "project scope guard must run inside a git worktree"
 cd "$ROOT"
+source "$ROOT/plans/lib/obsidian_vault.sh"
+
+if ! resolve_obsidian_vault_path required; then
+  obsidian_vault_missing_message required "$(obsidian_vault_configured_path)" >&2
+  exit 1
+fi
 
 if [[ -z "$branch_name" ]]; then
   branch_name="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
@@ -89,7 +95,7 @@ case "$branch_name" in
 esac
 
 metadata_json="$(
-  python3 - "$branch_name" "$ROOT" <<'PY'
+  python3 - "$branch_name" "$ROOT" "$OBSIDIAN_VAULT_PATH_RESOLVED" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -101,9 +107,10 @@ from obsidian_frontmatter import parse_frontmatter, clean_scalar, frontmatter_sc
 
 branch_name = sys.argv[1]
 repo_root = Path(sys.argv[2])
-projects_dir = repo_root / "obsidian" / "Projects"
+vault_root = Path(sys.argv[3])
+projects_dir = vault_root / "Projects"
 if not projects_dir.is_dir():
-    print("ERROR: missing obsidian/Projects directory", file=sys.stderr)
+    print(f"ERROR: missing Obsidian Projects directory: {projects_dir}", file=sys.stderr)
     raise SystemExit(1)
 
 notes = []
@@ -117,7 +124,7 @@ for path in sorted(projects_dir.glob("*.md")):
         {
             "name": path.stem,
             "path": str(path),
-            "rel_path": str(path.relative_to(repo_root)),
+            "rel_path": str(path.relative_to(repo_root)) if path.is_relative_to(repo_root) else str(path),
             "branch": frontmatter_scalar(frontmatter, "branch"),
             "base": frontmatter_scalar(frontmatter, "base"),
             "pr": frontmatter_scalar(frontmatter, "pr"),
@@ -129,7 +136,7 @@ owners = [note for note in notes if note["branch"] == branch_name]
 if not owners:
     print(
         f"ERROR: no Obsidian project note declares branch '{branch_name}'. "
-        "Update or create a note under obsidian/Projects before continuing.",
+        f"Update or create a note under {projects_dir} before continuing.",
         file=sys.stderr,
     )
     raise SystemExit(1)
