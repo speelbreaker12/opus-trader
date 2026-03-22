@@ -263,8 +263,9 @@ Date: 2026-03-21
 Summary: Reproduced the workflow timeout on clean `main` in `.worktrees/verify-mechanical-timeout-fix` and isolated it to `MECHANICAL_TIMEOUT` being too low for the current `verify_mechanical.sh` compile footprint. A direct timed run of `bash plans/verify_mechanical.sh --strict` passed in `247.54s`, so `plans/verify_fork.sh` now raises `MECHANICAL_TIMEOUT` from `240s` to `5m` and `plans/tests/test_verify_timeout_policy.sh` was updated red-to-green to lock the new policy. `VERIFY_RUN_ID=debug_timeout_fix ./plans/workflow_verify.sh` now passes `mechanical_verification` (`mechanical_verification.rc=0`) and surfaces the next downstream timeout at `wf_test_pr_review_gate_hook` (`rc=137`).
 Commands: cargo build --workspace; /usr/bin/time -p bash plans/verify_mechanical.sh --strict; bash plans/tests/test_verify_timeout_policy.sh; VERIFY_RUN_ID=debug_timeout_fix ./plans/workflow_verify.sh; git diff --check.
 Evidence: plans/verify_fork.sh; plans/tests/test_verify_timeout_policy.sh; artifacts/verify/debug_timeout_fix/mechanical_verification.log; artifacts/verify/debug_timeout_fix/mechanical_verification.rc; artifacts/verify/debug_timeout_fix/wf_test_pr_review_gate_hook.log; artifacts/verify/debug_timeout_fix/wf_test_pr_review_gate_hook.rc.
-Next: Commit and publish the timeout-budget fix, then investigate `wf_test_pr_review_gate_hook` as the next workflow blocker.
-Next: If a clean worktree or CI run is available for this branch, run `./plans/verify.sh full` to produce final clean-checkout verification evidence for merge.
+Next:
+  - Commit and publish the timeout-budget fix, then investigate `wf_test_pr_review_gate_hook` as the next workflow blocker.
+  - If a clean worktree or CI run is available for this branch, run `./plans/verify.sh full` to produce final clean-checkout verification evidence for merge.
 Story: workflow-maintenance
 Date: 2026-03-15 17:34:00 UTC
 Summary: Fixed `plans/review_logged.sh` so `codex review --base` no longer receives the Rust fintech review prompt as an unsupported positional argument, while `--commit` and `--uncommitted` still inject the custom rules. Added fixture coverage proving files-mode prompt literalization still works and base-mode argv no longer contains the prompt payload.

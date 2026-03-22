@@ -28,7 +28,7 @@ assert_contains_line 'RUST_CLIPPY_TIMEOUT="${RUST_CLIPPY_TIMEOUT:-5m}"'
 assert_contains_line 'RUST_CLIPPY_TIMEOUT="${RUST_CLIPPY_TIMEOUT:-15m}"'
 assert_contains_line 'RUST_TEST_TIMEOUT="${RUST_TEST_TIMEOUT:-5m}"'
 assert_contains_line 'RUST_TEST_TIMEOUT="${RUST_TEST_TIMEOUT:-45m}"'
-assert_contains_line 'MECHANICAL_TIMEOUT="${MECHANICAL_TIMEOUT:-5m}"'
+assert_contains_line 'MECHANICAL_TIMEOUT="${MECHANICAL_TIMEOUT:-10m}"'
 
 line_default="$(grep -nF 'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-600s}"' "$VERIFY" | head -n1 | cut -d: -f1)"
 line_full_override="$(grep -nF 'if [[ "$MODE" == "full" && "$PREFLIGHT_TIMEOUT_WAS_SET" -eq 0 ]]; then' "$VERIFY" | head -n1 | cut -d: -f1)"
