@@ -16,11 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/rust-skills-prompt-hook.py 2>&1"
-          },
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/obsidian-context-hook.sh"
+            "command": "python3 .claude/hooks/rust-skills-prompt-hook.py"
           }
         ]
       }
@@ -31,11 +27,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/scripts/dangerous-command-blocker.py 2>&1"
+            "command": "python3 .claude/scripts/dangerous-command-blocker.py"
           },
           {
             "type": "command",
-            "command": "python3 .claude/scripts/secret-scanner.py 2>&1"
+            "command": "python3 .claude/scripts/secret-scanner.py"
           },
           {
             "type": "command",
@@ -47,7 +43,7 @@
           },
           {
             "type": "command",
-            "command": "bash .claude/hooks/obsidian-precommit-hook.sh"
+            "command": "bash .claude/hooks/vault-update-check.sh"
           }
         ]
       },
@@ -56,7 +52,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/rust-skills-edit-hook.py 2>&1"
+            "command": "python3 .claude/hooks/rust-skills-edit-hook.py"
           }
         ]
       },
@@ -65,7 +61,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/rust-skills-edit-hook.py 2>&1"
+            "command": "python3 .claude/hooks/rust-skills-edit-hook.py"
           }
         ]
       }

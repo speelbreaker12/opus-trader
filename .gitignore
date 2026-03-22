@@ -16,11 +16,7 @@ __pycache__/
 evals/
 
 # Local Codex config
-.codex/*
-!.codex/commands/
-!.codex/commands/*.md
-!.codex/skills/
-!.codex/skills/**
+.codex/
 
 # Local IDE/Agent state
 .claude/*
@@ -37,6 +33,7 @@ evals/
 !.claude/skills/
 !.claude/skills/**
 .obsidian/
+obsidian/
 .code/
 
 # Build/tool caches

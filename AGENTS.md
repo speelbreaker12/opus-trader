@@ -148,34 +148,21 @@ Key fintech rules:
 - Fail-closed: if uncertain, choose `TradingMode::ReduceOnly`, never `Active`
 - No `unwrap()` in production paths — use `?` or explicit error handling
 
-## Obsidian Project Tracking (Mandatory)
+## Workflow Policy
 
-Obsidian project tracking lives in the external vault at `${OBSIDIAN_VAULT_PATH:-$HOME/Obsidian/opus-trader}`.
+Read `~/Desktop/obsidian/00_START_HERE/AGENT_BOOT_POLICY.md` first. It is the boot policy.
 
-**On session start:** Read all `${OBSIDIAN_VAULT_PATH}/Projects/*.md` files to understand active work, priorities, and current state. If the vault is missing, the session context hook warns and skips routing help.
-If the Obsidian router hook points to `/obsidian-workflow`, use it as the project-page/debrief checklist companion. For normal project work, the Obsidian debrief is also the session handoff unless a specialized workflow defines its own dedicated handoff artifact.
-Project notes may include optional frontmatter `aliases` and `keywords` to improve first-prompt router matching; keep them current when they materially help rediscovery.
-Project notes must also keep `branch`, `base`, `pr`, and explicit `scope_paths` current so hooks can enforce one-project/one-branch/one-PR ownership mechanically.
-If the first prompt matches a project note whose `branch` differs from the current branch/worktree, switch or create that project’s worktree before editing.
+**Hard rules (summary):**
+- External Obsidian vault (`~/Desktop/obsidian/`) is the only canonical location for project memory and planning artifacts.
+- Never create or update canonical planning docs inside repo worktrees.
+- Before starting net-new work, check whether a project already exists.
+- Every active project must declare Touch Files. No two active projects share a Primary touch file.
+- Before creating a new project, check touch-file overlap against all active projects.
+- When resuming work, load the project page first and use its assigned worktree.
+- Update the project page when status, links, next actions, or touch files change.
 
-**Before push/PR and at end of session:** Update or create the relevant project file in `${OBSIDIAN_VAULT_PATH}/Projects/`:
-1. Add a dated entry under `## Log` describing what changed
-2. Update `## Current State` if the project status shifted
-3. Update the `## Commits` section near the top of the note with date + hash (or `pending`) + short description for each project batch
-4. Update frontmatter (`status`, `priority`, `branch`, `base`, `pr`, `scope_paths`) if needed
-5. Write or update a matching debrief/session handoff in `${OBSIDIAN_VAULT_PATH}/Debriefs/` and link it from the project's `## Debriefs` section
-
-**If no existing project matches your work:** Create a new one by copying `${OBSIDIAN_VAULT_PATH}/Templates/Project.md` to `${OBSIDIAN_VAULT_PATH}/Projects/<Project Name>.md` and filling in the fields.
-
-**Commit-time Obsidian staging is no longer enforced.** The scope hooks still block push/PR boundaries when files escape the active project note's declared `scope_paths`, when the branch is not owned by exactly one project note, when the vault is missing, or when project-note branch/PR metadata drifts from the branch being used.
-
-**At end of session:** Write a debrief in `${OBSIDIAN_VAULT_PATH}/Debriefs/<Project> <date>.md` using the template in `${OBSIDIAN_VAULT_PATH}/Templates/Debrief.md`. That debrief is the default end-of-session handoff unless a specialized workflow requires a separate artifact (for example `reviews/reconciliations/**/HANDOFF.md`). Include a `## Commits` section with the relevant commit hash(es); if the debrief is written before the commit exists, record `pending` and replace it once the commit is known. Keep the project note's `## Commits` section near the top in the same date/hash/summary format, and link the debrief from the project's `## Debriefs` section before pushing or opening the PR.
-
-Hard rules:
-- Never commit files outside the active project note’s declared `scope_paths`.
-- Never push a branch whose full diff crosses project scope.
-- Never add work for a different project onto a branch with an open PR.
-- If scope changes, create a new project/worktree/branch instead of widening the current PR.
+**Banned for new artifacts in this repo:** `obsidian/`, `reviews/`, `docs/superpowers/specs/`, `docs/superpowers/plans/`
+**Allowed in repo:** `plans/` (scripts only), `specs/` (code contracts), `docs/codebase/`, `docs/skills/`
 
 ## Non-negotiables
 - Contract alignment is mandatory; if conflict, STOP and output `<promise>BLOCKED_CONTRACT_CONFLICT</promise>` with the violated section.

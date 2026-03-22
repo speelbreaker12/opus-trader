@@ -6,13 +6,28 @@ Your job is to control the session safely before any code work begins.
 
 This is a control-plane skill. It decides where the work belongs, which Obsidian page owns it, which worktree should be used, and what handoff must be left.
 
-For normal project work, the Obsidian debrief is the session handoff. Only specialized workflows should keep a separate handoff artifact.
-
 It is not the Commit Skill and not the Push/PR Skill. Use those separately when the session reaches those boundaries.
+
+## External Vault
+
+The Obsidian vault is **external** — it lives at `~/Desktop/obsidian/`, NOT inside any repo.
+
+Vault layout:
+- `projects/` — one file per project (truth capsule)
+- `debriefs/` — session debriefs
+- `handoffs/` — context transfer between sessions
+- `plans/` — implementation plans
+- `designs/` — architecture/design docs
+- `audits/` — review/audit results
+- `templates/` — Project.md, Debrief.md templates
+- `index/PROJECT_INDEX.md` — all projects
+- `index/ACTIVE_PROJECT.md` — active projects by priority
+
+**Hard invariant:** Agents must NEVER create `obsidian/` folders inside repos.
 
 ## Core model
 
-- Obsidian = control plane
+- Obsidian = control plane (external vault)
 - repo root = control lane
 - dedicated wt-* worktree = execution lane
 - Commit Skill = local history
@@ -95,18 +110,12 @@ Route shared_hotfix as follows:
 - create a dedicated hot-fix worktree from fresh main
 - do not bury the hot-fix inside unrelated feature work
 - after the hot-fix merges to main, refresh affected worktrees from main
-- create a dedicated hot-fix note in Obsidian linked back to impacted projects
+- create a dedicated hot-fix note in the vault linked back to impacted projects
 
 ## Obsidian routing rules
 
-Resolve the vault root first:
-
-```bash
-export OBSIDIAN_VAULT_PATH="${OBSIDIAN_VAULT_PATH:-$HOME/Obsidian/opus-trader}"
-```
-
 Default destinations:
-- existing / new project work -> project page under the project area
+- existing / new project work -> project page in the vault
 - maintenance -> maintenance / queue note
 - shared hot-fix -> dedicated hot-fix note linked back to impacted projects
 
@@ -122,14 +131,14 @@ Do not spread one session across multiple "owner" pages.
 #### Discovery
 
 ```bash
-ls "$OBSIDIAN_VAULT_PATH"/Projects/*.md
-rg -n "^branch:|^status:|^worktree:|^pr:" "$OBSIDIAN_VAULT_PATH"/Projects/*.md
+ls ~/Desktop/obsidian/projects/*.md
+cat ~/Desktop/obsidian/index/ACTIVE_PROJECT.md
 ```
 
 #### Read first
 - project page
-- latest debrief/session handoff
-- latest session note if present (if separate)
+- latest handoff
+- latest session note if present
 - relevant contract / PRD / implementation plan / story / task note
 
 #### Extract
@@ -144,7 +153,7 @@ rg -n "^branch:|^status:|^worktree:|^pr:" "$OBSIDIAN_VAULT_PATH"/Projects/*.md
 
 #### Propose
 - project slug
-- page path: `$OBSIDIAN_VAULT_PATH/Projects/<Project Name>.md`
+- page path: `~/Desktop/obsidian/projects/<Project Name>.md`
 - branch naming family: `<domain>/<slug>`
 - worktree name: `.worktrees/wt-<domain>-<slug>`
 
@@ -155,7 +164,7 @@ Then wait for confirmation before creating anything.
 Create the project page from the template:
 
 ```bash
-cp "$OBSIDIAN_VAULT_PATH/Templates/Project.md" "$OBSIDIAN_VAULT_PATH/Projects/<Project Name>.md"
+cp ~/Desktop/obsidian/templates/Project.md ~/Desktop/obsidian/projects/<Project Name>.md
 ```
 
 Required frontmatter fields:
@@ -221,7 +230,7 @@ After a PR merges, the merged branch and worktree are disposable. Do not keep th
 
 **Flow:**
 
-1. Sync local main (from the repo root, which stays on main):
+1. Sync local main:
 
 ```bash
 git fetch origin --prune
@@ -242,7 +251,7 @@ git branch -d <domain>/<slug>
 
 If `-d` fails because of squash merge, confirm the PR merged then use `-D`.
 
-4. Update the Obsidian project page:
+4. Update the Obsidian project page in the external vault:
    - set `status` to `done` (or update to reflect next slice)
    - record the merge commit / PR number
    - clear or archive the worktree/branch fields
@@ -263,8 +272,8 @@ Record:
 
 ### At the end of work
 
-Update:
-- session summary
+Update the project file in `~/Desktop/obsidian/projects/`:
+- session summary under `## Log`
 - files touched
 - tests or checks run
 - current git state
@@ -272,6 +281,8 @@ Update:
 - PR number/url if any
 - exact next step
 - warnings / blockers
+
+Write a debrief in `~/Desktop/obsidian/debriefs/` and link from the project's `## Debriefs`.
 
 ### Required touch list
 
@@ -350,6 +361,7 @@ Session Result
 - never assume earlier cwd is still valid
 - never create a new project when an existing one clearly fits
 - never bury a shared hot-fix inside unrelated feature work
-- never end without updating Obsidian
+- never end without updating the external Obsidian vault
 - never end without a handoff
 - never claim commit / push / PR / tests happened if they did not
+- never create obsidian/ folders inside repos

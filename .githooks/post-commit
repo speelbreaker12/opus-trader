@@ -26,8 +26,3 @@ if [ "$QUEUE_COUNT" -gt 0 ] 2>/dev/null; then
   printf 'stoic-reflect: queue has %s items \xE2\x86\x92 run $stoic-reflect\n' "$QUEUE_COUNT"
 fi
 
-if git rev-parse --verify --quiet HEAD~1 >/dev/null 2>&1; then
-  if git diff --name-only --find-renames --find-copies HEAD~1 HEAD -- "obsidian/Active Projects.md" | grep -q "^obsidian/Active Projects.md$"; then
-    printf 'obsidian: Active Projects dashboard auto-sync touched this commit.\n'
-  fi
-fi

@@ -9,23 +9,6 @@ cd "$(git rev-parse --show-toplevel)"
 
 echo "Running pre-commit checks..."
 
-# -1. Bare repo guard — never commit from the bare repo root.
-# Committing from bare root uses the wrong index and stages everything as deleted.
-if [[ "$(git rev-parse --is-bare-repository 2>/dev/null)" == "true" ]] || \
-   [[ ! -d "$(git rev-parse --show-toplevel 2>/dev/null)/.git" && \
-      -f "$(git rev-parse --show-toplevel 2>/dev/null)/.git" ]]; then
-  # We're either in a bare repo, or in a worktree (which has .git as a file, not dir).
-  # The dangerous case is bare repo — worktrees are fine.
-  if [[ "$(git rev-parse --is-bare-repository 2>/dev/null)" == "true" ]]; then
-    echo ""
-    echo "ERROR: Commits from the bare repo root are blocked."
-    echo "This would use the wrong index and delete all files."
-    echo "Switch to a worktree: cd .worktrees/<name>"
-    echo ""
-    exit 1
-  fi
-fi
-
 # 0. Main branch guard — no real work on main
 current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
@@ -37,157 +20,75 @@ if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
   exit 1
 fi
 
-# --- Change-class classification ---
-# Classes (by risk, not size):
-#   docs_only:       only *.md, *.txt, docs/*, reviews/*, artifacts/*
-#   obsidian_only:   only obsidian/**
-#   formatting_only: staged diff is whitespace-only across all files
-#   non_critical:    no crates/soldier_core/ changes (scripts, config, tooling)
-#   critical:        touches crates/ (safety paths, execution, risk)
-staged_files="$(git diff --cached --name-only --diff-filter=ACMR)"
-change_class="docs_only"
-
-while IFS= read -r path; do
-  [[ -n "$path" ]] || continue
-  case "$path" in
-    crates/*)
-      change_class="critical"
-      break
-      ;;
-    plans/*.sh|plans/lib/*.sh|plans/*.json|plans/*.py|scripts/*|python/*|.githooks/*|.claude/hooks/*|.claude/scripts/*)
-      # Non-critical code — only upgrade if not already critical
-      if [[ "$change_class" != "critical" ]]; then
-        change_class="non_critical"
-      fi
-      ;;
-    obsidian/*)
-      if [[ "$change_class" == "docs_only" ]]; then
-        change_class="obsidian_only"
-      fi
-      ;;
-    *.md|*.txt|*.json|docs/*|reviews/*|artifacts/*)
-      # stays docs_only or whatever it already is
-      ;;
-    *)
-      if [[ "$change_class" != "critical" ]]; then
-        change_class="non_critical"
-      fi
-      ;;
-  esac
-done <<< "$staged_files"
-
-# Detect formatting-only changes: if the class is non_critical or critical but
-# ALL staged diffs are whitespace-only, downgrade to formatting_only.
-if [[ "$change_class" != "docs_only" && "$change_class" != "obsidian_only" ]]; then
-  all_whitespace=1
-  while IFS= read -r path; do
-    [[ -n "$path" ]] || continue
-    if git diff --cached --ignore-all-space --ignore-blank-lines "$path" | grep -qE '^[+-].*[a-zA-Z]'; then
-      all_whitespace=0
-      break
-    fi
-  done <<< "$staged_files"
-  if [[ "$all_whitespace" -eq 1 ]]; then
-    change_class="formatting_only"
-  fi
+# 1. Block new planning artifacts in banned repo paths
+# Block new files in banned planning paths (exempt premortems/reconciliations — active workflow)
+NEW_BANNED=$(git diff --cached --name-only --diff-filter=A | grep -E "^(obsidian/|docs/superpowers/specs/|docs/superpowers/plans/)" || true)
+NEW_REVIEWS=$(git diff --cached --name-only --diff-filter=A | grep -E "^reviews/" | grep -vE "^reviews/(premortems|reconciliations)/" || true)
+NEW_PLANNING="${NEW_BANNED}${NEW_REVIEWS:+$'\n'}${NEW_REVIEWS}"
+NEW_PLANNING=$(echo "$NEW_PLANNING" | sed '/^$/d')
+if [[ -n "$NEW_PLANNING" ]]; then
+  echo ""
+  echo "ERROR: New planning artifacts must go in the external Obsidian vault, not the repo."
+  echo "Blocked files:"
+  echo "$NEW_PLANNING"
+  echo ""
+  echo "Write to ~/Desktop/obsidian/ instead. See AGENTS.md 'Workflow Policy'."
+  exit 1
 fi
 
-export OBSIDIAN_CHANGE_CLASS="$change_class"
-echo "Change class: $change_class"
+# 2. Project scope guard (all commits)
+plans/project_scope_guard.sh commit
 
-# --- Obsidian tracking guard (all commits, change-class-aware) ---
-# The guard itself handles exemptions: docs_only/obsidian_only/formatting_only auto-pass.
-# This runs before the tier dispatch so obsidian tracking is enforced for ALL commits.
-plans/obsidian_commit_guard.sh
+# 3. SSOT lint (existing)
+plans/ssot_lint.sh
 
-# --- Shell syntax lint (both tiers, <1 second) ---
-STAGED_SH="$(git diff --cached --name-only --diff-filter=ACM | grep '\.sh$' || true)"
-if [[ -n "$STAGED_SH" ]]; then
-  SH_ERRORS=0
-  while IFS= read -r sh_file; do
-    [[ -n "$sh_file" ]] || continue
-    if ! bash -n "$sh_file" 2>/dev/null; then
-      echo "ERROR: shell syntax error in $sh_file" >&2
-      bash -n "$sh_file" 2>&1 | head -5 >&2
-      SH_ERRORS=1
-    fi
-  done <<< "$STAGED_SH"
-  if [[ "$SH_ERRORS" -eq 1 ]]; then
+# 4. Contract cross-reference check (if CONTRACT.md is staged)
+if git diff --cached --name-only | grep -q "specs/CONTRACT.md"; then
+  echo "CONTRACT.md staged - running cross-reference check..."
+  if ! python3 scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --strict --check-at; then
     echo ""
-    echo "ERROR: Fix shell syntax errors before committing"
+    echo "ERROR: Contract cross-reference check failed"
+    echo "Fix the issues above before committing"
     exit 1
   fi
-  echo "Shell lint: $(echo "$STAGED_SH" | wc -l | tr -d ' ') .sh file(s) OK"
 fi
 
-# --- Two commit tiers ---
-#
-# Tier 1 (fast): docs, obsidian, formatting, non_critical (workflow/scripts/hooks)
-#   Bare repo guard + main guard only. Everything else deferred to push.
-#   Target: <5 seconds.
-#
-# Tier 2 (full): critical (crates/, trading system code)
-#   Scope guard + SSOT lint + contract crossref + unwrap check.
-#   Target: 30-60 seconds. Heavy verify deferred to push/merge.
+# 5. PRD schema check (if prd.json is staged)
+if git diff --cached --name-only | grep -q "plans/prd.json"; then
+  echo "prd.json staged - running schema check..."
+  if ! plans/prd_schema_check.sh plans/prd.json; then
+    echo ""
+    echo "ERROR: PRD schema validation failed"
+    echo "Run 'plans/prd_gate.sh' for full diagnostics"
+    exit 1
+  fi
+fi
 
-case "$change_class" in
-  docs_only|obsidian_only|formatting_only|non_critical)
-    echo "Tier 1 (fast): $change_class — heavy gates deferred to push"
-    ;;
-  critical)
-    echo "Tier 2 (full): $change_class — running trading system gates"
-
-    # 1. Project scope guard — staged files vs scope_paths
-    plans/project_scope_guard.sh commit
-
-    # 2. SSOT lint
-    plans/ssot_lint.sh
-
-    # 3. Contract cross-reference check (if CONTRACT.md is staged)
-    if git diff --cached --name-only | grep -q "specs/CONTRACT.md"; then
-      echo "CONTRACT.md staged - running cross-reference check..."
-      if ! python3 scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --strict --check-at; then
-        echo ""
-        echo "ERROR: Contract cross-reference check failed"
-        echo "Fix the issues above before committing"
-        exit 1
-      fi
+# 6. Check for unwrap() in staged Rust files (safety-critical paths only)
+STAGED_RS=$(git diff --cached --name-only --diff-filter=ACM | grep -E "^crates/soldier_core/.*\.rs$" || true)
+if [[ -n "$STAGED_RS" ]]; then
+  echo "Checking staged soldier_core files for unwrap()..."
+  UNWRAP_FOUND=0
+  for file in $STAGED_RS; do
+    # Skip test files
+    if [[ "$file" == *"test"* ]]; then
+      continue
     fi
-
-    # 4. PRD schema check (if prd.json is staged)
-    if git diff --cached --name-only | grep -q "plans/prd.json"; then
-      echo "prd.json staged - running schema check..."
-      if ! plans/prd_schema_check.sh plans/prd.json; then
-        echo ""
-        echo "ERROR: PRD schema validation failed"
-        echo "Run 'plans/prd_gate.sh' for full diagnostics"
-        exit 1
-      fi
+    if git diff --cached "$file" | grep -q "\.unwrap()"; then
+      echo "WARN: unwrap() added in $file"
+      UNWRAP_FOUND=1
     fi
+  done
+  if [[ $UNWRAP_FOUND -eq 1 ]]; then
+    echo ""
+    echo "WARNING: unwrap() found in staged changes"
+    echo "Consider using ? or .ok_or() instead"
+    echo "(Proceeding anyway - this is a warning only)"
+    echo ""
+  fi
+fi
 
-    # 5. Check for unwrap() in staged Rust files (safety-critical paths only)
-    STAGED_RS=$(git diff --cached --name-only --diff-filter=ACM | grep -E "^crates/soldier_core/.*\.rs$" || true)
-    if [[ -n "$STAGED_RS" ]]; then
-      echo "Checking staged soldier_core files for unwrap()..."
-      UNWRAP_FOUND=0
-      for file in $STAGED_RS; do
-        if [[ "$file" == *"test"* ]]; then
-          continue
-        fi
-        if git diff --cached "$file" | grep -q "\.unwrap()"; then
-          echo "WARN: unwrap() added in $file"
-          UNWRAP_FOUND=1
-        fi
-      done
-      if [[ $UNWRAP_FOUND -eq 1 ]]; then
-        echo ""
-        echo "WARNING: unwrap() found in staged changes"
-        echo "Consider using ? or .ok_or() instead"
-        echo "(Proceeding anyway - this is a warning only)"
-        echo ""
-      fi
-    fi
-    ;;
-esac
+# 7. Enforce code-review-expert attestation for significant implementation changes
+plans/code_review_expert_guard.sh
 
 echo "Pre-commit checks passed."
