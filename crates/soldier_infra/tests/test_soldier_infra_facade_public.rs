@@ -37,8 +37,8 @@ fn soldier_infra_root_stays_a_pure_facade() {
     let api_rs = fs::read_to_string(manifest_dir.join("src/api.rs")).expect("read src/api.rs");
 
     assert!(
-        api_rs.contains("infra_bootstrapped"),
-        "expected infra_bootstrapped to be re-exported from src/api.rs"
+        api_rs.lines().any(|line| line.contains("pub use") && line.contains("infra_bootstrapped")),
+        "expected infra_bootstrapped to be a pub use re-export in src/api.rs"
     );
     assert!(
         !lib_rs.contains("pub fn infra_bootstrapped"),

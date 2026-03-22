@@ -9,10 +9,11 @@
 //! emergency-close selection, `RecordedBeforeDispatchGate`.
 //!
 //! **Private:** `base_gates`, `build_order_intent`, `dispatch_map`,
-//! `domain_model`, `engine`, `gate`, `gate_outcome`, `gates`,
-//! `intent_assembly`, `inventory_skew`, `open_runtime`, `order_size`,
-//! `pipeline`, `post_only_guard`, `preflight`, `pricer`, `quantize`,
-//! `routing`, `wal_gate`.
+//! `domain_model`, `emergency_close`, `engine`, `gate`, `gate_outcome`,
+//! `gates`, `group`, `intent_assembly`, `inventory_skew`, `label`,
+//! `open_runtime`, `order_size`, `pipeline`, `post_only_guard`,
+//! `preflight`, `pricer`, `quantize`, `reject_reason`, `routing`,
+//! `tlsm`, `wal_gate`.
 //!
 //! **Tests:** unit tests alongside implementation files; facade completeness
 //! in `facade_completeness_contract_tests.rs`; integration tests under

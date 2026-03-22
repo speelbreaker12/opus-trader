@@ -5,7 +5,7 @@ branch: hotfix/facade-boundary-doc-blocks-lockdown
 base: main
 pr:
 started: "2026-03-21"
-worktree: /Users/admin/Desktop/opus-trader/.git/Desktop/wt_facade_boundary_doc_blocks_lockdown
+worktree: $WORKTREES/wt_facade_boundary_doc_blocks_lockdown
 aliases:
   - Facade Boundary + Docs Hotfix
 keywords:
@@ -29,7 +29,7 @@ scope_paths:
 
 ## Current State
 
-In progress on branch `hotfix/facade-boundary-doc-blocks-lockdown` in worktree `/Users/admin/Desktop/opus-trader/.git/Desktop/wt_facade_boundary_doc_blocks_lockdown`. The facade/doc-block cleanup is implemented: `infra_bootstrapped()` now routes through the `soldier_infra` facade, the root doc blocks are normalized, and the new structure proof passes. Local quick verification is blocked only by the pre-existing workflow test `plans/tests/test_pr_review_gate_hook.sh`, which also fails unchanged on clean `main`.
+In progress on branch `hotfix/facade-boundary-doc-blocks-lockdown` in worktree `$WORKTREES/wt_facade_boundary_doc_blocks_lockdown`. The facade/doc-block cleanup is implemented: `infra_bootstrapped()` now routes through the `soldier_infra` facade, the root doc blocks are normalized, and the new structure proof passes. Local quick verification is blocked only by the pre-existing workflow test `plans/tests/test_pr_review_gate_hook.sh`, which also fails unchanged on clean `main`.
 
 ## Commits
 - `pending` — 2026-03-21 — bootstrap the broader facade/doc-block hotfix lane and finish the remaining facade-boundary cleanup from fresh `main`.
