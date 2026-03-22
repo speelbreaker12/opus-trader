@@ -19,7 +19,7 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD)
 SAFE_BRANCH="${BRANCH//\//_}"
 HEAD=$(git rev-parse HEAD)
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-cat > "$REPO_ROOT/artifacts/pr-review-gate/${SAFE_BRANCH}.review-stack.json" <<EOF
+cat > "$REPO_ROOT/artifacts/pr-review-gate/${SAFE_BRANCH}.json" <<EOF
 {
   "branch": "${BRANCH}",
   "head_commit": "${HEAD}",

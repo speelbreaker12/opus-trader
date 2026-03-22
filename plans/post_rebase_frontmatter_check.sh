@@ -10,6 +10,12 @@ set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT"
+source "$ROOT/plans/lib/obsidian_vault.sh"
+
+if ! resolve_obsidian_vault_path required; then
+  obsidian_vault_missing_message required "$(obsidian_vault_configured_path)" >&2
+  exit 1
+fi
 
 branch_name=""
 while [[ $# -gt 0 ]]; do
@@ -40,7 +46,7 @@ print(frontmatter_scalar(fm, 'branch'))
     project_file="$path"
     break
   fi
-done < <(find obsidian/Projects -name '*.md' -type f 2>/dev/null)
+done < <(find "$OBSIDIAN_VAULT_PATH_RESOLVED/Projects" -name '*.md' -type f 2>/dev/null)
 
 if [[ -z "$project_file" ]]; then
   echo "WARN: No project note declares branch '$branch_name' — skipping frontmatter check"
