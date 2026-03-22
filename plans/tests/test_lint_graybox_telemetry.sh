@@ -177,16 +177,55 @@ pass "declaration-only *_with_events signatures stay allowed"
 rm -f "$space_root/trait_decl.rs"
 
 cat > "$space_root/local_record_method.rs" <<'EOF'
-pub(crate) fn evaluate_local_metrics_with_events<E>(events: &mut E) {
+struct Metrics;
+
+impl Metrics {
+    fn record_wal_nonblocking_allowed(&mut self) {}
+}
+
+pub(crate) fn evaluate_local_metrics_with_events<E>(events: &mut E, metrics: &mut Metrics) {
     let _ = events;
     metrics.record_wal_nonblocking_allowed();
 }
 EOF
 
-LINT_GRAYBOX_TELEMETRY_ROOTS="$space_root" bash "$SCRIPT" >/dev/null
-pass "local record_* method calls stay allowed"
+set +e
+local_record_out="$(LINT_GRAYBOX_TELEMETRY_ROOTS="$space_root" bash "$SCRIPT" 2>&1)"
+local_record_rc=$?
+set -e
+[[ $local_record_rc -ne 0 ]] || fail "inline metrics.record_* calls should fail graybox lint"
+echo "$local_record_out" | grep -Fq "instance metric mutation" || fail "missing local metrics diagnostic"
+echo "$local_record_out" | grep -Fq "evaluate_local_metrics_with_events" || fail "missing function name in local metrics diagnostic"
+pass "inline metrics.record_* calls fail lint"
 
 rm -f "$space_root/local_record_method.rs"
+
+cat > "$space_root/wrapper_call.rs" <<'EOF'
+struct Input;
+struct Metrics;
+struct Events;
+
+pub(crate) fn check_post_only(_input: &Input, _metrics: &mut Metrics) {}
+pub(crate) fn check_post_only_with_events(_input: &Input, _metrics: &mut Metrics, _events: &mut Events) {}
+
+pub(crate) fn evaluate_preflight_with_events<E>(events: &mut E) {
+    let _ = events;
+    let input = Input;
+    let mut metrics = Metrics;
+    check_post_only(&input, &mut metrics);
+}
+EOF
+
+set +e
+wrapper_call_out="$(LINT_GRAYBOX_TELEMETRY_ROOTS="$space_root" bash "$SCRIPT" 2>&1)"
+wrapper_call_rc=$?
+set -e
+[[ $wrapper_call_rc -ne 0 ]] || fail "wrapper calls that bypass *_with_events should fail graybox lint"
+echo "$wrapper_call_out" | grep -Fq "wrapper call bypassing sink seam" || fail "missing wrapper-call diagnostic"
+echo "$wrapper_call_out" | grep -Fq "evaluate_preflight_with_events" || fail "missing function name in wrapper-call diagnostic"
+pass "wrapper calls bypassing *_with_events fail lint"
+
+rm -f "$space_root/wrapper_call.rs"
 
 cat > "$space_root/direct_bump.rs" <<'EOF'
 pub(crate) fn evaluate_bump_with_events<E>(events: &mut E) {

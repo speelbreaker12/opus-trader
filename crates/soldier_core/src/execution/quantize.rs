@@ -79,6 +79,28 @@ pub(crate) enum QuantizeEvent {
     Reject { error: QuantizeError },
 }
 
+struct ObservedQuantizeEvents<'a, 'b, E> {
+    metrics: &'a mut QuantizeMetrics,
+    inner: &'b mut E,
+}
+
+impl<E: EventSink<QuantizeEvent>> EventSink<QuantizeEvent> for ObservedQuantizeEvents<'_, '_, E> {
+    fn emit(&mut self, event: QuantizeEvent) {
+        match &event {
+            QuantizeEvent::Reject { error } => match error {
+                QuantizeError::TooSmallAfterQuantization { .. } => {
+                    self.metrics.record_too_small_rejection()
+                }
+                QuantizeError::InvalidInput { .. } => self.metrics.record_invalid_input_rejection(),
+                QuantizeError::InstrumentMetadataMissing { .. } => {
+                    self.metrics.record_metadata_missing_rejection()
+                }
+            },
+        }
+        self.inner.emit(event);
+    }
+}
+
 struct ProductionQuantizeEvents;
 
 impl EventSink<QuantizeEvent> for ProductionQuantizeEvents {
@@ -266,19 +288,11 @@ fn bump_quantize_reject_inner(error: &QuantizeError) {
     tracing::debug!("QuantizeReject error={:?}", error);
 }
 
-/// Record instance + static metrics for a quantize error, then return it.
+/// Emit a quantize reject event, then return the original error.
 fn reject_quantize_err_with_events<E: EventSink<QuantizeEvent>>(
     e: QuantizeError,
-    metrics: &mut QuantizeMetrics,
     events: &mut E,
 ) -> QuantizeError {
-    match &e {
-        QuantizeError::TooSmallAfterQuantization { .. } => metrics.record_too_small_rejection(),
-        QuantizeError::InvalidInput { .. } => metrics.record_invalid_input_rejection(),
-        QuantizeError::InstrumentMetadataMissing { .. } => {
-            metrics.record_metadata_missing_rejection()
-        }
-    }
     events.emit(QuantizeEvent::Reject { error: e.clone() });
     e
 }
@@ -320,12 +334,24 @@ pub(crate) fn quantize_with_events<E: EventSink<QuantizeEvent>>(
     metrics: &mut QuantizeMetrics,
     events: &mut E,
 ) -> Result<QuantizedValues, QuantizeError> {
-    validate_constraints(constraints)
-        .map_err(|e| reject_quantize_err_with_events(e, metrics, events))?;
+    let mut observed = ObservedQuantizeEvents {
+        metrics,
+        inner: events,
+    };
+    quantize_inner(raw_qty, raw_limit_price, side, constraints, &mut observed)
+}
+
+fn quantize_inner<E: EventSink<QuantizeEvent>>(
+    raw_qty: f64,
+    raw_limit_price: f64,
+    side: Side,
+    constraints: &QuantizeConstraints,
+    events: &mut E,
+) -> Result<QuantizedValues, QuantizeError> {
+    validate_constraints(constraints).map_err(|e| reject_quantize_err_with_events(e, events))?;
     if !raw_qty.is_finite() {
         return Err(reject_quantize_err_with_events(
             QuantizeError::InvalidInput { field: "raw_qty" },
-            metrics,
             events,
         ));
     }
@@ -334,21 +360,19 @@ pub(crate) fn quantize_with_events<E: EventSink<QuantizeEvent>>(
             QuantizeError::InvalidInput {
                 field: "raw_limit_price",
             },
-            metrics,
             events,
         ));
     }
     if raw_qty < 0.0 {
         return Err(reject_quantize_err_with_events(
             QuantizeError::InvalidInput { field: "raw_qty" },
-            metrics,
             events,
         ));
     }
 
     // Quantity: always round down (never round up size)
     let qty_steps = quantize_ratio_to_i64(raw_qty, constraints.amount_step, false)
-        .map_err(|e| reject_quantize_err_with_events(e, metrics, events))?;
+        .map_err(|e| reject_quantize_err_with_events(e, events))?;
     let qty_q = qty_steps as f64 * constraints.amount_step;
 
     // AT-908: reject if quantized quantity is below minimum
@@ -358,7 +382,6 @@ pub(crate) fn quantize_with_events<E: EventSink<QuantizeEvent>>(
                 qty_q,
                 min_amount: constraints.min_amount,
             },
-            metrics,
             events,
         ));
     }
@@ -367,10 +390,10 @@ pub(crate) fn quantize_with_events<E: EventSink<QuantizeEvent>>(
     let price_ticks = match side {
         // BUY: round down (never pay extra)
         Side::Buy => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, false)
-            .map_err(|e| reject_quantize_err_with_events(e, metrics, events))?,
+            .map_err(|e| reject_quantize_err_with_events(e, events))?,
         // SELL: round up (never sell cheaper)
         Side::Sell => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, true)
-            .map_err(|e| reject_quantize_err_with_events(e, metrics, events))?,
+            .map_err(|e| reject_quantize_err_with_events(e, events))?,
     };
     let limit_price_q = price_ticks as f64 * constraints.tick_size;
 

@@ -55,7 +55,7 @@ fn test_margin_gate_graybox_reject_emits_event_without_global_side_effects() {
 }
 
 #[test]
-fn test_margin_gate_graybox_allow_emits_no_events_or_global_side_effects() {
+fn test_margin_gate_graybox_allow_emits_allowed_event_without_global_side_effects() {
     let _guard = begin_metrics_test();
     let before = margin_gate_reject_total();
     let mut metrics = MarginGateMetrics::new();
@@ -69,10 +69,7 @@ fn test_margin_gate_graybox_allow_emits_no_events_or_global_side_effects() {
         result,
         MarginGateDecision::Allowed { mm_util } if (mm_util - 0.1).abs() < f64::EPSILON
     ));
-    assert!(
-        events.is_empty(),
-        "success path should emit no reject events"
-    );
+    assert_eq!(events, vec![MarginGateEvent::Allowed]);
     assert_eq!(margin_gate_reject_total(), before);
 
     let lines = take_execution_metric_lines();
