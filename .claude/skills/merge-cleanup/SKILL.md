@@ -1,6 +1,6 @@
 ---
 name: merge-cleanup
-description: Merge a single approved PR, sync main, remove worktree + branch, update Obsidian
+description: Merge single PR, sync main, remove worktree, delete branch, update Obsidian.
 context: fork
 allowed-tools: ["Read", "Glob", "Grep", "Bash", "Agent"]
 ---
