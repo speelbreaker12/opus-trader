@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VERIFY="$ROOT/plans/verify_fork.sh"
+VERIFY_ENV="$ROOT/plans/lib/verify_env.sh"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -11,13 +12,17 @@ fail() {
 
 assert_contains_line() {
   local needle="$1"
-  if ! grep -Fq "$needle" "$VERIFY"; then
+  local file="$2"
+  if ! grep -Fq "$needle" "$file"; then
     fail "missing expected verify timeout token: $needle"
   fi
 }
 
 [[ -f "$VERIFY" ]] || fail "missing verify script: $VERIFY"
+[[ -f "$VERIFY_ENV" ]] || fail "missing verify env script: $VERIFY_ENV"
 
+assert_contains_line 'source "$ROOT/plans/lib/verify_env.sh"' "$VERIFY"
+assert_contains_line 'init_verify_env "verify"' "$VERIFY"
 assert_contains_line 'PREFLIGHT_TIMEOUT_WAS_SET=0'
 assert_contains_line 'if [[ -n "${PREFLIGHT_TIMEOUT:-}" ]]; then'
 assert_contains_line 'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-600s}"'
@@ -30,13 +35,25 @@ assert_contains_line 'RUST_TEST_TIMEOUT="${RUST_TEST_TIMEOUT:-5m}"'
 assert_contains_line 'RUST_TEST_TIMEOUT="${RUST_TEST_TIMEOUT:-45m}"'
 assert_contains_line 'MECHANICAL_TIMEOUT="${MECHANICAL_TIMEOUT:-10m}"'
 
-line_default="$(grep -nF 'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-600s}"' "$VERIFY" | head -n1 | cut -d: -f1)"
-line_full_override="$(grep -nF 'if [[ "$MODE" == "full" && "$PREFLIGHT_TIMEOUT_WAS_SET" -eq 0 ]]; then' "$VERIFY" | head -n1 | cut -d: -f1)"
-line_mode_aware_start="$(grep -nF 'if [[ "$MODE" == "quick" ]]; then' "$VERIFY" | head -n1 | cut -d: -f1)"
-line_clippy_quick="$(grep -nF 'RUST_CLIPPY_TIMEOUT="${RUST_CLIPPY_TIMEOUT:-5m}"' "$VERIFY" | head -n1 | cut -d: -f1)"
-line_clippy_full="$(grep -nF 'RUST_CLIPPY_TIMEOUT="${RUST_CLIPPY_TIMEOUT:-15m}"' "$VERIFY" | head -n1 | cut -d: -f1)"
-line_test_quick="$(grep -nF 'RUST_TEST_TIMEOUT="${RUST_TEST_TIMEOUT:-5m}"' "$VERIFY" | head -n1 | cut -d: -f1)"
-line_test_full="$(grep -nF 'RUST_TEST_TIMEOUT="${RUST_TEST_TIMEOUT:-45m}"' "$VERIFY" | head -n1 | cut -d: -f1)"
+assert_contains_line 'local preflight_timeout_was_set=0' "$VERIFY_ENV"
+assert_contains_line 'if [[ -n "${PREFLIGHT_TIMEOUT:-}" ]]; then' "$VERIFY_ENV"
+assert_contains_line 'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-600s}"' "$VERIFY_ENV"
+assert_contains_line 'if [[ "${MODE:-quick}" == "full" && "$preflight_timeout_was_set" -eq 0 ]]; then' "$VERIFY_ENV"
+assert_contains_line 'PREFLIGHT_TIMEOUT="1800s"' "$VERIFY_ENV"
+assert_contains_line 'if [[ "${MODE:-quick}" == "quick" ]]; then' "$VERIFY_ENV"
+assert_contains_line 'RUST_CLIPPY_TIMEOUT="${RUST_CLIPPY_TIMEOUT:-5m}"' "$VERIFY_ENV"
+assert_contains_line 'RUST_CLIPPY_TIMEOUT="${RUST_CLIPPY_TIMEOUT:-15m}"' "$VERIFY_ENV"
+assert_contains_line 'RUST_TEST_TIMEOUT="${RUST_TEST_TIMEOUT:-5m}"' "$VERIFY_ENV"
+assert_contains_line 'RUST_TEST_TIMEOUT="${RUST_TEST_TIMEOUT:-45m}"' "$VERIFY_ENV"
+assert_contains_line 'WORKFLOW_TEST_TIMEOUT="${WORKFLOW_TEST_TIMEOUT:-15m}"' "$VERIFY_ENV"
+
+line_default="$(grep -nF 'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-600s}"' "$VERIFY_ENV" | head -n1 | cut -d: -f1)"
+line_full_override="$(grep -nF 'if [[ "${MODE:-quick}" == "full" && "$preflight_timeout_was_set" -eq 0 ]]; then' "$VERIFY_ENV" | head -n1 | cut -d: -f1)"
+line_mode_aware_start="$(grep -nF 'if [[ "${MODE:-quick}" == "quick" ]]; then' "$VERIFY_ENV" | head -n1 | cut -d: -f1)"
+line_clippy_quick="$(grep -nF 'RUST_CLIPPY_TIMEOUT="${RUST_CLIPPY_TIMEOUT:-5m}"' "$VERIFY_ENV" | head -n1 | cut -d: -f1)"
+line_clippy_full="$(grep -nF 'RUST_CLIPPY_TIMEOUT="${RUST_CLIPPY_TIMEOUT:-15m}"' "$VERIFY_ENV" | head -n1 | cut -d: -f1)"
+line_test_quick="$(grep -nF 'RUST_TEST_TIMEOUT="${RUST_TEST_TIMEOUT:-5m}"' "$VERIFY_ENV" | head -n1 | cut -d: -f1)"
+line_test_full="$(grep -nF 'RUST_TEST_TIMEOUT="${RUST_TEST_TIMEOUT:-45m}"' "$VERIFY_ENV" | head -n1 | cut -d: -f1)"
 
 [[ -n "$line_default" && -n "$line_full_override" ]] || fail "unable to determine timeout line ordering"
 if [[ "$line_default" -ge "$line_full_override" ]]; then

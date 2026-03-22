@@ -353,5 +353,10 @@ write_git_wrapper "$mock_git_dir/git" "$real_git" "$new_head_short"
 grep -Fq 'git rev-parse HEAD' "$ROOT/.claude/commands/review-stack.md" || fail "review-stack marker writer should use full HEAD SHA"
 grep -Fq 'artifacts/pr-review-gate/${SAFE_BRANCH}.json' "$ROOT/.claude/commands/review-stack.md" || fail "review-stack marker writer should use the canonical PR gate marker path"
 grep -Fq 'git rev-parse HEAD' "$ROOT/.claude/commands/external-review.md" || fail "external-review marker writer should use full HEAD SHA"
+grep -Fq 'python3 - "$marker_path" "$field_name" <<'"'"'PY'"'"'' "$HOOK" || fail "marker reader should keep python on a single-quoted heredoc"
+grep -Fq 'python3 - "$request_payload" "$default_cwd" 2>/dev/null <<'"'"'PY'"'"'' "$HOOK" || fail "command parser should keep python on a single-quoted heredoc"
+if grep -Fq 'python3 -c "' "$HOOK"; then
+  fail "hook should not embed multiline python via python3 -c"
+fi
 
 echo "test_pr_review_gate_hook.sh: ok"

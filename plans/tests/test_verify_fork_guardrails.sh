@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VERIFY="$ROOT/plans/verify_fork.sh"
 VERIFY_WRAPPER="$ROOT/plans/verify.sh"
 VERIFY_UTILS="$ROOT/plans/lib/verify_utils.sh"
+VERIFY_SCOPE_GATES="$ROOT/plans/lib/verify_scope_gates.sh"
 LIVE_ENABLE_PREFLIGHT="$ROOT/plans/live_enable_preflight.sh"
 
 fail() {
@@ -23,6 +24,13 @@ assert_not_contains_line() {
   local needle="$1"
   if grep -Fq "$needle" "$VERIFY"; then
     fail "unexpected fail-open token present: $needle"
+  fi
+}
+
+assert_scope_gate_contains() {
+  local needle="$1"
+  if ! grep -Fq "$needle" "$VERIFY_SCOPE_GATES"; then
+    fail "missing expected scope-gate token: $needle"
   fi
 }
 
@@ -47,6 +55,7 @@ assert_line_before() {
 
 [[ -f "$VERIFY" ]] || fail "missing verify script: $VERIFY"
 [[ -f "$VERIFY_WRAPPER" ]] || fail "missing verify wrapper: $VERIFY_WRAPPER"
+[[ -f "$VERIFY_SCOPE_GATES" ]] || fail "missing verify scope gates helper: $VERIFY_SCOPE_GATES"
 [[ -f "$LIVE_ENABLE_PREFLIGHT" ]] || fail "missing phase0 live-enable wrapper: $LIVE_ENABLE_PREFLIGHT"
 
 if ! bash -n "$LIVE_ENABLE_PREFLIGHT"; then
@@ -72,16 +81,16 @@ assert_contains_line 'cksum)'
 assert_contains_line 'echo "${hash:0:24}"'
 
 # Guardrail: should_enable_csp_strict must cache changed-file set and reuse it.
-assert_contains_line 'compute_csp_strict_changed_files()'
-assert_contains_line 'CSP_STRICT_CHANGED_FILES_CACHE_READY=0'
-assert_contains_line 'if [[ "$CSP_STRICT_CHANGED_FILES_CACHE_READY" == "0" || "$CSP_STRICT_CHANGED_FILES_CACHE_BASE_REF" != "$base_ref" ]]; then'
-assert_contains_line 'CSP_STRICT_CHANGED_FILES_CACHE="$(compute_csp_strict_changed_files "$base_ref")"'
-assert_contains_line '__CSP_STRICT_STATE__:git_unavailable'
-assert_contains_line '__CSP_STRICT_STATE__:no_changes'
-assert_contains_line '__CSP_STRICT_STATE__:changes_present'
-assert_contains_line 'cache_state_line="${CSP_STRICT_CHANGED_FILES_CACHE%%$'"'"'\n'"'"'*}"'
-assert_contains_line '"__CSP_STRICT_STATE__:git_unavailable"|"__CSP_STRICT_STATE__:no_changes"'
-assert_contains_line "grep -Eq '(^|/)specs/CONTRACT\\.md$|(^|/)specs/TRACE\\.yaml$' <<< \"\$CSP_STRICT_CHANGED_FILES_CACHE\""
+assert_scope_gate_contains 'compute_csp_strict_changed_files()'
+assert_scope_gate_contains 'CSP_STRICT_CHANGED_FILES_CACHE_READY=0'
+assert_scope_gate_contains 'if [[ "$CSP_STRICT_CHANGED_FILES_CACHE_READY" == "0" || "$CSP_STRICT_CHANGED_FILES_CACHE_BASE_REF" != "$base_ref" ]]; then'
+assert_scope_gate_contains 'CSP_STRICT_CHANGED_FILES_CACHE="$(compute_csp_strict_changed_files "$base_ref")"'
+assert_scope_gate_contains '__CSP_STRICT_STATE__:git_unavailable'
+assert_scope_gate_contains '__CSP_STRICT_STATE__:no_changes'
+assert_scope_gate_contains '__CSP_STRICT_STATE__:changes_present'
+assert_scope_gate_contains 'cache_state_line="${CSP_STRICT_CHANGED_FILES_CACHE%%$'"'"'\n'"'"'*}"'
+assert_scope_gate_contains '"__CSP_STRICT_STATE__:git_unavailable"|"__CSP_STRICT_STATE__:no_changes"'
+assert_scope_gate_contains "grep -Eq '(^|/)specs/CONTRACT\\.md$|(^|/)specs/TRACE\\.yaml$' <<< \"\$CSP_STRICT_CHANGED_FILES_CACHE\""
 
 # Guardrail: quick-mode fail_closed_coverage must be non-blocking and explicit about timeout behavior.
 assert_contains_line 'run_logged_nonblocking_gate "fail_closed_coverage"'
@@ -116,14 +125,16 @@ assert_line_before 'emit_timing_and_warn_summary()' 'log "VERIFY OK (mode=$MODE)
 assert_contains_line 'start_parallel_gate "contract_impl_lag_ids"'
 assert_contains_line 'run_logged_or_exit "contract_impl_lag_ids"'
 assert_contains_line 'tools/check_lag_ids.py --file docs/CONTRACT_IMPL_LAG.md'
-assert_line_before 'run_logged_or_exit "contract_crossrefs"' 'run_logged_or_exit "contract_impl_lag_ids"'
+assert_contains_line 'run_contract_crossrefs_gate'
+assert_scope_gate_contains 'run_logged_or_exit "contract_crossrefs"'
+assert_line_before 'run_contract_crossrefs_gate' 'run_logged_or_exit "contract_impl_lag_ids"'
 assert_line_before 'run_logged_or_exit "contract_impl_lag_ids"' 'run_logged_or_exit "arch_flows"'
 
 # Guardrail: CONTRACT.md mutations must be protected by contract-change ledger gate.
 assert_contains_line 'log "02a) contract change ledger"'
-assert_contains_line 'run_logged_or_exit "contract_change_ledger"'
-assert_contains_line 'bash "$ROOT/plans/check_contract_change_ledger.sh" --base-ref "$VERIFY_BASE_REF" --contract specs/CONTRACT.md'
-assert_contains_line '"$ROOT/plans/check_contract_change_ledger.sh" --base-ref "$VERIFY_BASE_REF" --contract specs/CONTRACT.md'
+assert_contains_line 'run_contract_change_ledger_gate'
+assert_scope_gate_contains 'run_logged_or_exit "contract_change_ledger"'
+assert_scope_gate_contains 'bash "$ROOT/plans/check_contract_change_ledger.sh" --base-ref "$VERIFY_BASE_REF" --contract specs/CONTRACT.md'
 assert_not_contains_line 'warn "contract_change_ledger skipped (missing plans/check_contract_change_ledger.sh)"'
 assert_line_before 'log "02) contract kernel"' 'log "02a) contract change ledger"'
 assert_line_before 'log "02a) contract change ledger"' 'log "02b-02e) profile/invariant gates (parallel)"'
@@ -158,28 +169,29 @@ assert_line_before 'log "14b) phase0 meta-test"' 'run_logged_or_exit "phase0_met
 
 # Behavior checks: the helpers must be invocable and deterministic where possible.
 extract_fn() {
-  local fn_name="$1"
+  local file="$1"
+  local fn_name="$2"
   awk -v fn="$fn_name" '
     $0 ~ "^" fn "\\(\\)[[:space:]]*\\{" { in_fn=1 }
     in_fn {
       print
       if ($0 == "}") { in_fn=0 }
     }
-  ' "$VERIFY"
+  ' "$file"
 }
 
 tmp_dir="$(mktemp -d)"
 tmp_verify_wrapper_root="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir" "$tmp_verify_wrapper_root"' EXIT
 tmp_fns="$tmp_dir/verify_fork_fns.sh"
-fn_defs="$(extract_fn detect_status_fixture_hash_backend)
-$(extract_fn status_fixture_path_hash)
-$(extract_fn status_fixture_gate_name)
-$(extract_fn run_required_bash_gate)
-$(extract_fn run_logged_nonblocking_gate)
-$(extract_fn compute_csp_strict_changed_files)
-$(extract_fn should_enable_csp_strict)
-$(extract_fn emit_timing_and_warn_summary)"
+fn_defs="$(extract_fn "$VERIFY" detect_status_fixture_hash_backend)
+$(extract_fn "$VERIFY" status_fixture_path_hash)
+$(extract_fn "$VERIFY" status_fixture_gate_name)
+$(extract_fn "$VERIFY" run_required_bash_gate)
+$(extract_fn "$VERIFY" run_logged_nonblocking_gate)
+$(extract_fn "$VERIFY_SCOPE_GATES" compute_csp_strict_changed_files)
+$(extract_fn "$VERIFY_SCOPE_GATES" should_enable_csp_strict)
+$(extract_fn "$VERIFY" emit_timing_and_warn_summary)"
 printf '%s\n' "$fn_defs" > "$tmp_fns"
 
 ENABLE_TIMEOUTS="${ENABLE_TIMEOUTS:-1}"
@@ -192,6 +204,38 @@ source "$VERIFY_UTILS"
 # This fixture validates helper behavior directly; do not inherit the outer
 # verify gate's FAILED_GATE suppression flag.
 unset RUN_LOGGED_SKIP_FAILED_GATE
+
+run_nonblocking_case() {
+  local case_dir="$1"
+  local gate_name="$2"
+  local expected_wrapper_rc="$3"
+  local expected_gate_rc="$4"
+  local expect_warn="$5"
+  shift 5
+
+  local VERIFY_ARTIFACTS_DIR="$case_dir"
+  local actual_wrapper_rc
+  local actual_gate_rc
+  mkdir -p "$case_dir"
+
+  set +e
+  run_logged_nonblocking_gate "$gate_name" 1s "$@"
+  actual_wrapper_rc=$?
+  set -e
+
+  [[ "$actual_wrapper_rc" == "$expected_wrapper_rc" ]] || fail "${gate_name}: expected wrapper rc $expected_wrapper_rc, got $actual_wrapper_rc"
+  actual_gate_rc="$(cat "$case_dir/${gate_name}.rc")"
+  [[ "$actual_gate_rc" == "$expected_gate_rc" ]] || fail "${gate_name}: expected gate rc $expected_gate_rc, got $actual_gate_rc"
+
+  if [[ "$expect_warn" == "yes" ]]; then
+    [[ -f "$case_dir/${gate_name}.warn" ]] || fail "${gate_name}: expected warn artifact"
+    [[ ! -f "$case_dir/FAILED_GATE" ]] || fail "${gate_name}: soft finding must not mark FAILED_GATE"
+  else
+    [[ ! -f "$case_dir/${gate_name}.warn" ]] || fail "${gate_name}: infra failure must not write warn artifact"
+    [[ -f "$case_dir/FAILED_GATE" ]] || fail "${gate_name}: infra failure must mark FAILED_GATE"
+    [[ "$(cat "$case_dir/FAILED_GATE")" == "$gate_name" ]] || fail "${gate_name}: FAILED_GATE must name the broken gate"
+  fi
+}
 
 STATUS_FIXTURE_HASH_BACKEND="$(detect_status_fixture_hash_backend)"
 fixture_name_1="tests/fixtures/status/alpha/beta.json"
@@ -211,13 +255,38 @@ fi
 artifact_dir="$tmp_dir/artifacts"
 mkdir -p "$artifact_dir"
 VERIFY_ARTIFACTS_DIR="$artifact_dir"
-run_logged_nonblocking_gate "status_fixture_test_gate" 1s bash -c "exit 7"
+run_logged_nonblocking_gate "status_fixture_test_gate" 1s bash -c "exit 1"
 if [[ ! -f "$artifact_dir/status_fixture_test_gate.warn" ]]; then
   fail "run_logged_nonblocking_gate must emit .warn artifact on failure"
 fi
-if ! grep -Fq "failed in quick mode with rc=7" "$artifact_dir/status_fixture_test_gate.warn"; then
+if ! grep -Fq "found an issue in quick mode with rc=1" "$artifact_dir/status_fixture_test_gate.warn"; then
   fail "run_logged_nonblocking_gate .warn artifact content missing"
 fi
+
+soft_case_dir="$tmp_dir/nonblocking_soft"
+run_nonblocking_case "$soft_case_dir" "nonblocking_soft_gate" 0 1 yes bash -c 'exit 1'
+
+infra_case_dir="$tmp_dir/nonblocking_infra"
+run_nonblocking_case "$infra_case_dir" "nonblocking_infra_gate" 2 2 no bash -c 'exit 2'
+
+missing_case_dir="$tmp_dir/nonblocking_missing"
+missing_gate="$tmp_dir/nonblocking_missing.sh"
+run_nonblocking_case "$missing_case_dir" "nonblocking_missing_gate" 127 127 no "$missing_gate"
+
+non_exec_case_dir="$tmp_dir/nonblocking_non_exec"
+non_exec_gate="$tmp_dir/nonblocking_non_exec.sh"
+cat > "$non_exec_gate" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod 0644 "$non_exec_gate"
+run_nonblocking_case "$non_exec_case_dir" "nonblocking_non_exec_gate" 126 126 no "$non_exec_gate"
+
+timeout_case_dir="$tmp_dir/nonblocking_timeout"
+run_nonblocking_case "$timeout_case_dir" "nonblocking_timeout_gate" 124 124 no bash -c 'exit 124'
+
+kill_case_dir="$tmp_dir/nonblocking_kill"
+run_nonblocking_case "$kill_case_dir" "nonblocking_kill_gate" 137 137 no bash -c 'exit 137'
 
 # Runtime check: required bash gates must run even when the script is not executable.
 non_exec_gate="$tmp_dir/non_exec_gate.sh"

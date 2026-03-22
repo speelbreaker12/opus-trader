@@ -16,9 +16,11 @@ GATE_MAP="$ROOT/plans/fail_closed_gate_map.json"
 SOLDIER_CORE_DIR="$ROOT/crates/soldier_core"
 DEFAULT_TEST_DIR="$SOLDIER_CORE_DIR/tests"
 BUILD_ORDER_INTENT="$ROOT/crates/soldier_core/src/execution/build_order_intent.rs"
+SOFT_FINDING_EXIT=1
+INFRA_FAILURE_EXIT=2
 
-command -v jq >/dev/null 2>&1 || { echo "ERROR: jq required" >&2; exit 1; }
-[[ -f "$GATE_MAP" ]] || { echo "ERROR: missing gate map: $GATE_MAP" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "ERROR: jq required" >&2; exit "$INFRA_FAILURE_EXIT"; }
+[[ -f "$GATE_MAP" ]] || { echo "ERROR: missing gate map: $GATE_MAP" >&2; exit "$INFRA_FAILURE_EXIT"; }
 
 # ── GateStep count validation ────────────────────────────────────────────
 
@@ -30,7 +32,7 @@ gate_map_count="$(jq 'keys | length' "$GATE_MAP")"
 if [[ "$gate_step_count" -ne "$gate_map_count" ]]; then
   echo "ERROR: GateStep variant count ($gate_step_count) != gate map key count ($gate_map_count)" >&2
   echo "  Update plans/fail_closed_gate_map.json when adding/removing gates." >&2
-  exit 1
+  exit "$INFRA_FAILURE_EXIT"
 fi
 
 # ── Fail-closed name patterns ────────────────────────────────────────────
@@ -49,7 +51,8 @@ ASSERTION_PATTERN='(GateDecision::Reject|GateOutcome::Reject|assert!\(!|assert_e
 
 # ── Check each gate ─────────────────────────────────────────────────────
 
-failures=0
+coverage_failures=0
+infra_failures=0
 warnings=0
 
 check_gate() {
@@ -61,8 +64,8 @@ check_gate() {
   test_files="$(jq -r --arg g "$gate_name" '.[$g][]' "$GATE_MAP" 2>/dev/null)"
 
   if [[ -z "$test_files" ]]; then
-    echo "FAIL: gate '$gate_name' has no test files in gate map" >&2
-    failures=$((failures + 1))
+    echo "ERROR: gate '$gate_name' has no test files in gate map" >&2
+    infra_failures=$((infra_failures + 1))
     return
   fi
 
@@ -70,8 +73,8 @@ check_gate() {
   local all_test_content=""
   while IFS= read -r tf; do
     if [[ "$tf" == /* || "$tf" == *".."* ]]; then
-      echo "FAIL: gate '$gate_name' has unsafe test path entry: $tf" >&2
-      failures=$((failures + 1))
+      echo "ERROR: gate '$gate_name' has unsafe test path entry: $tf" >&2
+      infra_failures=$((infra_failures + 1))
       return
     fi
 
@@ -82,8 +85,8 @@ check_gate() {
       full_path="$DEFAULT_TEST_DIR/$tf"
     fi
     if [[ ! -f "$full_path" ]]; then
-      echo "FAIL: gate '$gate_name' test file not found: $full_path" >&2
-      failures=$((failures + 1))
+      echo "ERROR: gate '$gate_name' test file not found: $full_path" >&2
+      infra_failures=$((infra_failures + 1))
       return
     fi
     all_test_content="$all_test_content$(cat "$full_path")"$'\n'
@@ -155,7 +158,7 @@ check_gate() {
   fi
 
   if [[ "$gate_failed" -ne 0 ]]; then
-    failures=$((failures + 1))
+    coverage_failures=$((coverage_failures + 1))
   else
     echo "  OK: gate '$gate_name' — fc=$fc_count trip=$trip_count non_trip=$non_trip_count"
   fi
@@ -171,11 +174,16 @@ while IFS= read -r gate; do
 done <<< "$gate_names"
 
 echo ""
-echo "fail_closed_coverage summary: failures=$failures warnings=$warnings"
+echo "fail_closed_coverage summary: coverage_failures=$coverage_failures infra_failures=$infra_failures warnings=$warnings"
 
-if [[ "$failures" -gt 0 ]]; then
-  echo "FAIL: $failures gate(s) failed coverage check" >&2
-  exit 1
+if [[ "$infra_failures" -gt 0 ]]; then
+  echo "ERROR: $infra_failures gate(s) failed due to infrastructure/setup issues" >&2
+  exit "$INFRA_FAILURE_EXIT"
+fi
+
+if [[ "$coverage_failures" -gt 0 ]]; then
+  echo "FAIL: $coverage_failures gate(s) failed coverage check" >&2
+  exit "$SOFT_FINDING_EXIT"
 fi
 
 echo "fail_closed_coverage: PASS"

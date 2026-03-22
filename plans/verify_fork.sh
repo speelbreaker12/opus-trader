@@ -55,9 +55,10 @@ if [[ -z "$MODE" ]]; then
 fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT"
-
-source "$ROOT/plans/lib/verify_utils.sh"
+source "$ROOT/plans/lib/verify_env.sh"
+init_verify_env "verify"
+source "$ROOT/plans/lib/verify_scope_gates.sh"
+source "$ROOT/plans/lib/rust_gates.sh"
 
 CONTRACT_COVERAGE_CI_SENTINEL="${CONTRACT_COVERAGE_CI_SENTINEL:-plans/contract_coverage_ci_strict}"
 CONTRACT_COVERAGE_STRICT_EFFECTIVE="${CONTRACT_COVERAGE_STRICT:-0}"
@@ -71,81 +72,8 @@ if [[ "$CROSSREF_STRICT_EFFECTIVE" != "1" && -f "$CROSSREF_CI_STRICT_SENTINEL" ]
   CROSSREF_STRICT_EFFECTIVE="1"
 fi
 
-VERIFY_CONSOLE="${VERIFY_CONSOLE:-auto}"
-case "$VERIFY_CONSOLE" in
-  auto)
-    if is_ci; then
-      VERIFY_CONSOLE="quiet"
-    else
-      VERIFY_CONSOLE="verbose"
-    fi
-    ;;
-  quiet|verbose) ;;
-  *)
-    warn "Unknown VERIFY_CONSOLE=$VERIFY_CONSOLE (expected auto|quiet|verbose); defaulting to verbose"
-    VERIFY_CONSOLE="verbose"
-    ;;
-esac
-
-VERIFY_LOG_CAPTURE="${VERIFY_LOG_CAPTURE:-1}"
-VERIFY_FAIL_TAIL_LINES="${VERIFY_FAIL_TAIL_LINES:-80}"
-VERIFY_FAIL_SUMMARY_LINES="${VERIFY_FAIL_SUMMARY_LINES:-20}"
-ENABLE_TIMEOUTS="${ENABLE_TIMEOUTS:-1}"
-TIMEOUT_WARNED=0
-
-TIMEOUT_BIN=""
-if command -v timeout >/dev/null 2>&1; then
-  TIMEOUT_BIN="timeout"
-elif command -v gtimeout >/dev/null 2>&1; then
-  TIMEOUT_BIN="gtimeout"
-fi
-
-# Timeout defaults (fork contract)
-PREFLIGHT_TIMEOUT_WAS_SET=0
-if [[ -n "${PREFLIGHT_TIMEOUT:-}" ]]; then
-  PREFLIGHT_TIMEOUT_WAS_SET=1
-fi
-PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-600s}"
-if [[ "$MODE" == "full" && "$PREFLIGHT_TIMEOUT_WAS_SET" -eq 0 ]]; then
-  PREFLIGHT_TIMEOUT="1800s"
-fi
-CONTRACT_KERNEL_TIMEOUT="${CONTRACT_KERNEL_TIMEOUT:-30s}"
-CONTRACT_PROFILE_TIMEOUT="${CONTRACT_PROFILE_TIMEOUT:-30s}"
-CONTRACT_COVERAGE_TIMEOUT="${CONTRACT_COVERAGE_TIMEOUT:-2m}"
-SPEC_LINT_TIMEOUT="${SPEC_LINT_TIMEOUT:-2m}"
-CSP_TRACE_TIMEOUT="${CSP_TRACE_TIMEOUT:-2m}"
-STATUS_FIXTURE_TIMEOUT="${STATUS_FIXTURE_TIMEOUT:-30s}"
-STATUS_REASON_CODEGEN_TIMEOUT="${STATUS_REASON_CODEGEN_TIMEOUT:-$SPEC_LINT_TIMEOUT}"
-VENDOR_DOCS_LINT_TIMEOUT="${VENDOR_DOCS_LINT_TIMEOUT:-1m}"
-RUST_FMT_TIMEOUT="${RUST_FMT_TIMEOUT:-2m}"
-if [[ "$MODE" == "quick" ]]; then
-  RUST_CLIPPY_TIMEOUT="${RUST_CLIPPY_TIMEOUT:-5m}"
-  RUST_TEST_TIMEOUT="${RUST_TEST_TIMEOUT:-5m}"
-else
-  RUST_CLIPPY_TIMEOUT="${RUST_CLIPPY_TIMEOUT:-15m}"
-  RUST_TEST_TIMEOUT="${RUST_TEST_TIMEOUT:-45m}"
-fi
-RUFF_TIMEOUT="${RUFF_TIMEOUT:-2m}"
-PYTEST_TIMEOUT="${PYTEST_TIMEOUT:-15m}"
-MYPY_TIMEOUT="${MYPY_TIMEOUT:-10m}"
-NODE_LINT_TIMEOUT="${NODE_LINT_TIMEOUT:-5m}"
-NODE_TYPECHECK_TIMEOUT="${NODE_TYPECHECK_TIMEOUT:-10m}"
-NODE_TEST_TIMEOUT="${NODE_TEST_TIMEOUT:-10m}"
-ADVERSARIAL_GATE_TIMEOUT="${ADVERSARIAL_GATE_TIMEOUT:-2m}"
-GATE_INTEGRITY_TIMEOUT="${GATE_INTEGRITY_TIMEOUT:-30s}"
-DOC_SYNC_TIMEOUT="${DOC_SYNC_TIMEOUT:-30s}"
-WORKFLOW_TEST_TIMEOUT="${WORKFLOW_TEST_TIMEOUT:-15m}"
-ARTIFACT_LINT_TIMEOUT="${ARTIFACT_LINT_TIMEOUT:-45s}"
-CONTRACT_REVIEW_TIMEOUT="${CONTRACT_REVIEW_TIMEOUT:-30s}"
-
-VERIFY_RUN_ID="${VERIFY_RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
-VERIFY_ARTIFACTS_DIR="${VERIFY_ARTIFACTS_DIR:-$ROOT/artifacts/verify/$VERIFY_RUN_ID}"
-mkdir -p "$VERIFY_ARTIFACTS_DIR"
 CROSSREF_ARTIFACTS_DIR="$VERIFY_ARTIFACTS_DIR/crossref"
 mkdir -p "$CROSSREF_ARTIFACTS_DIR"
-
-VERIFY_STARTED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-VERIFY_BASE_REF="${BASE_REF:-origin/main}"
 
 write_verify_meta() {
   local status="$1"
@@ -212,72 +140,6 @@ on_exit() {
   exit "$rc"
 }
 trap 'on_exit $?' EXIT
-
-compute_csp_strict_changed_files() {
-  local base_ref="$1"
-  local changed=""
-  if ! command -v git >/dev/null 2>&1; then
-    printf '%s\n' "__CSP_STRICT_STATE__:git_unavailable"
-    return 0
-  fi
-
-  if git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
-    changed="$(
-      {
-        git diff --name-only "$base_ref"...HEAD 2>/dev/null || true
-        git diff --name-only --cached 2>/dev/null || true
-        git diff --name-only 2>/dev/null || true
-      } | sed '/^$/d' | sort -u
-    )"
-  else
-    changed="$(
-      {
-        git diff --name-only --cached 2>/dev/null || true
-        git diff --name-only 2>/dev/null || true
-      } | sed '/^$/d' | sort -u
-    )"
-  fi
-
-  if [[ -z "$changed" ]]; then
-    printf '%s\n' "__CSP_STRICT_STATE__:no_changes"
-    return 0
-  fi
-
-  printf '%s\n' "__CSP_STRICT_STATE__:changes_present"
-  printf '%s\n' "$changed"
-}
-
-CSP_STRICT_CHANGED_FILES_CACHE_READY=0
-CSP_STRICT_CHANGED_FILES_CACHE_BASE_REF=""
-CSP_STRICT_CHANGED_FILES_CACHE=""
-
-should_enable_csp_strict() {
-  local base_ref="$1"
-  local cache_state_line=""
-
-  if [[ "$CSP_STRICT_CHANGED_FILES_CACHE_READY" == "0" || "$CSP_STRICT_CHANGED_FILES_CACHE_BASE_REF" != "$base_ref" ]]; then
-    CSP_STRICT_CHANGED_FILES_CACHE="$(compute_csp_strict_changed_files "$base_ref")"
-    CSP_STRICT_CHANGED_FILES_CACHE_BASE_REF="$base_ref"
-    CSP_STRICT_CHANGED_FILES_CACHE_READY=1
-  fi
-
-  if [[ -z "$CSP_STRICT_CHANGED_FILES_CACHE" ]]; then
-    return 1
-  fi
-
-  cache_state_line="${CSP_STRICT_CHANGED_FILES_CACHE%%$'\n'*}"
-  case "$cache_state_line" in
-    "__CSP_STRICT_STATE__:git_unavailable"|"__CSP_STRICT_STATE__:no_changes")
-      return 1
-      ;;
-  esac
-
-  if grep -Eq '(^|/)specs/CONTRACT\.md$|(^|/)specs/TRACE\.yaml$' <<< "$CSP_STRICT_CHANGED_FILES_CACHE"; then
-    return 0
-  fi
-
-  return 1
-}
 
 detect_status_fixture_hash_backend() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -367,7 +229,7 @@ run_logged_nonblocking_gate() {
   esac
 
   set +e
-  if RUN_LOGGED_SUPPRESS_TIMEOUT_FAIL=1 RUN_LOGGED_SKIP_FAILED_GATE=1 run_logged "$gate_name" "$timeout" "$@"; then
+  if RUN_LOGGED_SUPPRESS_TIMEOUT_FAIL=1 RUN_LOGGED_SUPPRESS_EXCERPT=1 RUN_LOGGED_SKIP_FAILED_GATE=1 run_logged "$gate_name" "$timeout" "$@"; then
     rc=0
   else
     rc=$?
@@ -375,17 +237,33 @@ run_logged_nonblocking_gate() {
 
   if (( had_errexit == 1 )); then
     set -e
+  else
+    set +e
+  fi
+
+  # Nonblocking gate convention:
+  #   0   = pass.
+  #   1   = legitimate soft finding; preserve quick-mode nonblocking behavior.
+  #   2+  = infrastructure failure.
+  #   124 = timeout wrapper exit; infra failure.
+  #   126 = found but not executable; infra failure.
+  #   127 = command/script missing; infra failure.
+  #   137 = timeout kill / SIGKILL; infra failure.
+  if [[ "$rc" == "1" ]]; then
+    local warn_file="${VERIFY_ARTIFACTS_DIR}/${gate_name}.warn"
+    : > "$warn_file"
+    echo "WARN: ${gate_name} found an issue in quick mode with rc=${rc}" >> "$warn_file"
+    return 0
   fi
 
   if [[ "$rc" != "0" ]]; then
-    local warn_file="${VERIFY_ARTIFACTS_DIR}/${gate_name}.warn"
-    : > "$warn_file"
-    if [[ "$rc" == "124" || "$rc" == "137" ]]; then
-      echo "WARN: ${gate_name} timed out in quick mode (limit=${timeout}, rc=${rc})" >> "$warn_file"
-    else
-      echo "WARN: ${gate_name} failed in quick mode with rc=${rc}" >> "$warn_file"
+    if [[ ! -f "${VERIFY_ARTIFACTS_DIR}/FAILED_GATE" ]]; then
+      echo "$gate_name" > "${VERIFY_ARTIFACTS_DIR}/FAILED_GATE"
     fi
+    echo "FAIL: ${gate_name} infrastructure failure in quick mode (rc=${rc})" >&2
+    return "$rc"
   fi
+
   return 0
 }
 
@@ -433,16 +311,32 @@ fi
 PARALLEL_GATE_NAMES=()
 PARALLEL_GATE_TIMEOUTS=()
 PARALLEL_ACTIVE_PIDS=()
+PARALLEL_GATE_WAIT_RCS=()
+PARALLEL_WAIT_NEXT_INDEX=0
 
 parallel_group_reset() {
   PARALLEL_GATE_NAMES=()
   PARALLEL_GATE_TIMEOUTS=()
   PARALLEL_ACTIVE_PIDS=()
+  PARALLEL_GATE_WAIT_RCS=()
+  PARALLEL_WAIT_NEXT_INDEX=0
 }
 
+# Invariant: PARALLEL_GATE_WAIT_RCS[i] always corresponds to
+# PARALLEL_GATE_NAMES[i].  This holds because:
+#   1. Gates append to NAMES and ACTIVE_PIDS in the same order.
+#   2. parallel_wait_oldest pops ACTIVE_PIDS[0] (FIFO) and stores
+#      the result at WAIT_RCS[WAIT_NEXT_INDEX], then increments.
+#   3. FIFO pop order == insertion order == NAMES order.
+# When VERIFY_PARALLEL_JOBS < group size, start_parallel_gate calls
+# parallel_wait_oldest to free a slot BEFORE appending the new gate,
+# so the wait index stays aligned with the gate index.
+# finish_parallel_group_or_exit prefers the .rc artifact file over
+# WAIT_RCS as the primary source; WAIT_RCS is a fallback only.
 parallel_wait_oldest() {
   local pid=""
   local errexit=0
+  local wait_rc="0"
   case "$-" in
     *e*) errexit=1 ;;
   esac
@@ -450,9 +344,14 @@ parallel_wait_oldest() {
   pid="${PARALLEL_ACTIVE_PIDS[0]}"
   set +e
   wait "$pid"
+  wait_rc=$?
   if [[ "$errexit" == "1" ]]; then
     set -e
+  else
+    set +e
   fi
+  PARALLEL_GATE_WAIT_RCS[$PARALLEL_WAIT_NEXT_INDEX]="$wait_rc"
+  PARALLEL_WAIT_NEXT_INDEX=$((PARALLEL_WAIT_NEXT_INDEX + 1))
   PARALLEL_ACTIVE_PIDS=("${PARALLEL_ACTIVE_PIDS[@]:1}")
 }
 
@@ -478,11 +377,7 @@ start_parallel_gate() {
 }
 
 start_parallel_workflow_test() {
-  local test_script="$1"
-  local test_name="${test_script##*/}"
-  local gate_name="wf_${test_name%.sh}"
-  start_parallel_gate "$gate_name" "$WORKFLOW_TEST_TIMEOUT" \
-    bash "$test_script"
+  start_parallel_workflow_integration_test_gate "$1"
 }
 
 finish_parallel_group_or_exit() {
@@ -493,27 +388,46 @@ finish_parallel_group_or_exit() {
   local gate_name=""
   local gate_timeout=""
   local gate_rc=""
+  local gate_source=""
+  local wait_rc=""
+  local summary_file="$VERIFY_ARTIFACTS_DIR/parallel_failures.summary.log"
+  local failure_notes=()
 
   while [[ "${#PARALLEL_ACTIVE_PIDS[@]}" -gt 0 ]]; do
     parallel_wait_oldest
   done
 
+  rm -f "$summary_file"
+
   for idx in "${!PARALLEL_GATE_NAMES[@]}"; do
     gate_name="${PARALLEL_GATE_NAMES[$idx]}"
     gate_timeout="${PARALLEL_GATE_TIMEOUTS[$idx]}"
-    if [[ ! -f "$VERIFY_ARTIFACTS_DIR/${gate_name}.rc" ]]; then
-      first_failed="$gate_name"
-      first_rc="2"
-      first_timeout="$gate_timeout"
-      break
+    wait_rc=""
+    if [[ "${#PARALLEL_GATE_WAIT_RCS[@]}" -gt "$idx" ]]; then
+      wait_rc="${PARALLEL_GATE_WAIT_RCS[$idx]}"
     fi
 
-    gate_rc="$(cat "$VERIFY_ARTIFACTS_DIR/${gate_name}.rc")"
+    if [[ ! -f "$VERIFY_ARTIFACTS_DIR/${gate_name}.rc" ]]; then
+      if [[ -n "$wait_rc" && "$wait_rc" != "0" ]]; then
+        gate_rc="$wait_rc"
+        gate_source="wait_status_missing_rc"
+      else
+        gate_rc="2"
+        gate_source="missing_rc_artifact"
+      fi
+    else
+      gate_rc="$(cat "$VERIFY_ARTIFACTS_DIR/${gate_name}.rc")"
+      gate_source="rc_artifact"
+    fi
+
     if [[ "$gate_rc" != "0" ]]; then
-      first_failed="$gate_name"
-      first_rc="$gate_rc"
-      first_timeout="$gate_timeout"
-      break
+      failure_notes+=("${gate_name} rc=${gate_rc} source=${gate_source}")
+      printf '%s\n' "${gate_name} rc=${gate_rc} source=${gate_source}" >> "$summary_file"
+      if [[ -z "$first_failed" ]]; then
+        first_failed="$gate_name"
+        first_rc="$gate_rc"
+        first_timeout="$gate_timeout"
+      fi
     fi
   done
 
@@ -521,10 +435,18 @@ finish_parallel_group_or_exit() {
     if [[ ! -f "$VERIFY_ARTIFACTS_DIR/FAILED_GATE" ]]; then
       echo "$first_failed" > "$VERIFY_ARTIFACTS_DIR/FAILED_GATE"
     fi
-    if [[ "$first_rc" == "124" || "$first_rc" == "137" ]]; then
-      fail "Timeout running ${first_failed} (limit=${first_timeout})"
+    if [[ "${#failure_notes[@]}" -gt 1 ]]; then
+      echo "secondary parallel failures:" >&2
+      for idx in "${!failure_notes[@]}"; do
+        [[ "$idx" == "0" ]] && continue
+        echo "  ${failure_notes[$idx]}" >&2
+      done
     fi
     emit_fail_excerpt "$first_failed" "$VERIFY_ARTIFACTS_DIR/${first_failed}.log"
+    if [[ "$first_rc" == "124" || "$first_rc" == "137" ]]; then
+      echo "FAIL: Timeout running ${first_failed} (limit=${first_timeout})" >&2
+      exit "$first_rc"
+    fi
     exit "$first_rc"
   fi
 }
@@ -613,13 +535,11 @@ run_logged_or_exit "artifact_lint" "$ARTIFACT_LINT_TIMEOUT" "${artifact_lint_cmd
 
 if [[ -f "docs/contract_kernel.json" ]]; then
   log "02) contract kernel"
-  run_logged_or_exit "contract_kernel" "$CONTRACT_KERNEL_TIMEOUT" \
-    "$PYTHON_BIN" scripts/check_contract_kernel.py --kernel docs/contract_kernel.json
+  run_contract_kernel_gate
 fi
 
 log "02a) contract change ledger"
-run_logged_or_exit "contract_change_ledger" "$CONTRACT_KERNEL_TIMEOUT" \
-  bash "$ROOT/plans/check_contract_change_ledger.sh" --base-ref "$VERIFY_BASE_REF" --contract specs/CONTRACT.md
+run_contract_change_ledger_gate
 
 log "02a2) autoresearch context manifest freshness"
 run_logged_or_exit "autoresearch_manifest" "$CONTRACT_KERNEL_TIMEOUT" \
@@ -720,16 +640,8 @@ fi
 
 if [[ "$VERIFY_PARALLEL" == "1" ]]; then
   log "04-12) contract/spec validators (parallel)"
-  csp_trace_cmd=(
-    "$PYTHON_BIN" scripts/check_csp_trace.py --contract specs/CONTRACT.md --trace specs/TRACE.yaml
-  )
-  if should_enable_csp_strict "$VERIFY_BASE_REF"; then
-    csp_trace_cmd+=(--strict)
-  fi
-
   parallel_group_reset
-  start_parallel_gate "contract_crossrefs" "$SPEC_LINT_TIMEOUT" \
-    "$PYTHON_BIN" scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --check-at --strict --include-bare-section-refs
+  start_parallel_contract_crossrefs_gate
   start_parallel_gate "contract_impl_lag_ids" "$SPEC_LINT_TIMEOUT" \
     "$PYTHON_BIN" tools/check_lag_ids.py --file docs/CONTRACT_IMPL_LAG.md
   start_parallel_gate "arch_flows" "$SPEC_LINT_TIMEOUT" \
@@ -746,12 +658,11 @@ if [[ "$VERIFY_PARALLEL" == "1" ]]; then
     "$PYTHON_BIN" scripts/check_crash_replay_idempotency.py --contract specs/CONTRACT.md --spec specs/flows/CRASH_REPLAY_IDEMPOTENCY.yaml --strict
   start_parallel_gate "reconciliation_matrix" "$SPEC_LINT_TIMEOUT" \
     "$PYTHON_BIN" scripts/check_reconciliation_matrix.py --contract specs/CONTRACT.md --matrix specs/flows/RECONCILIATION_MATRIX.md --strict
-  start_parallel_gate "csp_trace" "$CSP_TRACE_TIMEOUT" "${csp_trace_cmd[@]}"
+  start_parallel_csp_trace_gate auto
   finish_parallel_group_or_exit
 else
   log "04) contract crossrefs"
-  run_logged_or_exit "contract_crossrefs" "$SPEC_LINT_TIMEOUT" \
-    "$PYTHON_BIN" scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --check-at --strict --include-bare-section-refs
+  run_contract_crossrefs_gate
 
   log "04b) contract impl lag IDs"
   run_logged_or_exit "contract_impl_lag_ids" "$SPEC_LINT_TIMEOUT" \
@@ -786,13 +697,7 @@ else
     "$PYTHON_BIN" scripts/check_reconciliation_matrix.py --contract specs/CONTRACT.md --matrix specs/flows/RECONCILIATION_MATRIX.md --strict
 
   log "12) csp trace"
-  if should_enable_csp_strict "$VERIFY_BASE_REF"; then
-    run_logged_or_exit "csp_trace" "$CSP_TRACE_TIMEOUT" \
-      "$PYTHON_BIN" scripts/check_csp_trace.py --contract specs/CONTRACT.md --trace specs/TRACE.yaml --strict
-  else
-    run_logged_or_exit "csp_trace" "$CSP_TRACE_TIMEOUT" \
-      "$PYTHON_BIN" scripts/check_csp_trace.py --contract specs/CONTRACT.md --trace specs/TRACE.yaml
-  fi
+  run_csp_trace_gate auto
 fi
 
 if [[ -f specs/status/status_reason_registries_manifest.json ]]; then
@@ -975,6 +880,7 @@ WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
   "plans/tests/test_verify_fork_guardrails.sh"
   "plans/tests/test_verify_gate_contract_check_batching.sh"
+  "plans/tests/test_verify_scope.sh"
   "plans/tests/test_slice_review_gate.sh"
   "plans/tests/test_story_review_findings_guard.sh"
   "plans/tests/test_fork_attestation_remediation_verify.sh"
@@ -1026,20 +932,18 @@ if [[ "$VERIFY_PARALLEL" == "1" ]]; then
   fi
 else
   for workflow_test in "${WORKFLOW_INTEGRATION_TESTS[@]}"; do
-    run_logged_or_exit "wf_${workflow_test##*/}" "$WORKFLOW_TEST_TIMEOUT" \
-      bash "$workflow_test"
+    run_workflow_integration_test_gate "$workflow_test"
   done
   if [[ "$MODE" == "full" ]]; then
     for workflow_test in "${FULL_MODE_WORKFLOW_INTEGRATION_TESTS[@]}"; do
-      run_logged_or_exit "wf_${workflow_test##*/}" "$WORKFLOW_TEST_TIMEOUT" \
-        bash "$workflow_test"
+      run_workflow_integration_test_gate "$workflow_test"
     done
   fi
 fi
 
 if [[ -f Cargo.toml ]]; then
   log "15) rust gates"
-  bash "$ROOT/plans/lib/rust_gates.sh"
+  run_rust_gates
 fi
 
 finish_parallel_group_or_exit

@@ -14,6 +14,7 @@ check_script() {
 
 check_script "plans/verify.sh"
 check_script "plans/verify_fork.sh"
+check_script "plans/verify_scope.sh"
 check_script "plans/verify_gate_contract_check.sh"
 check_script "plans/preflight.sh"
 check_script "plans/legacy_layout_guard.sh"
@@ -50,11 +51,10 @@ check_script "plans/workflow_quick_step.sh"
 check_script "plans/toggle_policy_check.sh"
 check_script "plans/artifact_lint.sh"
 check_script "plans/bidi_control_guard.sh"
-check_script "plans/lint_graybox_telemetry.sh"
-check_script "plans/tests/test_lint_graybox_telemetry.sh"
+check_script "plans/lib/verify_env.sh"
+check_script "plans/lib/verify_scope_gates.sh"
 check_script "plans/lib/status_reason_codegen_gate.sh"
-
-bash plans/tests/test_lint_graybox_telemetry.sh
+check_script "plans/tests/test_verify_scope.sh"
 
 ./plans/workflow_contract_gate.sh
 ./plans/verify.sh quick

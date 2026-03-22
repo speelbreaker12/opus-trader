@@ -52,6 +52,8 @@ plans/lib/python_gates.sh
 plans/lib/rust_gates.sh
 plans/lib/status_reason_codegen_gate.sh
 plans/lib/verify_checkpoint.sh
+plans/lib/verify_env.sh
+plans/lib/verify_scope_gates.sh
 plans/lib/verify_utils.sh
 plans/lint_execution_facade.sh
 plans/lint_facade_public_modules.sh
@@ -190,6 +192,7 @@ plans/tests/test_toggle_policy_check.sh
 plans/tests/test_upgrade_1b_proof.sh
 plans/tests/test_verify_fork_guardrails.sh
 plans/tests/test_verify_gate_contract_check_batching.sh
+plans/tests/test_verify_scope.sh
 plans/tests/test_wf_step_path_signal_scan.sh
 plans/tests/test_wf_step_review_provenance.sh
 plans/tests/test_wf_step_stop_on_blocker.sh
@@ -203,6 +206,7 @@ plans/verify.sh
 plans/verify_day.sh
 plans/verify_fork.sh
 plans/verify_gate_contract_check.sh
+plans/verify_scope.sh
 plans/wf_step.sh
 plans/workflow_contract_gate.sh
 plans/workflow_contract_map.json

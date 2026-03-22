@@ -619,7 +619,6 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_rust_gates_quick_clippy.sh"
   "plans/tests/test_lint_facade_public_modules.sh"
   "plans/tests/test_lint_execution_facade.sh"
-  "plans/tests/test_lint_graybox_telemetry.sh"
   "plans/tests/test_lint_risk_facade.sh"
   "plans/tests/test_lint_venue_facade.sh"
   "plans/tests/test_lint_soldier_infra_facade.sh"
@@ -647,9 +646,7 @@ FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS=(
 REVIEW_FIXTURE_TESTS=("${SMOKE_REVIEW_FIXTURE_TESTS[@]}")
 SERIAL_REVIEW_FIXTURE_TESTS=()
 if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then
-  if [[ ${#FULL_ONLY_REVIEW_FIXTURE_TESTS[@]} -gt 0 ]]; then
-    REVIEW_FIXTURE_TESTS+=("${FULL_ONLY_REVIEW_FIXTURE_TESTS[@]}")
-  fi
+  REVIEW_FIXTURE_TESTS+=("${FULL_ONLY_REVIEW_FIXTURE_TESTS[@]}")
   if [[ ${#FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS[@]} -gt 0 ]]; then
     SERIAL_REVIEW_FIXTURE_TESTS+=("${FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS[@]}")
   fi

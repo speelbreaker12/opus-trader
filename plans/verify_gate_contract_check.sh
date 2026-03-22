@@ -6,6 +6,8 @@ cd "$ROOT"
 
 DOC="specs/WORKFLOW_CONTRACT.md"
 VERIFY="plans/verify_fork.sh"
+VERIFY_ENV="plans/lib/verify_env.sh"
+VERIFY_SCOPE_GATES="plans/lib/verify_scope_gates.sh"
 RUST_GATES="plans/lib/rust_gates.sh"
 PY_GATES="plans/lib/python_gates.sh"
 NODE_GATES="plans/lib/node_gates.sh"
@@ -16,7 +18,7 @@ fail() {
   exit 1
 }
 
-for f in "$DOC" "$VERIFY" "$RUST_GATES" "$PY_GATES" "$NODE_GATES" "$STATUS_REASON_CODEGEN_GATE"; do
+for f in "$DOC" "$VERIFY" "$VERIFY_ENV" "$VERIFY_SCOPE_GATES" "$RUST_GATES" "$PY_GATES" "$NODE_GATES" "$STATUS_REASON_CODEGEN_GATE"; do
   [[ -f "$f" ]] || fail "missing required file: $f"
 done
 
@@ -126,7 +128,13 @@ verify_tokens=(
   'run_logged_or_exit "at_coverage_report"'
   'run_logged_or_exit "crossref_invariants"'
   'run_logged_or_exit "crossref_gate"'
-  'run_logged_or_exit "contract_crossrefs"'
+  'source "$ROOT/plans/lib/verify_scope_gates.sh"'
+  'run_contract_kernel_gate'
+  'run_contract_change_ledger_gate'
+  'start_parallel_contract_crossrefs_gate'
+  'run_contract_crossrefs_gate'
+  'start_parallel_csp_trace_gate'
+  'run_csp_trace_gate'
   'start_parallel_gate "contract_impl_lag_ids"'
   'run_logged_or_exit "contract_impl_lag_ids"'
   'run_logged_or_exit "arch_flows"'
@@ -136,7 +144,8 @@ verify_tokens=(
   'run_logged_or_exit "crash_matrix"'
   'run_logged_or_exit "crash_replay_idempotency"'
   'run_logged_or_exit "reconciliation_matrix"'
-  'run_logged_or_exit "csp_trace"'
+  'start_parallel_workflow_integration_test_gate'
+  'run_workflow_integration_test_gate'
   'status_fixture_'
   'log "12f) status reason codegen"'
   'bash "$ROOT/plans/lib/status_reason_codegen_gate.sh"'
@@ -144,8 +153,26 @@ verify_tokens=(
 )
 
 VERIFY_CONTENT="$(<"$VERIFY")"
+VERIFY_ENV_CONTENT="$(<"$VERIFY_ENV")"
 for token in "${verify_tokens[@]}"; do
   require_code_token "$VERIFY_CONTENT" "$VERIFY" "$token"
+done
+
+verify_scope_gate_tokens=(
+  'run_logged_or_exit "contract_kernel"'
+  'run_logged_or_exit "contract_change_ledger"'
+  'run_logged_or_exit "contract_crossrefs"'
+  'start_parallel_gate "contract_crossrefs"'
+  'run_logged_or_exit "csp_trace"'
+  'start_parallel_gate "csp_trace"'
+  'run_logged_or_exit "workflow_contract_gate"'
+  'local gate_name="wf_${test_name%.sh}"'
+  'run_logged_or_exit "$gate_name"'
+  'start_parallel_gate "$gate_name" "$WORKFLOW_TEST_TIMEOUT"'
+)
+VERIFY_SCOPE_GATES_CONTENT="$(<"$VERIFY_SCOPE_GATES")"
+for token in "${verify_scope_gate_tokens[@]}"; do
+  require_code_token "$VERIFY_SCOPE_GATES_CONTENT" "$VERIFY_SCOPE_GATES" "$token"
 done
 
 verify_extra_tokens=(
@@ -166,22 +193,36 @@ verify_extra_tokens=(
   'crossref_strict=1 (sentinel/env enabled)'
   'Skipping crossref_gate in quick mode (full-only gate)'
   'env CONTRACT_COVERAGE_STRICT="$CONTRACT_COVERAGE_STRICT_EFFECTIVE"'
-  'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-600s}"'
-  'PREFLIGHT_TIMEOUT_WAS_SET=0'
-  'if [[ "$MODE" == "full" && "$PREFLIGHT_TIMEOUT_WAS_SET" -eq 0 ]]; then'
+  'source "$ROOT/plans/lib/verify_env.sh"'
+  'init_verify_env "verify"'
+  'source "$ROOT/plans/lib/verify_scope_gates.sh"'
   'run_logged_or_exit "slice_completion_enforce"'
 )
 for token in "${verify_extra_tokens[@]}"; do
   require_code_token "$VERIFY_CONTENT" "$VERIFY" "$token"
 done
 
+verify_env_tokens=(
+  'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-600s}"'
+  'local preflight_timeout_was_set=0'
+  'if [[ -n "${PREFLIGHT_TIMEOUT:-}" ]]; then'
+  'if [[ "${MODE:-quick}" == "full" && "$preflight_timeout_was_set" -eq 0 ]]; then'
+  'RUST_CLIPPY_TIMEOUT="${RUST_CLIPPY_TIMEOUT:-5m}"'
+  'RUST_CLIPPY_TIMEOUT="${RUST_CLIPPY_TIMEOUT:-15m}"'
+  'RUST_TEST_TIMEOUT="${RUST_TEST_TIMEOUT:-5m}"'
+  'RUST_TEST_TIMEOUT="${RUST_TEST_TIMEOUT:-45m}"'
+)
+for token in "${verify_env_tokens[@]}"; do
+  require_code_token "$VERIFY_ENV_CONTENT" "$VERIFY_ENV" "$token"
+done
+
 # Stack gate scripts: ensure quick/full Rust gate names are present.
 rust_quick_tokens=(
-  'run_logged_or_exit "rust_fmt"'
-  'run_logged_or_exit "rust_clippy"'
+  'run_rust_logged_or_exit "rust_fmt"'
+  'run_rust_logged_or_exit "rust_clippy"'
   'cargo clippy --workspace --lib -- -D warnings'
-  'run_logged_or_exit "rust_tests_quick"'
-  'run_logged_or_exit "rust_tests_smoke"'
+  'run_mode_selected_rust_tests'
+  'run_smoke_cargo_test_gate "rust_tests_smoke"'
   'run_logged_or_exit "execution_facade_lint"'
   'run_logged_or_exit "graybox_telemetry_lint"'
 )
@@ -191,10 +232,11 @@ for token in "${rust_quick_tokens[@]}"; do
 done
 
 rust_full_tokens=(
-  'run_logged_or_exit "rust_clippy"'
+  'run_rust_logged_or_exit "rust_clippy"'
   'cargo clippy --workspace --all-targets --all-features -- -D warnings'
-  'run_logged_or_exit "rust_tests_full"'
-  'run_logged_or_exit "rust_tests_smoke"'
+  'record_rust_test_runner_fallback \'
+  '"repo_contract_requires_cargo_doctests_and_shared_state"'
+  'run_smoke_cargo_test_gate "rust_tests_smoke"'
   'run_logged_or_exit "execution_facade_lint"'
   'run_logged_or_exit "graybox_telemetry_lint"'
 )
@@ -204,6 +246,14 @@ done
 
 if contains_literal_token "$RUST_GATES_CONTENT" 'warn "Skipping clippy in quick mode"'; then
   fail "quick Rust gates must not skip rust_clippy"
+fi
+
+if contains_literal_token "$RUST_GATES_CONTENT" 'cargo nextest run --workspace --all-features --locked'; then
+  fail "rust gates must not treat cargo nextest run as an authoritative full-test path"
+fi
+
+if contains_literal_token "$RUST_GATES_CONTENT" 'cargo nextest run --workspace --lib --locked'; then
+  fail "rust gates must not treat cargo nextest run as an authoritative quick-test path"
 fi
 
 py_tokens=(

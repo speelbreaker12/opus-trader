@@ -26,9 +26,9 @@ assert_absent_line() {
 [[ -f "$RUST_GATES" ]] || fail "missing rust gates script: $RUST_GATES"
 
 assert_contains_line 'log "2b) Rust clippy (full)"'
-assert_contains_line 'run_logged_or_exit "rust_clippy" "$RUST_CLIPPY_TIMEOUT" cargo clippy --workspace --all-targets --all-features -- -D warnings'
+assert_contains_line 'run_rust_logged_or_exit "rust_clippy" "$RUST_CLIPPY_TIMEOUT" cargo clippy --workspace --all-targets --all-features -- -D warnings'
 assert_contains_line 'log "2b) Rust clippy (quick)"'
-assert_contains_line 'run_logged_or_exit "rust_clippy" "$RUST_CLIPPY_TIMEOUT" cargo clippy --workspace --lib -- -D warnings'
+assert_contains_line 'run_rust_logged_or_exit "rust_clippy" "$RUST_CLIPPY_TIMEOUT" cargo clippy --workspace --lib -- -D warnings'
 
 assert_absent_line 'warn "Skipping clippy in quick mode"'
 
