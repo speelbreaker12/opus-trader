@@ -232,7 +232,7 @@ Push/PR Result
 ```
 
 ## Obsidian update requirement
-At PR boundary, update the main project page (`obsidian/Projects/`) with:
+At PR boundary, update the main project page in `${OBSIDIAN_VAULT_PATH:-$HOME/Obsidian/opus-trader}/Projects/` with:
 - latest commit hash shipped
 - whether branch was rebased or merged with main
 - PR number/url

@@ -169,7 +169,8 @@ git branch -D <branch>
 Find the project note that declared this branch:
 
 ```bash
-grep -rl "branch: <branch>" obsidian/Projects/*.md
+vault="${OBSIDIAN_VAULT_PATH:-$HOME/Obsidian/opus-trader}"
+grep -rl "branch: <branch>" "$vault"/Projects/*.md
 ```
 
 Update it:
