@@ -1,0 +1,19 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "contract-gap-detector-1.0",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "Sample Contract Fixture",
+      "category": "weak_normative",
+      "severity": "P1",
+      "description": "The missing-data reject rule uses SHOULD, which makes fail-closed behavior optional for PolicyGuard.",
+      "evidence": {
+        "line": 4,
+        "quote": "PolicyGuard SHOULD reject when data is missing."
+      },
+      "proposed_fix_type": "mechanical",
+      "proposed_fix": "Replace \"SHOULD\" with \"MUST\" in the PolicyGuard missing-data reject rule."
+    }
+  ]
+}

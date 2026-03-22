@@ -1,6 +1,4 @@
-# SKILL: /review-stack
-
-Invoke the `review-stack` skill to run the full review stack and collect a single gate artifact.
+Invoke the review-stack skill to run the full 7-skill review stack and emit the PR review gate marker.
 
 ## Steps
 
@@ -12,7 +10,7 @@ Invoke the `review-stack` skill to run the full review stack and collect a singl
 git rev-parse HEAD
 ```
 
-3. After the review stack completes with `PASS` or `CONDITIONAL_PASS`, write the PR gate marker under `artifacts/pr-review-gate`:
+3. After the review completes successfully, write the gate marker under `artifacts/pr-review-gate`:
 
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
@@ -26,10 +24,9 @@ cat > "$REPO_ROOT/artifacts/pr-review-gate/${SAFE_BRANCH}.json" <<EOF
   "branch": "${BRANCH}",
   "head_commit": "${HEAD}",
   "head": "${HEAD}",
-  "verdict": "${DECISION}",
   "timestamp_utc": "${TS}"
 }
 EOF
 ```
 
-This marker is checked by the PR review gate before `gh pr create`.
+This marker is checked by workflow review gates before PR publication and merge.

@@ -6,6 +6,8 @@ Your job is to control the session safely before any code work begins.
 
 This is a control-plane skill. It decides where the work belongs, which Obsidian page owns it, which worktree should be used, and what handoff must be left.
 
+For normal project work, the Obsidian debrief is the session handoff. Only specialized workflows should keep a separate handoff artifact.
+
 It is not the Commit Skill and not the Push/PR Skill. Use those separately when the session reaches those boundaries.
 
 ## Core model
@@ -97,6 +99,12 @@ Route shared_hotfix as follows:
 
 ## Obsidian routing rules
 
+Resolve the vault root first:
+
+```bash
+export OBSIDIAN_VAULT_PATH="${OBSIDIAN_VAULT_PATH:-$HOME/Obsidian/opus-trader}"
+```
+
 Default destinations:
 - existing / new project work -> project page under the project area
 - maintenance -> maintenance / queue note
@@ -114,14 +122,14 @@ Do not spread one session across multiple "owner" pages.
 #### Discovery
 
 ```bash
-ls obsidian/Projects/*.md
-rg -n "^branch:|^status:|^worktree:|^pr:" obsidian/Projects/*.md
+ls "$OBSIDIAN_VAULT_PATH"/Projects/*.md
+rg -n "^branch:|^status:|^worktree:|^pr:" "$OBSIDIAN_VAULT_PATH"/Projects/*.md
 ```
 
 #### Read first
 - project page
-- latest handoff
-- latest session note if present
+- latest debrief/session handoff
+- latest session note if present (if separate)
 - relevant contract / PRD / implementation plan / story / task note
 
 #### Extract
@@ -136,7 +144,7 @@ rg -n "^branch:|^status:|^worktree:|^pr:" obsidian/Projects/*.md
 
 #### Propose
 - project slug
-- page path: `obsidian/Projects/<Project Name>.md`
+- page path: `$OBSIDIAN_VAULT_PATH/Projects/<Project Name>.md`
 - branch naming family: `<domain>/<slug>`
 - worktree name: `.worktrees/wt-<domain>-<slug>`
 
@@ -147,7 +155,7 @@ Then wait for confirmation before creating anything.
 Create the project page from the template:
 
 ```bash
-cp obsidian/Templates/Project.md "obsidian/Projects/<Project Name>.md"
+cp "$OBSIDIAN_VAULT_PATH/Templates/Project.md" "$OBSIDIAN_VAULT_PATH/Projects/<Project Name>.md"
 ```
 
 Required frontmatter fields:
@@ -213,10 +221,9 @@ After a PR merges, the merged branch and worktree are disposable. Do not keep th
 
 **Flow:**
 
-1. Sync local main (from the main worktree `wt-main`):
+1. Sync local main (from the repo root, which stays on main):
 
 ```bash
-cd .worktrees/wt-main
 git fetch origin --prune
 git pull --ff-only origin main
 ```

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT="$ROOT/plans/premortem_path_guard.sh"
@@ -17,6 +19,7 @@ trap 'rm -rf "$tmp_dir"' EXIT
 fixture="$tmp_dir/repo"
 mkdir -p "$fixture/docs" "$fixture/reviews/premortems"
 git init -q "$fixture"
+git -C "$fixture" config core.hooksPath /dev/null
 
 cat > "$fixture/docs/good.md" <<'MD'
 Use reviews/premortems/S1-007_premortem.md.

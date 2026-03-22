@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SOURCE_PREFLIGHT="$ROOT/plans/preflight.sh"
@@ -24,6 +26,8 @@ write_pass_script() {
   cat > "$path" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 exit 0
 EOF
   chmod +x "$path"
@@ -56,6 +60,7 @@ EOF
   git init -q
   git config user.name "fixture"
   git config user.email "fixture@example.com"
+  git config core.hooksPath /dev/null
 )
 
 # Complementary invalid files: each file fails alone, but concatenation can parse.

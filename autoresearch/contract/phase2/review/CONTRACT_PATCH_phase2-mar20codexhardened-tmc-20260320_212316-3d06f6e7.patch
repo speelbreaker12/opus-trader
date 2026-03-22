@@ -1,0 +1,43 @@
+--- a/specs/CONTRACT.md
++++ b/specs/CONTRACT.md
+@@ -53,4 +53,9 @@
+ **Unconfirmed behavior (Non‑Negotiable):**
+ - If the primary predicate is true but confirmation fails, PolicyGuard MUST compute `TradingMode = ReduceOnly`
+   and include the appropriate `REDUCEONLY_*_UNCONFIRMED` reason code.
++- Failed corroboration on a watchdog or disk Kill predicate downgrades only that predicate's contribution to
++  `SystemIntegrityAxis`; it does not override other active Kill-tier predicates in the same coherent snapshot.
++- Final `TradingMode` MUST still be resolved per §2.2.3.3.
++- Therefore, if any simultaneous confirmed or authoritative Kill-tier trigger is active, PolicyGuard MUST compute
++  `TradingMode == Kill` and MUST emit only the winning-tier `KILL_*` reasons.
+--- a/specs/CONTRACT.md
++++ b/specs/CONTRACT.md
+@@ -47,3 +47,8 @@
+ - **Disk Kill (confirmed):**
+   `disk_used_pct >= disk_kill_pct` **AND** `disk_used_pct_secondary >= disk_kill_pct`,
+   with both timestamps fresh per `disk_used_max_age_ms`.
++- If `disk_used_pct >= disk_kill_pct` but `disk_used_pct_secondary` is missing, unparseable, below threshold, or stale,
++  or if either disk sample timestamp is missing, unparseable, or older than `disk_used_max_age_ms`, PolicyGuard MUST
++  treat Disk Kill as unconfirmed and emit `REDUCEONLY_DISK_KILL_UNCONFIRMED`.
++- That disk-corroboration freshness failure MUST NOT be surfaced as `REDUCEONLY_INPUT_MISSING_OR_STALE` unless some
++  other independent critical input is missing, unparseable, or stale in the same tick.
+--- a/specs/CONTRACT.md
++++ b/specs/CONTRACT.md
+@@ -287,11 +287,18 @@
+ - `mode_reasons` MUST include **all** active reasons from the **computed TradingMode tier** for that tick.
+ - Reasons from non-winning tiers MUST NOT be included (tier purity).
+ 
+ **Acceptance Tests:**
+ 
+ AT-1244
+ - Given: PolicyGuard computes `TradingMode == ReduceOnly` with multiple active reduce-only predicates (e.g., `risk_state == Degraded` AND `bunker_mode_active == true` AND `open_permission_blocked_latch == true`).
+ - When: `mode_reasons` is computed for that tick.
+ - Then: `mode_reasons` MUST contain all applicable `REDUCEONLY_*` reason codes, in the canonical order defined above, and MUST NOT contain any `KILL_*` codes.
+ - Pass criteria: reasons are tier-pure (only `REDUCEONLY_*`), complete (all active predicates represented), and deterministically ordered per the registry above.
+ - Fail criteria: missing active reason, `KILL_*` code present, or order deviates from canonical registry.
++
++AT-1282
++- Given: `risk_state == Kill`, `session_termination_active == true`, and `bunker_mode_active == true`; all other Kill-tier predicates inactive.
++- When: `TradingMode` and `mode_reasons` are computed for that tick.
++- Then: `TradingMode == Kill` and `mode_reasons == [KILL_RISKSTATE_KILL, KILL_RATE_LIMIT_SESSION_TERMINATION]`.
++- Pass criteria: all active Kill-tier reasons are emitted, canonical registry order is preserved, and no `REDUCEONLY_*` reason appears.
++- Fail criteria: any active Kill-tier reason missing, order non-canonical, or any `REDUCEONLY_*` reason mixed into `mode_reasons`.

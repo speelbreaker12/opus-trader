@@ -1,0 +1,36 @@
+{
+  "run_id": "phase2-mar20codexhardened-ec-20260320_212954-8cae5620",
+  "reviewed_at": "2026-03-20T22:55:59Z",
+  "contract_file_hash": "09b3885d5af5f1d3ede265940ff2441e8964042cbfb8abe1d9b2af183c76ff55",
+  "proposals_file_hash": "c19a46b21809b6b6a686d599ceece49cd760092c0b9e2d36ef55b742e85df48b",
+  "decisions": [
+    {
+      "proposal_id": "P-001",
+      "decision": "pending_scope_review",
+      "reviewer": "human+codex",
+      "reason_code": "latch_policy_scope",
+      "notes": "Residual-exposure fail-closed behavior is worth discussing, but binding it to the open-permission latch and affected-scope semantics is broader than a narrow contract patch."
+    },
+    {
+      "proposal_id": "P-002",
+      "decision": "pending_scope_review",
+      "reviewer": "human+codex",
+      "reason_code": "broad_gate_matrix_scope",
+      "notes": "The concern is real, but this opens a large gate-by-gate enumeration story rather than a tight patch."
+    },
+    {
+      "proposal_id": "P-003",
+      "decision": "accepted",
+      "reviewer": "human+codex",
+      "reason_code": "missing_at_coverage",
+      "notes": "The three-attempt cap and `1x`/`2x`/`4x` retry schedule are normative and currently untested."
+    },
+    {
+      "proposal_id": "P-004",
+      "decision": "rejected",
+      "reviewer": "human+codex",
+      "reason_code": "overstrict_success_condition",
+      "notes": "Replacing `~0` with exact `exposure_usd_after == 0` is too strict for a contract that already uses epsilon-style neutralization language elsewhere."
+    }
+  ]
+}

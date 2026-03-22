@@ -48,9 +48,16 @@ fn bump_pending_exposure_reject_inner(reason: PendingExposureRejectReason) {
 }
 
 /// Internal pending exposure events for graybox testing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PendingExposureEvent {
-    ReserveRejected { reason: PendingExposureRejectReason },
+    CrossInstrumentReservationCollision {
+        reservation_id: String,
+        existing_instrument: String,
+        attempted_instrument: String,
+    },
+    ReserveRejected {
+        reason: PendingExposureRejectReason,
+    },
 }
 
 struct ProductionPendingExposureEvents;
@@ -58,6 +65,16 @@ struct ProductionPendingExposureEvents;
 impl EventSink<PendingExposureEvent> for ProductionPendingExposureEvents {
     fn emit(&mut self, event: PendingExposureEvent) {
         match event {
+            PendingExposureEvent::CrossInstrumentReservationCollision {
+                reservation_id,
+                existing_instrument,
+                attempted_instrument,
+            } => tracing::error!(
+                reservation_id = %reservation_id,
+                existing = %existing_instrument,
+                attempted = %attempted_instrument,
+                "cross-instrument ReservationId collision — rejecting to prevent budget leak"
+            ),
             PendingExposureEvent::ReserveRejected { reason } => {
                 bump_pending_exposure_reject(reason)
             }
@@ -479,10 +496,11 @@ impl PendingExposureBook {
         if let Some(existing_instrument) = inner.reservation_instrument.get(reservation_id)
             && existing_instrument != instrument_id
         {
-            tracing::error!(
-                %reservation_id, existing = %existing_instrument, attempted = %instrument_id,
-                "cross-instrument ReservationId collision — rejecting to prevent budget leak"
-            );
+            events.emit(PendingExposureEvent::CrossInstrumentReservationCollision {
+                reservation_id: reservation_id.to_string(),
+                existing_instrument: existing_instrument.clone(),
+                attempted_instrument: instrument_id.to_string(),
+            });
             let pending = inner
                 .instruments
                 .get(instrument_id)
@@ -1019,6 +1037,102 @@ mod tests {
                     && line.contains("run_id=run-pending-exposure-001")
             }),
             "expected structured reject metric line, got {lines:?}"
+        );
+    }
+
+    #[test]
+    fn test_reserve_graybox_instrument_not_registered_preserves_context_without_global_side_effects()
+     {
+        let _guard = begin_metrics_test();
+        let before = pending_exposure_reject_total();
+        let mut metrics = PendingExposureMetrics::new();
+        let book = PendingExposureBook::new(None);
+        let mut events = Vec::new();
+
+        let result = book.reserve_with_events(
+            &ReservationId::new("missing-book").unwrap(),
+            "MISSING",
+            0.0,
+            1.0,
+            &mut metrics,
+            &mut events,
+        );
+
+        assert!(matches!(
+            result,
+            PendingExposureResult::Rejected {
+                reason: PendingExposureRejectReason::InstrumentNotRegistered,
+                pending_total,
+            } if pending_total.is_nan()
+        ));
+        assert_eq!(metrics.reserve_instrument_not_registered_total(), 1);
+        assert_eq!(
+            events,
+            vec![PendingExposureEvent::ReserveRejected {
+                reason: PendingExposureRejectReason::InstrumentNotRegistered
+            }]
+        );
+        assert_eq!(pending_exposure_reject_total(), before);
+
+        let lines = take_execution_metric_lines();
+        assert!(
+            lines.is_empty(),
+            "graybox path must not emit global metric lines: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn test_cross_instrument_collision_graybox_preserves_event_context() {
+        let _guard = begin_metrics_test();
+        let before = pending_exposure_reject_total();
+        let mut metrics = PendingExposureMetrics::new();
+        let book = PendingExposureBook::new(None);
+        book.register_instrument("BTC", Some(100.0));
+        book.register_instrument("ETH", Some(100.0));
+        let reservation_id = ReservationId::new("shared-id").unwrap();
+        let mut initial_events = Vec::new();
+
+        let initial = book.reserve_with_events(
+            &reservation_id,
+            "BTC",
+            0.0,
+            10.0,
+            &mut metrics,
+            &mut initial_events,
+        );
+        assert!(matches!(initial, PendingExposureResult::Reserved { .. }));
+        assert!(initial_events.is_empty());
+
+        let mut events = Vec::new();
+        let result =
+            book.reserve_with_events(&reservation_id, "ETH", 0.0, 10.0, &mut metrics, &mut events);
+
+        assert!(matches!(
+            result,
+            PendingExposureResult::Rejected {
+                reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
+                pending_total: 0.0,
+            }
+        ));
+        assert_eq!(pending_exposure_reject_total(), before);
+        assert_eq!(
+            events,
+            vec![
+                PendingExposureEvent::CrossInstrumentReservationCollision {
+                    reservation_id: "shared-id".to_string(),
+                    existing_instrument: "BTC".to_string(),
+                    attempted_instrument: "ETH".to_string(),
+                },
+                PendingExposureEvent::ReserveRejected {
+                    reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
+                },
+            ]
+        );
+
+        let lines = take_execution_metric_lines();
+        assert!(
+            lines.is_empty(),
+            "graybox path must not emit global metric lines: {lines:?}"
         );
     }
 }

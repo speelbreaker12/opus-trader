@@ -65,6 +65,13 @@ AT-235
 - Pass criteria: bounded close attempts then hedge fallback if needed; exposure neutralized.
 - Fail criteria: no close attempts or exposure remains.
 
+AT-1284
+- Given: attempt 1 and attempt 2 partially fill while exposure remains.
+- When: emergency close schedules bounded IOC retries.
+- Then: at most three IOC close attempts are submitted total; attempt 1 uses `close_buffer_ticks`, attempt 2 uses `2 * close_buffer_ticks`, and attempt 3 uses `4 * close_buffer_ticks`; no fourth IOC close attempt is permitted.
+- Pass criteria: dispatch records show exactly the `1x`, `2x`, `4x` buffer schedule with a hard cap of three total attempts.
+- Fail criteria: any fourth IOC close attempt occurs, or any retry uses a buffer other than `close_buffer_ticks`, `2 * close_buffer_ticks`, or `4 * close_buffer_ticks`.
+
 AT-1272
 - Given: one leg filled, close attempts exhausted with remaining exposure, and hedge dispatch fails (rejected, timeout, or venue error).
 - When: emergency close completes step 3 and proceeds to step 4.

@@ -1478,7 +1478,7 @@ OPEN rejections due to missing/unparseable/stale L2 MUST use `Rejected(Liquidity
 
 **Algorithm (Deterministic):**
 
-0. **Staleness pre-check:** If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`, reject per the rules above (OPEN → `Rejected(LiquidityGateNoL2)`; CLOSE/HEDGE → §3.1 fallback). Do not proceed to book walk.
+0. **Staleness pre-check:** If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`, reject per the rules above (OPEN → `Rejected(LiquidityGateNoL2)`; CLOSE/HEDGE/replace order placement → §3.1 fallback, with `Rejected(EmergencyCloseNoPrice)` and `RiskState::Degraded` if no valid fallback price source exists). Do not proceed to book walk.
 1. Walk the L2 book on the correct side (asks for buy, bids for sell).
 2. Compute the Weighted Avg Price (WAP) for `OrderQty`.
 3. Compute expected slippage: `slippage_bps = abs(WAP - BestPrice) / BestPrice * 10_000`
@@ -2505,6 +2505,13 @@ AT-422
 - Pass criteria: trip/clear behavior follows overridden config values, not defaults.
 - Fail criteria: no trip, no clear, or behavior matches hard-coded defaults instead of config.
 
+AT-1283
+- Given: `parquet_queue_trip_pct = 0.80`, `parquet_queue_trip_window_s = 5`, `parquet_queue_clear_pct = 0.75`, `queue_clear_window_s = 10`, `evidenceguard_global_cooldown = 120`, and all other EvidenceGuard criteria are satisfied.
+- When: `parquet_queue_depth_pct` is 0.85 for 6s, then 0.72 for 10s, and remains 0.72 through 120s.
+- Then: after 10s EvidenceChainState remains not GREEN because the global cooldown has not expired; only after 120s may EvidenceChainState become GREEN if all criteria remain satisfied.
+- Pass criteria: GREEN stays blocked until `max(queue_clear_window_s, evidenceguard_global_cooldown)` expires.
+- Fail criteria: GREEN clears after only the 10s clear window or otherwise ignores the non-zero cooldown.
+
 AT-404
 - Given: `EvidenceChainState != GREEN`, a cancel/replace that increases exposure, and no Kill-tier triggers are active.
 - When: EvidenceGuard evaluates permissions.
@@ -2598,6 +2605,11 @@ If the primary predicate is true but corroboration is missing/false, the trigger
 - **Disk Kill (confirmed):**  
   `disk_used_pct >= disk_kill_pct` **AND** `disk_used_pct_secondary >= disk_kill_pct`,  
   with both timestamps fresh per `disk_used_max_age_ms`.
+- If `disk_used_pct >= disk_kill_pct` but `disk_used_pct_secondary` is missing, unparseable, below threshold, or stale,
+  or if either disk sample timestamp is missing, unparseable, or older than `disk_used_max_age_ms`, PolicyGuard MUST
+  treat Disk Kill as unconfirmed and emit `REDUCEONLY_DISK_KILL_UNCONFIRMED`.
+- That disk-corroboration freshness failure MUST NOT be surfaced as `REDUCEONLY_INPUT_MISSING_OR_STALE` unless some
+  other independent critical input is missing, unparseable, or stale in the same tick.
 - **Session Termination Kill (authoritative):**
   `session_termination_active == true`.
   This signal is authoritative and does NOT require corroboration by rolling counts.
@@ -2605,6 +2617,11 @@ If the primary predicate is true but corroboration is missing/false, the trigger
 **Unconfirmed behavior (Non‑Negotiable):**
 - If the primary predicate is true but confirmation fails, PolicyGuard MUST compute `TradingMode = ReduceOnly`
   and include the appropriate `REDUCEONLY_*_UNCONFIRMED` reason code.
+- Failed corroboration on a watchdog or disk Kill predicate downgrades only that predicate's contribution to
+  `SystemIntegrityAxis`; it does not override other active Kill-tier predicates in the same coherent snapshot.
+- Final `TradingMode` MUST still be resolved per §2.2.3.3.
+- Therefore, if any simultaneous confirmed or authoritative Kill-tier trigger is active, PolicyGuard MUST compute
+  `TradingMode == Kill` and MUST emit only the winning-tier `KILL_*` reasons.
 
 **Session-termination clarification (Normative):**
 - `10028_count_5m` remains an observability/release metric.
@@ -2846,6 +2863,13 @@ AT-1244
 - Then: `mode_reasons` MUST contain all applicable `REDUCEONLY_*` reason codes, in the canonical order defined above, and MUST NOT contain any `KILL_*` codes.
 - Pass criteria: reasons are tier-pure (only `REDUCEONLY_*`), complete (all active predicates represented), and deterministically ordered per the registry above.
 - Fail criteria: missing active reason, `KILL_*` code present, or order deviates from canonical registry.
+
+AT-1282
+- Given: `risk_state == Kill`, `session_termination_active == true`, and `bunker_mode_active == true`; all other Kill-tier predicates inactive.
+- When: `TradingMode` and `mode_reasons` are computed for that tick.
+- Then: `TradingMode == Kill` and `mode_reasons == [KILL_RISKSTATE_KILL, KILL_RATE_LIMIT_SESSION_TERMINATION]`.
+- Pass criteria: all active Kill-tier reasons are emitted, canonical registry order is preserved, and no `REDUCEONLY_*` reason appears.
+- Fail criteria: any active Kill-tier reason missing, order non-canonical, or any `REDUCEONLY_*` reason mixed into `mode_reasons`.
 
 ---
 
@@ -3829,6 +3853,13 @@ AT-235
 - Then: close attempts run and fallback hedge executes if still exposed; exposure goes to ~0.
 - Pass criteria: bounded close attempts then hedge fallback if needed; exposure neutralized.
 - Fail criteria: no close attempts or exposure remains.
+
+AT-1284
+- Given: attempt 1 and attempt 2 partially fill while exposure remains.
+- When: emergency close schedules bounded IOC retries.
+- Then: at most three IOC close attempts are submitted total; attempt 1 uses `close_buffer_ticks`, attempt 2 uses `2 * close_buffer_ticks`, and attempt 3 uses `4 * close_buffer_ticks`; no fourth IOC close attempt is permitted.
+- Pass criteria: dispatch records show exactly the `1x`, `2x`, `4x` buffer schedule with a hard cap of three total attempts.
+- Fail criteria: any fourth IOC close attempt occurs, or any retry uses a buffer other than `close_buffer_ticks`, `2 * close_buffer_ticks`, or `4 * close_buffer_ticks`.
 
 AT-1272
 - Given: one leg filled, close attempts exhausted with remaining exposure, and hedge dispatch fails (rejected, timeout, or venue error).
@@ -6965,3 +6996,4 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-15 | CCL-2026-03-15-06 | §2.2.4 Open Permission Latch (AT-1243 cadence); Appendix CONTRACT_CHANGE_LEDGER | clarify | Clarify deterministic `RECONCILE_STALL` emission cadence: one emission per continuous stall episode at threshold exceedance, re-emission only on failing-criterion change or new post-clear episode. | Prevent alert/log spam ambiguity while preserving deterministic observability and fail-closed latch semantics. | AT-1243 | local/remediation-order-v4-task3-quality-fix |
 | 2026-03-17 | CCL-2026-03-17-01 | §1.3 Liquidity Gate; §1.4 Pricer; §2.2.1.2 Critical Inputs; §2.2.2 EvidenceGuard; §2.2.3.2 MarketIntegrityAxis; §2.2.3.4 Rename; §2.2.4 OPL; §3.1 Emergency Close; Appendix A; Appendix B RejectReasonCode; CSP table; CONTRACT_CHANGE_LEDGER | hardening | Autoresearch Phase 2+3: 16 accepted machine-generated proposals — margin headroom NaN/missing fail-closed, account_summary staleness gate, cortex_override missing → ForceReduceOnly, inventory_skew_sell_floor formula, bunker_mode_last_update_ts_ms critical input, session_termination rename ATs, hedge qty bound, monotonic retry, SHALL→MUST tightening, CSP-063 dedup, AT renumber 1243→1253. | Close contract gaps identified by automated gap detection across execution pipeline and PolicyGuard fixtures. | AT-1251, AT-1252, AT-1253, AT-1254, AT-1255, AT-1256, AT-1257, AT-1258, AT-1259, AT-1260, AT-1261, AT-1262, AT-1263, AT-1264 | autoresearch/phase3-contract-patch |
 | 2026-03-19 | CCL-2026-03-19-01 | §1.3 Liquidity Gate; §2.2.2 EvidenceGuard; §2.2.3 TradingMode; §2.2.4 Open Permission Latch; §3.1 Emergency Close; Appendix CONTRACT_CHANGE_LEDGER | hardening | Autoresearch Phase 4: add replace-order stale-L2 fallback/no-fallback ATs, slippage equality boundary AT, negative reconciliation-criteria ATs, latch invariant/cross-ref/defaults, hedge failure/partial-fill ATs, EvidenceGuard counter/CSP-bypass ATs, cortex/margin/risk_state axis isolation ATs, AT-918 reason code, cause enum, SHALL→MUST, EG cooldown default. | Close contract gaps from Phase 4 automated+manual gap detection across 5 CONTRACT.md sections. | AT-222, AT-918, AT-1265, AT-1266, AT-1267, AT-1268, AT-1269, AT-1270, AT-1271, AT-1272, AT-1273, AT-1274, AT-1275, AT-1276, AT-1277, AT-1278, AT-1279, AT-1280, AT-1281 | project/contract-autoresearch |
+| 2026-03-20 | CCL-2026-03-20-01 | §1.3 Liquidity Gate; §2.2.2 EvidenceGuard; §2.2.3 TradingMode; §3.1 Emergency Close; Appendix CONTRACT_CHANGE_LEDGER | hardening | Apply the accepted hardened Phase 2 patch batch: align the Liquidity Gate stale-L2 algorithm step with replace-order fallback semantics, add a non-zero EvidenceGuard cooldown AT, clarify watchdog/disk Kill corroboration and winning-tier reason purity, and add an explicit bounded emergency-close retry schedule AT. | Carry forward the reviewed Phase 2 contract-only deltas on a contract-scoped branch without widening the autoresearch backend PR, while keeping AT numbering and ledger growth deterministic. | AT-422, AT-235, AT-1282, AT-1283, AT-1284 | project/contract-phase2-accepted-patch-batch |

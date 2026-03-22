@@ -1,0 +1,5 @@
+--- a/specs/CONTRACT.md
++++ b/specs/CONTRACT.md
+@@ -15,1 +15,1 @@
+-0. **Staleness pre-check:** If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`, reject per the rules above (OPEN → `Rejected(LiquidityGateNoL2)`; CLOSE/HEDGE → §3.1 fallback). Do not proceed to book walk.
++0. **Staleness pre-check:** If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`, reject per the rules above (OPEN → `Rejected(LiquidityGateNoL2)`; CLOSE/HEDGE/replace order placement → §3.1 fallback, with `Rejected(EmergencyCloseNoPrice)` and `RiskState::Degraded` if no valid fallback price source exists). Do not proceed to book walk.

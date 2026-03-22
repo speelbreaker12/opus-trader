@@ -250,6 +250,7 @@ setup_actual_parallel_repo() {
   local repo="$tmp_dir/$name/repo"
   mkdir -p "$repo/plans" "$repo/python/proof_graph"
   git init -q "$repo"
+  git -C "$repo" config core.hooksPath /dev/null
 
   cp "$ROOT/plans/parallel_review.sh" "$repo/plans/parallel_review.sh"
   chmod +x "$repo/plans/parallel_review.sh"
@@ -679,6 +680,7 @@ test_parallel_review_artifact_summary_uses_story_artifacts_root() {
   local output_file="$fixture_dir/parallel_review.out"
   mkdir -p "$repo/plans" "$repo/.tmp/run" "$repo/canonical/story"
   git init -q "$repo"
+  git -C "$repo" config core.hooksPath /dev/null
 
   cp "$ROOT/plans/parallel_review.sh" "$repo/plans/parallel_review.sh"
   chmod +x "$repo/plans/parallel_review.sh"
@@ -764,6 +766,7 @@ test_parallel_review_proof_aggregation_uses_story_artifacts_root() {
   local aggregate_log="$fixture_dir/aggregate_root.log"
   mkdir -p "$repo/plans" "$repo/.tmp/run" "$repo/canonical/story/S9-PG"
   git init -q "$repo"
+  git -C "$repo" config core.hooksPath /dev/null
 
   cp "$ROOT/plans/parallel_review.sh" "$repo/plans/parallel_review.sh"
   chmod +x "$repo/plans/parallel_review.sh"

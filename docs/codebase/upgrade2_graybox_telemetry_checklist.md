@@ -1,10 +1,10 @@
 # Upgrade 2 Graybox Telemetry Coverage Checklist
 
-Status: Upgrade 2A PASS / Upgrade 2 overall FAIL (Upgrade 2B open)
+Status: Upgrade 2 PASS
 
 This checklist is the Upgrade 2 acceptance gate.
-Upgrade 2 is not complete until both Upgrade 2A and Upgrade 2B are complete.
-Upgrade 2A may be marked complete independently.
+Upgrade 2 is complete only when both Upgrade 2A and Upgrade 2B are complete.
+Upgrade 2A remains a useful sub-checklist, but the repo-level status is driven by both tables.
 
 ## Scope Rule
 
@@ -81,9 +81,9 @@ This is a non-blocking sibling checklist for Upgrade 2A, but Upgrade 2 stays ope
 
 | Module | Status | Evidence | Notes |
 | --- | --- | --- | --- |
-| group | FAIL | `crates/soldier_core/src/execution/group.rs:44`, `crates/soldier_core/src/execution/group.rs:50`, `crates/soldier_core/src/execution/group.rs:56` | Lock-timeout, persist-fail, and `MixedFailed` counters still emit directly from state-machine transitions. |
-| gate sequence | FAIL | `crates/soldier_core/src/execution/build_order_intent.rs:244`, `crates/soldier_core/src/execution/build_order_intent.rs:251` | Chokepoint approval/rejection metrics still emit directly from the finish path. |
-| WAL-nonblocking | FAIL | `crates/soldier_core/src/execution/build_order_intent.rs:469`, `crates/soldier_core/src/execution/build_order_intent.rs:488` | Chokepoint WAL-nonblocking metrics still emit directly from the RecordedBeforeDispatch branch. |
+| group | PASS | `crates/soldier_core/src/execution/group.rs`, `crates/soldier_core/src/execution/group.rs` tests | `apply_leg_result_with_events`, `try_acquire_group_lock_with_events`, and `persist_before_dispatch_with_events` keep the state-machine graybox path sink-only while the legacy wrappers still emit the exact contract counters and metric lines. |
+| gate sequence | PASS | `crates/soldier_core/src/execution/build_order_intent.rs`, `crates/soldier_core/src/execution/build_order_intent_gate_ordering_tests.rs` | `build_order_intent_internal_with_events` emits typed `ChokeEvent` values; wrapper paths adapt them back into the legacy `gate_sequence_total` contract. |
+| WAL-nonblocking | PASS | `crates/soldier_core/src/execution/build_order_intent.rs`, `crates/soldier_core/src/execution/build_order_intent_gate_ordering_tests.rs` | Graybox chokepoint evaluation reports WAL-nonblocking visibility via `ChokeEvent::WalNonblockingAllowed`; wrapper helpers preserve the exact legacy metric line tails for both `precomputed_false` and `no_gate_configured`. |
 
 ## Quick Census Command
 

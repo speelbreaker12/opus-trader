@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "contract-gap-detector-v1",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "Algorithm (Deterministic)",
+      "category": "missing_fail_closed",
+      "severity": "P1",
+      "description": "The algorithm does not define the fail-closed outcome when visible depth cannot fully cover `OrderQty`, leaving WAP/slippage undefined for an unpriceable order.",
+      "evidence": {
+        "line": 17,
+        "quote": "2. Compute the Weighted Avg Price (WAP) for `OrderQty`."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add a rule that if cumulative displayed depth on the required side is less than `OrderQty`, LiquidityGate MUST reject before dispatch with an explicit reason and matching AT."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "Algorithm (Deterministic)",
+      "category": "gate_interaction_gap",
+      "severity": "P2",
+      "description": "The staleness pre-check omits replace-order placement from the fallback branch, even though the normative rule and later ATs require replace intents to use the same fallback/no-price handling.",
+      "evidence": {
+        "line": 15,
+        "quote": "reject per the rules above (OPEN \u2192 `Rejected(LiquidityGateNoL2)`; CLOSE/HEDGE \u2192 \u00a73.1 fallback)."
+      },
+      "proposed_fix_type": "mechanical",
+      "proposed_fix": "Change the step-0 parenthetical to include replace in the fallback branch: `CLOSE/HEDGE/replace \u2192 \u00a73.1 fallback`."
+    }
+  ]
+}

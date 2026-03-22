@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HOOK="$ROOT/.claude/hooks/pr-review-gate-hook.sh"
@@ -95,6 +97,8 @@ write_git_wrapper() {
   cat > "$path" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 if [[ "\${1:-}" == "rev-parse" && "\${2:-}" == "${ambiguous_short}^{commit}" ]]; then
   echo "fatal: ambiguous short SHA" >&2
   exit 128
@@ -115,6 +119,7 @@ mkdir -p "$repo"
 git -C "$repo" init -q
 git -C "$repo" config user.name "Test User"
 git -C "$repo" config user.email "test@example.com"
+git -C "$repo" config core.hooksPath /dev/null
 git -C "$repo" checkout -qb "story/S1-pr-gate-hook"
 
 echo "seed" > "$repo/sample.txt"
@@ -125,6 +130,7 @@ branch_name="$(git -C "$repo" rev-parse --abbrev-ref HEAD)"
 safe_branch="${branch_name//\//_}"
 marker_dir="$repo/artifacts/pr-review-gate"
 marker_path="$marker_dir/${safe_branch}.json"
+legacy_marker_path="$marker_dir/${safe_branch}.review-stack.json"
 external_marker_path="$marker_dir/${safe_branch}.external.json"
 mkdir -p "$marker_dir"
 
@@ -135,11 +141,30 @@ write_review_marker "$marker_path" "PASS" "head" "$(git -C "$repo" rev-parse --s
   expect_pass "fresh marker permits gh pr create with --repo" "gh --repo owner/repo pr create --title ready"
 )
 
+rm -f "$marker_path"
+write_review_marker "$legacy_marker_path" "PASS" "head" "$(git -C "$repo" rev-parse --short HEAD)"
+
+(
+  cd "$repo"
+  expect_pass "legacy review-stack marker filename still permits gh pr create" "gh pr create --title ready"
+)
+
+write_review_marker "$marker_path" "FAIL" "head" "$(git -C "$repo" rev-parse --short HEAD)"
+
+(
+  cd "$repo"
+  expect_block "canonical marker verdict wins over legacy fallback" "verdict for 'story/S1-pr-gate-hook' is 'FAIL'" "gh pr create --title ready"
+)
+
+rm -f "$legacy_marker_path"
+rm -f "$marker_path"
+
 target_repo="$tmp_dir/target-repo"
 mkdir -p "$target_repo"
 git -C "$target_repo" init -q
 git -C "$target_repo" config user.name "Target User"
 git -C "$target_repo" config user.email "target@example.com"
+git -C "$target_repo" config core.hooksPath /dev/null
 git -C "$target_repo" checkout -qb "story/S2-pr-gate-hook"
 echo "target" > "$target_repo/target.txt"
 git -C "$target_repo" add target.txt
@@ -326,6 +351,7 @@ write_git_wrapper "$mock_git_dir/git" "$real_git" "$new_head_short"
 )
 
 grep -Fq 'git rev-parse HEAD' "$ROOT/.claude/commands/review-stack.md" || fail "review-stack marker writer should use full HEAD SHA"
+grep -Fq 'artifacts/pr-review-gate/${SAFE_BRANCH}.json' "$ROOT/.claude/commands/review-stack.md" || fail "review-stack marker writer should use the canonical PR gate marker path"
 grep -Fq 'git rev-parse HEAD' "$ROOT/.claude/commands/external-review.md" || fail "external-review marker writer should use full HEAD SHA"
 grep -Fq 'python3 - "$marker_path" "$field_name" <<'"'"'PY'"'"'' "$HOOK" || fail "marker reader should keep python on a single-quoted heredoc"
 grep -Fq 'python3 - "$request_payload" "$default_cwd" 2>/dev/null <<'"'"'PY'"'"'' "$HOOK" || fail "command parser should keep python on a single-quoted heredoc"

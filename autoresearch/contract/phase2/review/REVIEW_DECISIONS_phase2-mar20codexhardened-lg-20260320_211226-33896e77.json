@@ -1,0 +1,22 @@
+{
+  "run_id": "phase2-mar20codexhardened-lg-20260320_211226-33896e77",
+  "reviewed_at": "2026-03-20T22:55:59Z",
+  "contract_file_hash": "09b3885d5af5f1d3ede265940ff2441e8964042cbfb8abe1d9b2af183c76ff55",
+  "proposals_file_hash": "5a79a7d889afd11fae35a908395a3b91bac73ff9258428696f2ce8761fbd1ea3",
+  "decisions": [
+    {
+      "proposal_id": "P-001",
+      "decision": "pending_scope_review",
+      "reviewer": "human+codex",
+      "reason_code": "reject_code_semantics_unsettled",
+      "notes": "The shallow-book fail-closed gap is real, but choosing `Rejected(ExpectedSlippageTooHigh)` as the canonical outcome needs a broader LiquidityGate reason-code review."
+    },
+    {
+      "proposal_id": "P-002",
+      "decision": "accepted",
+      "reviewer": "human+codex",
+      "reason_code": "algorithm_prose_alignment",
+      "notes": "Algorithm step 0 omits replace handling already stated in the normative prose and supported by AT-1265/AT-1266; this is a narrow consistency repair."
+    }
+  ]
+}

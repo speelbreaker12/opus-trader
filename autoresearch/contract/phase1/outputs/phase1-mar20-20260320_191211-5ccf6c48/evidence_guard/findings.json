@@ -1,0 +1,58 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "1.0.0",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "2.2.2 EvidenceGuard",
+      "category": "missing_fail_closed",
+      "severity": "P1",
+      "description": "The contract requires evidence artifacts to be joinable, but the GREEN criteria never define a not-GREEN outcome when linkage keys are missing or mismatched. A non-joinable evidence chain is therefore not fail-closed.",
+      "evidence": {
+        "line": 15,
+        "quote": "The following MUST be writable + joinable for every dispatched open-intent:"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Require any non-joinable evidence artifact chain or missing linkage key to force EvidenceChainState != GREEN, block OPEN intents, and add an AT."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "2.2.2 EvidenceGuard",
+      "category": "stale_input_unspecified",
+      "severity": "P1",
+      "description": "The freshness rule defines the older-than-threshold case but does not say what happens if `evidenceguard_counters_last_update_ts_ms` is missing or unparseable. That leaves stale-counter handling ambiguous in a fail-closed path.",
+      "evidence": {
+        "line": 33,
+        "quote": "Required counters MUST be fresh: if `now_ms - evidenceguard_counters_last_update_ts_ms` > `evidenceguard_counters_max_age_ms`"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "State that missing or unparseable `evidenceguard_counters_last_update_ts_ms` forces EvidenceChainState != GREEN and add an AT."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "2.2.2 EvidenceGuard",
+      "category": "gate_interaction_gap",
+      "severity": "P1",
+      "description": "The permission rule mixes CLOSE/HEDGE/CANCEL with a condition phrased only for cancel/replace and separately references Kill semantics. That leaves the exact allow/block behavior for HEDGE and CLOSE under `EvidenceChainState != GREEN` versus `TradingMode::Kill` ambiguous.",
+      "evidence": {
+        "line": 24,
+        "quote": "CLOSE / HEDGE / CANCEL intents are allowed only if the cancel/replace is NOT risk-increasing per \u00a72.2.5, and only when not constrained by \u00a72.2.3 Kill semantics (risk-reducing only)."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Split this into an explicit permission matrix for CLOSE, HEDGE, CANCEL, and cancel/replace when EvidenceChainState != GREEN, including the Kill-active case, and add an AT."
+    },
+    {
+      "finding_id": "F-004",
+      "section": "2.2.2 EvidenceGuard",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "The spec explicitly requires the bounded-queue-full WAL enqueue failure path to increment `wal_write_errors`, but the acceptance tests never prove that path causes the counter increment and EvidenceGuard trip.",
+      "evidence": {
+        "line": 34,
+        "quote": "`wal_write_errors` MUST increment on any failure to satisfy RecordedBeforeDispatch for an OPEN intent, including WAL enqueue failure (bounded queue full)"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an AT for bounded-queue-full WAL enqueue failure causing `wal_write_errors` to increment and OPEN intents to block."
+    }
+  ]
+}

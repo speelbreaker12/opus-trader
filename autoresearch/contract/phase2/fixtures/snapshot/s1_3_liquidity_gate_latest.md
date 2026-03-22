@@ -12,7 +12,7 @@ OPEN rejections due to missing/unparseable/stale L2 MUST use `Rejected(Liquidity
 
 **Algorithm (Deterministic):**
 
-0. **Staleness pre-check:** If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`, reject per the rules above (OPEN → `Rejected(LiquidityGateNoL2)`; CLOSE/HEDGE → §3.1 fallback). Do not proceed to book walk.
+0. **Staleness pre-check:** If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`, reject per the rules above (OPEN → `Rejected(LiquidityGateNoL2)`; CLOSE/HEDGE/replace order placement → §3.1 fallback, with `Rejected(EmergencyCloseNoPrice)` and `RiskState::Degraded` if no valid fallback price source exists). Do not proceed to book walk.
 1. Walk the L2 book on the correct side (asks for buy, bids for sell).
 2. Compute the Weighted Avg Price (WAP) for `OrderQty`.
 3. Compute expected slippage: `slippage_bps = abs(WAP - BestPrice) / BestPrice * 10_000`

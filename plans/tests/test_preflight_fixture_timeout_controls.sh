@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SOURCE_PREFLIGHT="$ROOT/plans/preflight.sh"
@@ -164,6 +166,8 @@ chmod +x "$repo/scripts/check_skills_index.py"
 cat > "$repo/plans/tests/test_dummy_sleep.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 if [[ -n "${DUMMY_EXIT_CODE:-}" ]]; then
   exit "$DUMMY_EXIT_CODE"
@@ -179,6 +183,8 @@ write_pass_script() {
   cat > "$path" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 exit 0
 EOF
   chmod +x "$path"
@@ -205,6 +211,7 @@ EOF
   git init -q
   git config user.name "fixture"
   git config user.email "fixture@example.com"
+  git config core.hooksPath /dev/null
 )
 
 invalid_wait_mode_log="$tmp_dir/invalid_wait_mode.log"
@@ -248,6 +255,8 @@ mkdir -p "$mock_fast_hash_git_bin"
 cat > "$mock_fast_hash_git_bin/git" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 real_git="$(
   command -v git
 )"
@@ -333,6 +342,8 @@ mkdir -p "$mock_bin"
 cat > "$mock_bin/timeout" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 limit="${1:-}"
 shift || true
@@ -423,6 +434,8 @@ timeout_invocation_log="$tmp_dir/mock_timeout_invocations.log"
 cat > "$mock_bin/timeout" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 printf '%s\n' "\$1" >> "$timeout_invocation_log"
 shift
 "\$@"
@@ -454,6 +467,8 @@ chmod +x "$parallel_default_script"
 cat > "$repo/plans/tests/test_dummy_sleep.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 if [[ -n "${DUMMY_EXIT_CODE:-}" ]]; then
   exit "$DUMMY_EXIT_CODE"
@@ -505,6 +520,8 @@ mkdir -p "$mock_parallel_bin"
 cat > "$mock_parallel_bin/sysctl" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 if [[ "${1:-}" == "-n" && "${2:-}" == "hw.ncpu" ]]; then
   printf '2\n'
@@ -543,6 +560,8 @@ parallel_max="$(cat "$parallel_state_dir/max" 2>/dev/null || echo 0)"
 cat > "$mock_parallel_bin/sysctl" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 if [[ "${1:-}" == "-n" && "${2:-}" == "hw.ncpu" ]]; then
   printf '64\n'

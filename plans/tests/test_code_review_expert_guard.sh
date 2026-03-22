@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GUARD_SRC="$ROOT/plans/code_review_expert_guard.sh"
@@ -25,6 +27,7 @@ cd "$repo"
 git init -q
 git config user.name "Test User"
 git config user.email "test@example.com"
+git config core.hooksPath /dev/null
 
 echo "base" > README.md
 git add README.md

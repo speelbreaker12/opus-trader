@@ -1,0 +1,1 @@
+Use the `/obsidian-workflow` skill from `SKILLS/obsidian-workflow.md` to route the current session to the correct project, worktree, and Obsidian page.

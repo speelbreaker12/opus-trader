@@ -87,6 +87,7 @@ quick_tokens=(
   rust_tests_quick
   rust_tests_smoke
   execution_facade_lint
+  graybox_telemetry_lint
   python_ruff_check
   python_pytest_quick
   node_lint
@@ -223,6 +224,7 @@ rust_quick_tokens=(
   'run_mode_selected_rust_tests'
   'run_smoke_cargo_test_gate "rust_tests_smoke"'
   'run_logged_or_exit "execution_facade_lint"'
+  'run_logged_or_exit "graybox_telemetry_lint"'
 )
 RUST_GATES_CONTENT="$(<"$RUST_GATES")"
 for token in "${rust_quick_tokens[@]}"; do
@@ -236,6 +238,7 @@ rust_full_tokens=(
   '"repo_contract_requires_cargo_doctests_and_shared_state"'
   'run_smoke_cargo_test_gate "rust_tests_smoke"'
   'run_logged_or_exit "execution_facade_lint"'
+  'run_logged_or_exit "graybox_telemetry_lint"'
 )
 for token in "${rust_full_tokens[@]}"; do
   require_code_token "$RUST_GATES_CONTENT" "$RUST_GATES" "$token"
