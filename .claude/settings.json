@@ -21,6 +21,12 @@
           {
             "type": "command",
             "command": "bash .claude/hooks/obsidian-context-hook.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/github-comment-review.sh",
+            "timeout": 30,
+            "statusMessage": "Checking GitHub comments..."
           }
         ]
       }
