@@ -40,6 +40,8 @@ Review-ready on branch `project/workflow-facade-leak-guard-v2` with PR #225 open
 - `e5e906df` — 2026-03-20 — isolate pre-push hook git env, add regression coverage, and recover clean push/PR flow on the v2 branch.
 - `551dc1e8` — 2026-03-20 — record PR boundary metadata after opening PR #225.
 
+- address PR #225 review comments: capture stderr in test, deduplicate allowlist, add python3 check, ASCII success message, document false-positive limitation.
+
 ## Key Files
 - plans/lint_facade_public_modules.sh
 - plans/tests/test_lint_facade_public_modules.sh
@@ -54,6 +56,7 @@ Review-ready on branch `project/workflow-facade-leak-guard-v2` with PR #225 open
 
 ## Debriefs
 - [[Workflow Facade Leak Guard 2026-03-20]]
+- [[Workflow Facade Leak Guard 2026-03-21]]
 
 ## Log
 ### 2026-03-20
@@ -69,3 +72,6 @@ Review-ready on branch `project/workflow-facade-leak-guard-v2` with PR #225 open
 - Identified the root cause as pre-push hook git environment leakage into verify fixture repos, added `plans/tests/test_pre_push_hook_env_isolation.sh`, and patched `.githooks/pre-push` to clear hook-scoped `GIT_*` variables before invoking `plans/verify.sh`.
 - Verified the new env-isolation regression and the updated preflight/allowlist coverage; repo-wide quick verify still hit an existing `test_lint_execution_facade.sh` timeout while the tree was dirty.
 - Refreshed `project/workflow-facade-leak-guard-v2` against `origin/main` with a no-op rebase, pushed the clean branch successfully, and opened PR #225: https://github.com/speelbreaker12/opus-trader/pull/225.
+### 2026-03-21
+- Addressed 5 unresolved PR #225 review comments: added stderr capture in pre-push hook test, deduplicated facade allowlist to single source of truth, added python3 availability check, replaced non-ASCII checkmark with ASCII, documented `pub mod` string-literal false-positive limitation with mitigation filter.
+- Replaced shallow string-prefix heuristic with full `strip_strings_and_comments()` preprocessor in the facade lint Python script. Now properly handles multi-line raw strings (`r#"..."#`), byte strings, regular strings, line comments, and block comments before scanning for `pub mod`. Fixed line-number off-by-one from regex `^` anchor.
