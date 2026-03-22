@@ -21,14 +21,18 @@ if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
 fi
 
 # 1. Block new planning artifacts in banned repo paths
-NEW_PLANNING=$(git diff --cached --name-only --diff-filter=A | grep -E "^(reviews/|docs/superpowers/specs/|docs/superpowers/plans/)" || true)
+# Block new files in banned planning paths (exempt premortems/reconciliations — active workflow)
+NEW_BANNED=$(git diff --cached --name-only --diff-filter=A | grep -E "^(obsidian/|docs/superpowers/specs/|docs/superpowers/plans/)" || true)
+NEW_REVIEWS=$(git diff --cached --name-only --diff-filter=A | grep -E "^reviews/" | grep -vE "^reviews/(premortems|reconciliations)/" || true)
+NEW_PLANNING="${NEW_BANNED}${NEW_REVIEWS:+$'\n'}${NEW_REVIEWS}"
+NEW_PLANNING=$(echo "$NEW_PLANNING" | sed '/^$/d')
 if [[ -n "$NEW_PLANNING" ]]; then
   echo ""
   echo "ERROR: New planning artifacts must go in the external Obsidian vault, not the repo."
   echo "Blocked files:"
   echo "$NEW_PLANNING"
   echo ""
-  echo "Write to ~/Desktop/obsidian/ instead. See AGENTS.md 'Canonical Artifact Policy'."
+  echo "Write to ~/Desktop/obsidian/ instead. See AGENTS.md 'Workflow Policy'."
   exit 1
 fi
 
