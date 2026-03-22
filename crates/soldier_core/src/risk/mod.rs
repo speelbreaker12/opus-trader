@@ -4,8 +4,15 @@
 //! pending-exposure evaluation, global exposure budget evaluation,
 //! instrument state, and `RiskState`.
 //!
-//! Public API lives in `api.rs`.
-//! All other child modules are intentionally private implementation details.
+//! **Public:** `RiskState`, fee evaluation, margin gate, pending exposure,
+//! exposure budget, `InstrumentState`.
+//!
+//! **Private:** `exposure_budget`, `fees`, `instrument_state`,
+//! `margin_gate`, `pending_exposure`, `state`.
+//!
+//! **Tests:** unit tests alongside implementation files; facade completeness
+//! in `facade_completeness_contract_tests.rs`; integration tests under
+//! `tests/` covering the public risk surface.
 
 mod api;
 mod exposure_budget;
