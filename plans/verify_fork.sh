@@ -322,6 +322,17 @@ parallel_group_reset() {
   PARALLEL_WAIT_NEXT_INDEX=0
 }
 
+# Invariant: PARALLEL_GATE_WAIT_RCS[i] always corresponds to
+# PARALLEL_GATE_NAMES[i].  This holds because:
+#   1. Gates append to NAMES and ACTIVE_PIDS in the same order.
+#   2. parallel_wait_oldest pops ACTIVE_PIDS[0] (FIFO) and stores
+#      the result at WAIT_RCS[WAIT_NEXT_INDEX], then increments.
+#   3. FIFO pop order == insertion order == NAMES order.
+# When VERIFY_PARALLEL_JOBS < group size, start_parallel_gate calls
+# parallel_wait_oldest to free a slot BEFORE appending the new gate,
+# so the wait index stays aligned with the gate index.
+# finish_parallel_group_or_exit prefers the .rc artifact file over
+# WAIT_RCS as the primary source; WAIT_RCS is a fallback only.
 parallel_wait_oldest() {
   local pid=""
   local errexit=0
