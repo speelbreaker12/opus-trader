@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
-# Warn if pushing without updating the external Obsidian vault project page.
+# Warn if committing or pushing without updating the external Obsidian vault project page.
 # Soft gate — warns but does not block (exit 0 always).
 
-# Only trigger on git push commands
 INPUT="$(cat)"
 COMMAND="$(echo "$INPUT" | grep -o '"command":"[^"]*"' | head -1 | sed 's/"command":"//;s/"$//' 2>/dev/null || true)"
 if [[ -z "$COMMAND" ]]; then
   COMMAND="$(echo "$INPUT" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("command",""))' 2>/dev/null || true)"
 fi
 
-# Only check on git push
-echo "$COMMAND" | grep -qE '\bgit\s+push\b' || exit 0
+# Only check on git commit or git push
+IS_COMMIT=false
+IS_PUSH=false
+echo "$COMMAND" | grep -qE '\bgit\s+commit\b' && IS_COMMIT=true
+echo "$COMMAND" | grep -qE '\bgit\s+push\b' && IS_PUSH=true
+$IS_COMMIT || $IS_PUSH || exit 0
 
 VAULT="${OBSIDIAN_VAULT_PATH:-$HOME/Desktop/obsidian}"
 ACTIVE_FILE="$VAULT/index/ACTIVE_PROJECT.md"
@@ -30,13 +33,21 @@ TODAY="$(date +%Y-%m-%d)"
 FILE_DATE="$(stat -f '%Sm' -t '%Y-%m-%d' "$PROJECT_FILE" 2>/dev/null || stat -c '%y' "$PROJECT_FILE" 2>/dev/null | cut -d' ' -f1)"
 
 if [[ "$FILE_DATE" != "$TODAY" ]]; then
+  if $IS_COMMIT; then
+    ACTION="committing"
+    HINT="Update ## Log and ## Commits in the project page."
+  else
+    ACTION="pushing"
+    HINT="Update ## Log, ## Commits, and ## Current State before pushing."
+  fi
   echo ""
   echo "WARNING: Obsidian project page not updated today."
   echo "  Project: $PROJECT_NAME"
   echo "  File:    $PROJECT_FILE"
   echo "  Last modified: $FILE_DATE"
   echo ""
-  echo "  Consider updating ## Log, ## Commits, and ## Current State before pushing."
+  echo "  You are $ACTION but the project page is stale."
+  echo "  $HINT"
   echo ""
 fi
 
