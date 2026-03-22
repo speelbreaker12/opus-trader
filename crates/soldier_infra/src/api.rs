@@ -3,8 +3,9 @@
 //! This file defines the intended public surface for `soldier_infra`.
 //! Symbols not re-exported here remain implementation details.
 //!
-//! **Public:** bootstrap + storage init, gate/config resolution, WAL ledger
-//! + trade-ID registry, Deribit adapter types, legacy WAL durability helpers.
+//! **Public:** bootstrap + storage init, `infra_bootstrapped()`, gate/config
+//! resolution, WAL ledger + trade-ID registry, Deribit adapter types,
+//! legacy WAL durability helpers.
 //!
 //! **Private:** `bootstrap`, `config`, `store`, `deribit`, `wal`.
 //!
@@ -14,7 +15,7 @@
 
 pub use super::bootstrap::{
     AcknowledgedBootstrap, BootstrapResult, FullBootstrapConfig, FullBootstrapResult,
-    StorageConfig, bootstrap_full, bootstrap_storage,
+    StorageConfig, bootstrap_full, bootstrap_storage, infra_bootstrapped,
 };
 pub use super::config::{
     ALL_PARAMS, ConfigParam, EXPECTED_PARAM_COUNT, GateConfig, MissingConfigError,
