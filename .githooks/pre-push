@@ -45,17 +45,80 @@ while read -r _local_ref _local_sha remote_ref _remote_sha; do
 
   ./plans/project_scope_guard.sh push --branch "$local_branch" --head "$_local_sha"
 
+  # Post-rebase frontmatter integrity check — hard gate.
+  # Catches silent clobber of branch/base/scope_paths after rebase.
+  if [[ -x ./plans/post_rebase_frontmatter_check.sh ]]; then
+    ./plans/post_rebase_frontmatter_check.sh --branch "$local_branch"
+  fi
+
+  # Code-review-expert attestation — enforced at publish boundary.
+  # Skipped for branches with no significant (crates/scripts) changes.
+  branch_base_for_class="$(git merge-base origin/main HEAD 2>/dev/null || true)"
+  has_significant_changes=0
+  if [[ -n "$branch_base_for_class" ]]; then
+    if git diff --name-only "${branch_base_for_class}...HEAD" | grep -qE '^(crates/|plans/.*\.sh|scripts/|python/)'; then
+      has_significant_changes=1
+    fi
+  else
+    has_significant_changes=1  # fail-closed
+  fi
+
+  if [[ "$has_significant_changes" -eq 1 ]]; then
+    if [[ -x ./plans/code_review_expert_guard.sh ]]; then
+      CODE_REVIEW_PUBLISH_MODE=1 ./plans/code_review_expert_guard.sh
+    fi
+  else
+    echo "Skipping code-review-expert guard (no significant changes on branch)"
+  fi
+
   if [[ "${SKIP_PRE_PUSH_VERIFY:-0}" == "1" ]]; then
-    echo "WARN: SKIP_PRE_PUSH_VERIFY=1, skipping verification"
+    echo "WARN: SKIP_PRE_PUSH_VERIFY=1, skipping verify.sh (scope/frontmatter/review gates already ran)"
+    continue
+  fi
+
+  # SKIP_VERIFY_ONLY: skip verify.sh but keep scope/frontmatter/code-review gates.
+  # Use when you already ran verify locally and just want a fast push.
+  if [[ "${SKIP_VERIFY_ONLY:-0}" == "1" ]]; then
+    echo "WARN: SKIP_VERIFY_ONLY=1, skipping verify.sh (scope/frontmatter/review gates ran above)"
     continue
   fi
 
   # Main/master push is blocked above — all remaining pushes are feature branches
   echo "Pushing to feature branch: $remote_ref"
-  (
-    # Git hook invocations export repo-bound environment variables that can
-    # redirect fixture-repo git commands back into the active worktree.
-    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_PREFIX
-    "$VERIFY_SH_PATH" quick
-  )
+
+  # Cache-aware skip: if the current tree SHA was already verified in this
+  # session, skip the redundant verify.sh run (~5 min savings).
+  git_dir="$(git rev-parse --git-dir 2>/dev/null || true)"
+  verify_cache="${git_dir:-.git}/.verify-cache"
+  current_tree="$(git rev-parse HEAD^{tree} 2>/dev/null || true)"
+  cached_tree=""
+  if [[ -f "$verify_cache" ]]; then
+    cached_tree="$(cat "$verify_cache" 2>/dev/null || true)"
+  fi
+
+  if [[ -n "$current_tree" && "$current_tree" == "$cached_tree" ]]; then
+    echo "Skipping verify.sh — tree $current_tree already verified (cached)"
+  else
+    # Change-class skip: if the branch has no crates/ changes vs origin/main,
+    # skip the full cargo verify (~5 min). Only workflow/docs/obsidian changed.
+    branch_base="$(git merge-base origin/main HEAD 2>/dev/null || true)"
+    has_crate_changes=0
+    if [[ -n "$branch_base" ]]; then
+      if git diff --name-only "${branch_base}...HEAD" | grep -q '^crates/'; then
+        has_crate_changes=1
+      fi
+    else
+      has_crate_changes=1  # fail-closed: can't determine, run verify
+    fi
+
+    if [[ "$has_crate_changes" -eq 0 ]]; then
+      echo "Skipping verify.sh — no crates/ changes on branch (docs/workflow only)"
+    else
+      "$VERIFY_SH_PATH" quick
+      # Cache the verified tree SHA on success
+      if [[ -n "$current_tree" && -n "$git_dir" ]]; then
+        printf '%s\n' "$current_tree" > "$verify_cache"
+      fi
+    fi
+  fi
 done

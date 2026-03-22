@@ -50,7 +50,11 @@ check_script "plans/workflow_quick_step.sh"
 check_script "plans/toggle_policy_check.sh"
 check_script "plans/artifact_lint.sh"
 check_script "plans/bidi_control_guard.sh"
+check_script "plans/lint_graybox_telemetry.sh"
+check_script "plans/tests/test_lint_graybox_telemetry.sh"
 check_script "plans/lib/status_reason_codegen_gate.sh"
+
+bash plans/tests/test_lint_graybox_telemetry.sh
 
 ./plans/workflow_contract_gate.sh
 ./plans/verify.sh quick

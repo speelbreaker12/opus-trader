@@ -390,46 +390,53 @@ EOF
 fi
 
 SAFE_BRANCH="${BRANCH//\//_}"
-MARKER="$(resolve_marker_path "${SAFE_BRANCH}.json" "$REPO_ROOT" "$COMMAND_CWD" "$HEAD_SHA" 1)"
+PRIMARY_MARKER="$(resolve_marker_path "${SAFE_BRANCH}.json" "$REPO_ROOT" "$COMMAND_CWD" "$HEAD_SHA" 1)"
+LEGACY_MARKER="$(resolve_marker_path "${SAFE_BRANCH}.review-stack.json" "$REPO_ROOT" "$COMMAND_CWD" "$HEAD_SHA" 1)"
+if [ -f "$PRIMARY_MARKER" ]; then
+    MARKER="$PRIMARY_MARKER"
+elif [ -f "$LEGACY_MARKER" ]; then
+    MARKER="$LEGACY_MARKER"
+else
+    MARKER="$PRIMARY_MARKER"
+fi
 EXT_MARKER="$(resolve_marker_path "${SAFE_BRANCH}.external.json" "$REPO_ROOT" "$COMMAND_CWD" "$HEAD_SHA" 0)"
 
-# ── review-stack gate (BLOCKING) ──────────────────────────────────────────
+# ── review-stack gate (BLOCKING at PR creation) ────────────────────────────
 if [ ! -f "$MARKER" ]; then
     cat >&2 <<EOF
 GATE BLOCKED: No review-stack result for branch '${BRANCH}'.
-Run /review-stack first. It must complete with PASS or CONDITIONAL_PASS.
-Expected marker: ${MARKER}
+Run /review-stack before creating the PR. Expected marker: ${MARKER}
 EOF
     exit 2
-fi
+else
+    VERDICT="$(read_marker_field "$MARKER" verdict)"
+    MARKER_HEAD="$(read_marker_head "$MARKER")"
 
-VERDICT="$(read_marker_field "$MARKER" verdict)"
-MARKER_HEAD="$(read_marker_head "$MARKER")"
+    [ -n "$VERDICT" ] || VERDICT="UNKNOWN"
 
-[ -n "$VERDICT" ] || VERDICT="UNKNOWN"
-
-if [ "$VERDICT" != "PASS" ] && [ "$VERDICT" != "CONDITIONAL_PASS" ]; then
-    cat >&2 <<EOF
+    if [ "$VERDICT" != "PASS" ] && [ "$VERDICT" != "CONDITIONAL_PASS" ]; then
+        cat >&2 <<EOF
 GATE BLOCKED: review-stack verdict for '${BRANCH}' is '${VERDICT}'.
-Must be PASS or CONDITIONAL_PASS. Re-run /review-stack and fix all findings.
+Fix findings and re-run /review-stack before creating the PR.
 EOF
-    exit 2
-fi
+        exit 2
+    fi
 
-if [ -z "$MARKER_HEAD" ]; then
-    cat >&2 <<EOF
+    if [ -z "$MARKER_HEAD" ]; then
+        cat >&2 <<EOF
 GATE BLOCKED: review-stack marker for '${BRANCH}' is missing head/head_commit.
-Re-run /review-stack for the current branch head ${HEAD_SHA}.
+Re-run /review-stack on the current head before creating the PR.
 EOF
-    exit 2
-fi
+        exit 2
+    fi
 
-if ! marker_head_matches_current "$MARKER_HEAD" "$HEAD_SHA"; then
-    cat >&2 <<EOF
+    if ! marker_head_matches_current "$MARKER_HEAD" "$HEAD_SHA"; then
+        cat >&2 <<EOF
 GATE BLOCKED: review-stack marker for '${BRANCH}' targets HEAD '${MARKER_HEAD}' but current HEAD is '${HEAD_SHA}'.
-Re-run /review-stack for the current branch head before creating the PR.
+Re-run /review-stack on the current head before creating the PR.
 EOF
-    exit 2
+        exit 2
+    fi
 fi
 
 if [ -x "$REPO_ROOT/plans/project_scope_guard.sh" ] && [ -d "$REPO_ROOT/obsidian/Projects" ]; then

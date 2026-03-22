@@ -33,6 +33,9 @@ chmod +x "$repo/plans/verify_gate_contract_check.sh"
 verify_file="$repo/plans/verify_fork.sh"
 verify_file_backup="$tmp_dir/verify_fork.original.sh"
 cp "$verify_file" "$verify_file_backup"
+rust_gates_file="$repo/plans/lib/rust_gates.sh"
+rust_gates_file_backup="$tmp_dir/rust_gates.original.sh"
+cp "$rust_gates_file" "$rust_gates_file_backup"
 gate_check_file="$repo/plans/verify_gate_contract_check.sh"
 
 mutate_verify_file() {
@@ -57,6 +60,7 @@ PY
 
 run_expect_missing_token() {
   local expected_token="$1"
+  local expected_file="$2"
   local output=""
   local rc=0
   local expected_line=""
@@ -72,7 +76,7 @@ run_expect_missing_token() {
 
   [[ "$rc" -eq 1 ]] || fail "expected verify gate check to fail with rc=1, got $rc"
 
-  expected_line="FAIL: missing code token '$expected_token' in plans/verify_fork.sh"
+  expected_line="FAIL: missing code token '$expected_token' in $expected_file"
   first_line="$(printf '%s\n' "$output" | head -n1)"
   [[ "$first_line" == "$expected_line" ]] \
     || fail "unexpected failure line: '$first_line' (expected '$expected_line')"
@@ -108,7 +112,7 @@ mutate_verify_file "$verify_file" \
   'run_logged_or_exit "contract_review_validate"' \
   'run_logged_or_exit "__removed_contract_review_validate"'
 
-run_expect_missing_token 'run_logged_or_exit "contract_review_generate"'
+run_expect_missing_token 'run_logged_or_exit "contract_review_generate"' "plans/verify_fork.sh"
 
 # Case B: remove only the second ordered verify token.
 # Must keep exact failure message contract unchanged.
@@ -117,6 +121,16 @@ mutate_verify_file "$verify_file" \
   'run_logged_or_exit "contract_review_validate"' \
   'run_logged_or_exit "__removed_contract_review_validate"'
 
-run_expect_missing_token 'run_logged_or_exit "contract_review_validate"'
+run_expect_missing_token 'run_logged_or_exit "contract_review_validate"' "plans/verify_fork.sh"
+
+# Case C: remove the graybox telemetry lint Rust gate token.
+# Must fail on the rust gate script so new workflow contract tokens stay self-proving.
+cp "$verify_file_backup" "$verify_file"
+cp "$rust_gates_file_backup" "$rust_gates_file"
+mutate_verify_file "$rust_gates_file" \
+  'run_logged_or_exit "graybox_telemetry_lint"' \
+  'run_logged_or_exit "__removed_graybox_telemetry_lint"'
+
+run_expect_missing_token 'run_logged_or_exit "graybox_telemetry_lint"' "plans/lib/rust_gates.sh"
 
 echo "PASS: verify gate contract check batching"

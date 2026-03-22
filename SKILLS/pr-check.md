@@ -1,14 +1,16 @@
-# SKILL: /pr-check (Review Comments → Resolve Conflicts → Merge → Sync)
+# SKILL: /pr-check (Triage + Fix Open PRs)
 
 > **Canonical version.** The `commit-commands` plugin also registers `pr-check` — that is a generic fallback. This SKILLS/ file is the project-specific version with opus-trader conventions (conflict resolution bias, dependency ordering). Prefer this one.
 
 ## Purpose
-Scan all open PRs, surface review comments and merge conflicts, resolve them, merge approved PRs, and sync local main.
+Scan all open PRs, surface review comments and merge conflicts, resolve them, and make PRs ready for merge.
+
+> **Scope note:** This skill triages and fixes PRs. To merge a PR, use /merge-cleanup. To push updates, use /push-pr.
 
 ## When to use
-- After `/commit` + `/push-pr` to shepherd PRs to completion
+- After `/commit` + `/push-pr` to shepherd PRs toward merge-readiness
 - Periodic housekeeping to keep PRs moving
-- When you want a single command to clear your PR queue
+- When you want a single command to triage your PR queue
 
 ## Process
 
@@ -144,49 +146,9 @@ EOF
 git push
 ```
 
-### 5) Merge Approved PRs
-For each PR that is:
-- Review decision: APPROVED (or no reviewers required)
-- CI checks: passing
-- No merge conflicts
-
-**Ask the user** which PRs to merge, then:
-```bash
-gh pr merge <number> --merge --delete-branch
+### 5) Final Report
 ```
-
-Rules:
-- Default to merge commit (not squash/rebase) unless user specifies otherwise
-- Delete the remote branch after merge
-- Process PRs in dependency order if branches are stacked
-
-### 6) Sync Local Main
-After all merges complete:
-```bash
-git checkout main
-git pull origin main
-```
-
-If the user was on a feature branch that got merged:
-- Inform them the branch was deleted remotely
-- Suggest which branch to work on next
-
-If there are remaining open PRs based on main:
-```bash
-# Rebase remaining PR branches onto updated main
-git checkout <remaining-branch>
-git rebase origin/main
-git push --force-with-lease
-```
-
-**Ask before rebasing** — never force-push without confirmation.
-
-### 7) Final Report
-```
-## PR Shepherd Summary
-
-### Merged
-- #42 feat: add widget → merged to main ✓
+## PR Triage Summary
 
 ### Updated (comments addressed)
 - #38 fix: cache bug → pushed review fixes, awaiting re-review
@@ -196,18 +158,14 @@ git push --force-with-lease
 
 ### Still Open
 - #35 refactor: auth flow → waiting on CI
-
-### Local
-- main synced to <sha>
-- Current branch: <branch>
+- #42 feat: add widget → APPROVED, ready for /merge-cleanup
 ```
 
 ## Hard Constraints
-- Never merge a PR without user confirmation
+- Never merge — use /merge-cleanup for that
 - Never close a PR without explicit user confirmation (step 1.5)
 - Never force-push without user confirmation (use `--force-with-lease` when approved)
 - Never dismiss reviews — only address them
-- Never merge PRs with failing CI unless user explicitly overrides
 - Never resolve conflicts by deleting the PR's changes — preserve intent
 - Always show conflict resolutions to the user before committing
 - Process stacked PRs in dependency order (base first)

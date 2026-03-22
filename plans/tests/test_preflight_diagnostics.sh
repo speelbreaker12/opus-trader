@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SOURCE_PREFLIGHT="$ROOT/plans/preflight.sh"
@@ -46,6 +48,8 @@ chmod +x "$repo/plans/preflight.sh"
 cat > "$repo/plans/tests/test_dummy_pass.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 exit 0
 EOF
 chmod +x "$repo/plans/tests/test_dummy_pass.sh"
@@ -55,6 +59,8 @@ write_pass_script() {
   cat > "$path" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+# Neutralize GIT_DIR leak from parent (pre-push hook sets GIT_DIR)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY 2>/dev/null || true
 exit 0
 EOF
   chmod +x "$path"
@@ -87,6 +93,7 @@ EOF
   git init -q
   git config user.name "fixture"
   git config user.email "fixture@example.com"
+  git config core.hooksPath /dev/null
   git add .
   git commit -qm "fixture"
 )
@@ -128,5 +135,26 @@ jq -e '.cache_file == ".cache/preflight_fixtures_smoke.hash"' "$diag" >/dev/null
 grep -Fq \
   'preflight diagnostics: fixture_mode=smoke tests=1 cache=miss hash=fallback_scan reasons=scoped_untracked_files_present,cache_file_missing' \
   "$run_log" || fail "missing diagnostics summary line"
+
+full_verify_artifacts="$tmp_dir/verify_artifacts_full"
+mkdir -p "$full_verify_artifacts"
+full_run_log="$tmp_dir/preflight_full.log"
+
+(
+  cd "$repo"
+  VERIFY_ARTIFACTS_DIR="$full_verify_artifacts" \
+  PREFLIGHT_FIXTURE_MODE=full \
+  PREFLIGHT_PARALLEL_JOBS=3 \
+  PREFLIGHT_FIXTURE_TEST_TIMEOUT=45 \
+  ./plans/preflight.sh >"$full_run_log" 2>&1
+) || fail "preflight full-mode run failed"
+
+full_diag="$full_verify_artifacts/preflight_diagnostics.json"
+[[ -f "$full_diag" ]] || fail "missing full-mode preflight diagnostics artifact"
+jq -e '.fixture_mode == "full"' "$full_diag" >/dev/null || fail "full fixture_mode mismatch"
+jq -e '.fixture_test_count == 1' "$full_diag" >/dev/null || fail "full fixture_test_count mismatch"
+grep -Fq \
+  'preflight diagnostics: fixture_mode=full tests=1 cache=miss hash=fallback_scan reasons=scoped_untracked_files_present,cache_file_missing' \
+  "$full_run_log" || fail "missing full-mode diagnostics summary line"
 
 echo "PASS: preflight diagnostics artifact + summary"

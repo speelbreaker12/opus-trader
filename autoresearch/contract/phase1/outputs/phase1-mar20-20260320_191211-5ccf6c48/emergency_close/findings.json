@@ -1,0 +1,58 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "phase1-contract-gap-detector-v1",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "Algorithm (Deterministic, 3 tries)",
+      "category": "missing_fail_closed",
+      "severity": "P1",
+      "description": "If emergency close still leaves residual exposure after hedge failure or partial hedge fill, the contract only requires logging and does not mandate a fail-closed trading-permission change or open-intent block.",
+      "evidence": {
+        "line": 21,
+        "quote": "log the failure and proceed to step 4 with exposure unchanged;"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Require a fail-closed state transition when `exposure_usd_after > 0`, such as forcing `ReduceOnly`/`Kill` or latching open intents blocked until reconciliation."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "Price Source (Deterministic, fail-closed)",
+      "category": "cross_ref_broken",
+      "severity": "P1",
+      "description": "Freshness gating depends on Appendix A values, but this fixture does not provide a resolvable Appendix A anchor or inline source-of-truth values.",
+      "evidence": {
+        "line": 8,
+        "quote": "(age <= `l2_book_snapshot_max_age_ms`; Appendix A)."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add the referenced Appendix A content or inline the authoritative freshness parameters in this section."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "Algorithm (Deterministic, 3 tries)",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "The contract fixes an exact retry schedule and hard attempt cap, but no acceptance test asserts the specific 3-attempt limit with 5/10/20 tick buffers.",
+      "evidence": {
+        "line": 20,
+        "quote": "buffer doubles each retry: attempt 2 = 10 ticks, attempt 3 = 20 ticks"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an AT that proves emergency close stops after 3 IOC attempts and uses the exact 5/10/20 tick buffer sequence."
+    },
+    {
+      "finding_id": "F-004",
+      "section": "AT-235",
+      "category": "weak_normative",
+      "severity": "P2",
+      "description": "AT-235 uses an approximate success condition for residual exposure, which makes pass/fail subjective across implementations.",
+      "evidence": {
+        "line": 64,
+        "quote": "exposure goes to ~0."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Define a numeric residual-exposure tolerance and measurement basis for AT-235 pass/fail evaluation."
+    }
+  ]
+}

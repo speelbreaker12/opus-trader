@@ -5,10 +5,8 @@
 use super::*;
 use crate::execution::{begin_metrics_test, take_execution_metric_lines, with_intent_trace_ids};
 
-fn metrics_lock() -> std::sync::MutexGuard<'static, ()> {
-    crate::execution::METRICS_TEST_LOCK
-        .lock()
-        .unwrap_or_else(|err| err.into_inner())
+fn metrics_lock() -> crate::execution::MetricsTestGuard {
+    begin_metrics_test()
 }
 
 /// Helper: build a post-only buy input.
@@ -232,6 +230,33 @@ fn test_post_only_inf_best_bid_rejected() {
     assert_eq!(m.reject_total(), 1);
 }
 
+/// -Inf limit_price must be rejected (fail-closed).
+#[test]
+fn test_post_only_neg_inf_limit_price_rejected() {
+    let input = post_only_buy(f64::NEG_INFINITY, Some(100.0));
+    let mut m = PostOnlyMetrics::new();
+    assert_eq!(check_post_only(&input, &mut m), PostOnlyResult::Rejected);
+    assert_eq!(m.reject_total(), 1);
+}
+
+/// -Inf best_ask with finite limit_price must be rejected (fail-closed).
+#[test]
+fn test_post_only_neg_inf_best_ask_rejected() {
+    let input = post_only_buy(99.0, Some(f64::NEG_INFINITY));
+    let mut m = PostOnlyMetrics::new();
+    assert_eq!(check_post_only(&input, &mut m), PostOnlyResult::Rejected);
+    assert_eq!(m.reject_total(), 1);
+}
+
+/// -Inf best_bid with finite limit_price must be rejected (fail-closed).
+#[test]
+fn test_post_only_neg_inf_best_bid_rejected() {
+    let input = post_only_sell(101.0, Some(f64::NEG_INFINITY));
+    let mut m = PostOnlyMetrics::new();
+    assert_eq!(check_post_only(&input, &mut m), PostOnlyResult::Rejected);
+    assert_eq!(m.reject_total(), 1);
+}
+
 /// NaN limit_price + empty book (None) must still be rejected.
 /// Catches check-after-comparison mutation (guard must fire before book check).
 #[test]
@@ -339,6 +364,84 @@ fn test_post_only_graybox_emits_reject_event_without_global_side_effects() {
 }
 
 #[test]
+fn test_post_only_graybox_invalid_limit_price_preserves_context_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = post_only_reject_total();
+    let mut metrics = PostOnlyMetrics::new();
+    let mut events = Vec::new();
+    let input = post_only_buy(f64::NAN, Some(100.0));
+
+    let result = check_post_only_with_events(&input, &mut metrics, &mut events);
+
+    assert_eq!(result, PostOnlyResult::Rejected);
+    assert_eq!(metrics.reject_total(), 1);
+    assert!(matches!(
+        events.as_slice(),
+        [PostOnlyEvent::InvalidLimitPrice { limit_price }, PostOnlyEvent::Reject]
+            if limit_price == "NaN"
+    ));
+    assert_eq!(post_only_reject_total(), before);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_post_only_graybox_invalid_best_ask_preserves_context_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = post_only_reject_total();
+    let mut metrics = PostOnlyMetrics::new();
+    let mut events = Vec::new();
+    let input = post_only_buy(99.0, Some(f64::NAN));
+
+    let result = check_post_only_with_events(&input, &mut metrics, &mut events);
+
+    assert_eq!(result, PostOnlyResult::Rejected);
+    assert_eq!(metrics.reject_total(), 1);
+    assert!(matches!(
+        events.as_slice(),
+        [PostOnlyEvent::InvalidBestAsk { best_ask }, PostOnlyEvent::Reject]
+            if best_ask == "NaN"
+    ));
+    assert_eq!(post_only_reject_total(), before);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_post_only_graybox_invalid_best_bid_preserves_context_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = post_only_reject_total();
+    let mut metrics = PostOnlyMetrics::new();
+    let mut events = Vec::new();
+    let input = post_only_sell(101.0, Some(f64::NAN));
+
+    let result = check_post_only_with_events(&input, &mut metrics, &mut events);
+
+    assert_eq!(result, PostOnlyResult::Rejected);
+    assert_eq!(metrics.reject_total(), 1);
+    assert!(matches!(
+        events.as_slice(),
+        [PostOnlyEvent::InvalidBestBid { best_bid }, PostOnlyEvent::Reject]
+            if best_bid == "NaN"
+    ));
+    assert_eq!(post_only_reject_total(), before);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
 fn test_post_only_graybox_allowed_emits_no_events_or_global_side_effects() {
     let _guard = begin_metrics_test();
     let before = post_only_reject_total();
@@ -361,6 +464,13 @@ fn test_post_only_graybox_allowed_emits_no_events_or_global_side_effects() {
         lines.is_empty(),
         "graybox path must not emit global metric lines: {lines:?}"
     );
+}
+
+#[test]
+fn assert_post_only_event_is_eq() {
+    fn assert_eq_impl<T: Eq>() {}
+
+    assert_eq_impl::<PostOnlyEvent>();
 }
 
 #[test]

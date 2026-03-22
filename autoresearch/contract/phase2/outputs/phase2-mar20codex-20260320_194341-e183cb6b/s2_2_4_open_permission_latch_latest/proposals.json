@@ -1,0 +1,44 @@
+{
+  "generated_at": "2026-03-20T00:00:00-06:00",
+  "validator_version": "phase2-proposals-v1",
+  "proposals": [
+    {
+      "proposal_id": "P-001",
+      "source_finding": "F-001",
+      "source_finding_category": "weak_normative",
+      "section": "2.2.4 Open Permission Latch (Reconcile-Required, Sticky Until Cleared) \u2014 CP-001",
+      "change_type": "new_requirement",
+      "rationale": "Makes the reconciliation epsilon fallback a binding runtime rule at the latch-clear decision point so position drift cannot be masked by a looser implementation.",
+      "status": "pending_scope_review",
+      "dedupe_key": "cp001-position-epsilon-fallback-must",
+      "enforcement_point": "Reconciliation success criteria evaluation before `open_permission_blocked_latch` may clear based on exchange-position versus ledger-fill matching.",
+      "callsite_evidence": "Line 27 states the fallback only as `(default: instrument's `min_amount` or `1e-6` if undefined)`, which describes a default without making the runtime behavior mandatory.",
+      "proposed_text": "- Exchange positions match ledger cumulative fills within `position_reconcile_epsilon`.\n- For reconciliation in this section, runtime MUST set `position_reconcile_epsilon` to the instrument's `min_amount`; if `min_amount` is undefined, runtime MUST use `1e-6`. Runtime MUST NOT use a looser fallback when deciding whether the latch may clear.",
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ -25,4 +25,5 @@\n **Reconciliation success criteria (required):**\n - Ledger inflight intents (non-terminal) match exchange open orders by label (all matched within label disambiguation rules per \u00a71.1.2).\n-- Exchange positions match ledger cumulative fills within `position_reconcile_epsilon` (default: instrument's `min_amount` or `1e-6` if undefined).\n+- Exchange positions match ledger cumulative fills within `position_reconcile_epsilon`.\n+- For reconciliation in this section, runtime MUST set `position_reconcile_epsilon` to the instrument's `min_amount`; if `min_amount` is undefined, runtime MUST use `1e-6`. Runtime MUST NOT use a looser fallback when deciding whether the latch may clear.\n - No missing trades over the last `reconcile_trade_lookback_sec` (default: 300s) as determined by REST `/get_user_trades` query. If the REST query fails (network error, timeout, HTTP error, or unparseable response), reconciliation MUST fail closed \u2014 the latch MUST remain set and OPEN intents MUST remain blocked.\n"
+    },
+    {
+      "proposal_id": "P-002",
+      "source_finding": "F-002",
+      "source_finding_category": "stale_input_unspecified",
+      "section": "2.2.4 Open Permission Latch (Reconcile-Required, Sticky Until Cleared) \u2014 CP-001",
+      "change_type": "new_requirement",
+      "rationale": "Adds fail-closed handling for invalid trade-lookback inputs so a bad window cannot omit recent trades and clear OPEN blocking prematurely.",
+      "status": "proposed",
+      "dedupe_key": "cp001-trade-lookback-invalid-fail-closed",
+      "proposed_text": "- No missing trades over the last `reconcile_trade_lookback_sec` as determined by REST `/get_user_trades` query.\n- If `reconcile_trade_lookback_sec` is unset, non-numeric, or `<= 0`, runtime MUST either normalize it to `300s` before issuing `/get_user_trades` or fail reconciliation and keep `open_permission_blocked_latch == true`; runtime MUST NOT clear the latch using an invalid lookback window.\n- If the REST query fails (network error, timeout, HTTP error, or unparseable response), reconciliation MUST fail closed \u2014 the latch MUST remain set and OPEN intents MUST remain blocked.",
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ -26,4 +26,6 @@\n - Ledger inflight intents (non-terminal) match exchange open orders by label (all matched within label disambiguation rules per \u00a71.1.2).\n - Exchange positions match ledger cumulative fills within `position_reconcile_epsilon` (default: instrument's `min_amount` or `1e-6` if undefined).\n-- No missing trades over the last `reconcile_trade_lookback_sec` (default: 300s) as determined by REST `/get_user_trades` query. If the REST query fails (network error, timeout, HTTP error, or unparseable response), reconciliation MUST fail closed \u2014 the latch MUST remain set and OPEN intents MUST remain blocked.\n+- No missing trades over the last `reconcile_trade_lookback_sec` as determined by REST `/get_user_trades` query.\n+- If `reconcile_trade_lookback_sec` is unset, non-numeric, or `<= 0`, runtime MUST either normalize it to `300s` before issuing `/get_user_trades` or fail reconciliation and keep `open_permission_blocked_latch == true`; runtime MUST NOT clear the latch using an invalid lookback window.\n+- If the REST query fails (network error, timeout, HTTP error, or unparseable response), reconciliation MUST fail closed \u2014 the latch MUST remain set and OPEN intents MUST remain blocked.\n - All reconcile-class reason codes cleared (no unresolved WS gaps, inventory mismatches, or session termination flags).\n"
+    },
+    {
+      "proposal_id": "P-003",
+      "source_finding": "F-003",
+      "source_finding_category": "missing_at_pair",
+      "section": "2.2.4 Open Permission Latch (Reconcile-Required, Sticky Until Cleared) \u2014 CP-001",
+      "change_type": "new_requirement",
+      "rationale": "Adds an acceptance-test pair for the startup fallback and warning path so the 30s normalization rule cannot drift without detection.",
+      "status": "proposed",
+      "dedupe_key": "cp001-reconcile-stall-delay-startup-at",
+      "proposed_text": "AT-NEW\n- Given: startup begins with `reconcile_stall_max_delay_s` missing, `0`, or a negative value.\n- When: configuration normalization completes before reconciliation stall observability evaluates.\n- Then: runtime MUST treat `reconcile_stall_max_delay_s` as `30s` and emit a startup warning log.\n- Pass criteria: effective threshold is `30s` and one startup warning log is emitted during startup.\n- Fail criteria: invalid value is retained, a non-`30s` threshold is used, or the startup warning log is missing.",
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ -44,6 +44,13 @@\n - Pass criteria: log + counter emitted with deterministic cadence and failing criterion; latch remains set.\n - Fail criteria: missing log/counter, missing failing criterion payload, repeated spam emission without criterion change/new episode, or latch cleared without reconciliation success.\n \n+AT-NEW\n+- Given: startup begins with `reconcile_stall_max_delay_s` missing, `0`, or a negative value.\n+- When: configuration normalization completes before reconciliation stall observability evaluates.\n+- Then: runtime MUST treat `reconcile_stall_max_delay_s` as `30s` and emit a startup warning log.\n+- Pass criteria: effective threshold is `30s` and one startup warning log is emitted during startup.\n+- Fail criteria: invalid value is retained, a non-`30s` threshold is used, or the startup warning log is missing.\n+\n AT-1100\n - Given: reconciliation runs and REST `/get_user_trades` over the last `reconcile_trade_lookback_sec` returns trades that are not present in the local ledger (missing trades).\n"
+    }
+  ]
+}
