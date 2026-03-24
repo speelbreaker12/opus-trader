@@ -3209,6 +3209,8 @@ AT-1269
 - `WS_DATA_STALE_RECONCILE_REQUIRED`
 - `INVENTORY_MISMATCH_RECONCILE_REQUIRED`
 - `SESSION_TERMINATION_RECONCILE_REQUIRED`
+- `EXCHANGE_INITIATED_RECONCILE_REQUIRED`
+- `MARGIN_DRIFT_RECONCILE_REQUIRED`
 
 **Hard rule:** Runtime-binding and EvidenceChain failures MUST NOT appear in `open_permission_reason_codes` (they are cleared by cert/evidence recovery, not reconciliation).
 
@@ -3229,8 +3231,8 @@ AT-430
 
 AT-1242
 - Given: the system is running with `open_permission_blocked_latch==false` (latch clear, normal operation).
-- When: one of the following trigger events occurs: (a) WS book gap detected, (b) WS trades gap detected, (c) WS data becomes stale beyond threshold, (d) inventory mismatch detected between ledger and exchange, (e) exchange session termination received.
-- Then: `open_permission_blocked_latch` MUST be set to `true` and `open_permission_reason_codes` MUST contain the corresponding reason code (`WS_BOOK_GAP_RECONCILE_REQUIRED`, `WS_TRADES_GAP_RECONCILE_REQUIRED`, `WS_DATA_STALE_RECONCILE_REQUIRED`, `INVENTORY_MISMATCH_RECONCILE_REQUIRED`, or `SESSION_TERMINATION_RECONCILE_REQUIRED` respectively); OPEN intents MUST be blocked.
+- When: one of the following trigger events occurs: (a) WS book gap detected, (b) WS trades gap detected, (c) WS data becomes stale beyond threshold, (d) inventory mismatch detected between ledger and exchange, (e) exchange session termination received, (f) exchange-initiated position/order change detected, (g) critical margin drift detected.
+- Then: `open_permission_blocked_latch` MUST be set to `true` and `open_permission_reason_codes` MUST contain the corresponding reason code (`WS_BOOK_GAP_RECONCILE_REQUIRED`, `WS_TRADES_GAP_RECONCILE_REQUIRED`, `WS_DATA_STALE_RECONCILE_REQUIRED`, `INVENTORY_MISMATCH_RECONCILE_REQUIRED`, `SESSION_TERMINATION_RECONCILE_REQUIRED`, `EXCHANGE_INITIATED_RECONCILE_REQUIRED`, or `MARGIN_DRIFT_RECONCILE_REQUIRED` respectively); OPEN intents MUST be blocked.
 - Pass criteria: latch transitions to `true` with the correct reason code; OPEN dispatch count remains 0 while latch is set.
 - Fail criteria: latch remains `false` after trigger event, reason code is missing/incorrect, or OPEN dispatches while latch is set.
 
@@ -3250,7 +3252,7 @@ AT-011
 - Fail criteria: latch clears without reconciliation success, or opens proceed while latch remains true.
 
 AT-1271
-- Given: any state transition that sets `open_permission_blocked_latch` to `true` (startup, WS gap, WS trades gap, WS data stale, inventory mismatch, session termination).
+- Given: any state transition that sets `open_permission_blocked_latch` to `true` (startup, WS gap, WS trades gap, WS data stale, inventory mismatch, session termination, exchange-initiated change, margin drift).
 - When: the latch transitions to `true`.
 - Then: `open_permission_reason_codes` MUST be non-empty and MUST contain at least one valid `OpenPermissionReasonCode` corresponding to the trigger.
 - And: conversely, any state where `open_permission_reason_codes == []` MUST have `open_permission_blocked_latch == false`.
@@ -4290,6 +4292,127 @@ AT-124
 - Fail criteria: any `ReplaceIOC` occurs while Degraded.
 
 
+### **3.6 Exchange-Initiated Position & Order Changes** <!-- CSP-064 -->
+Profile: CSP
+<!-- Anchors: liquidation, auto_exercise, maintenance_cancel, circuit_breaker, exchange_initiated -->
+
+**Why this exists:** The exchange may unilaterally modify positions or cancel orders without any action from the agent. If the agent only tracks its own dispatched intents, its internal state silently diverges from exchange truth. This section mandates detection and fail-closed handling for all classes of exchange-initiated changes.
+
+**Scope:** This section covers changes the **exchange** initiates, not the agent. Specifically:
+1. **Liquidation** — exchange reduces/closes positions due to margin shortfall
+2. **Auto-exercise / assignment** — options exercised or assigned at expiry by exchange rules
+3. **Maintenance cancels** — exchange cancels resting orders during maintenance windows or system events
+4. **Circuit breaker halts** — exchange suspends trading on an instrument; resting orders may be cancelled or frozen
+
+**Detection (Non-Negotiable):**
+- The Zombie Sweeper (§3.5) and periodic reconciliation (RM-010) MUST detect all four classes via REST position/order/trade snapshots.
+- Detection MUST NOT rely solely on WS events (WS may be disconnected when the exchange acts).
+- Any position delta not attributable to a known intent MUST be treated as an exchange-initiated change.
+
+**3.6.1 Liquidation Detection** <!-- CSP-065 -->
+<!-- Anchors: liquidation, margin_call, forced_close, position_delta -->
+
+- On each reconciliation cycle (§3.4, RM-010), compare REST positions against ledger-derived positions.
+- If `abs(exchange_position - ledger_position) > position_reconcile_epsilon` AND the delta is NOT attributable to any pending/inflight intent:
+  - Classify as `ExchangeInitiatedDelta`.
+  - Record the delta in WAL with source `EXCHANGE_LIQUIDATION` (or `EXCHANGE_UNKNOWN` if cause cannot be determined).
+  - Set `open_permission_blocked_latch = true`; add `EXCHANGE_INITIATED_RECONCILE_REQUIRED`.
+  - Set `RiskState::Degraded`.
+  - Adjust ledger-derived position to match exchange truth (exchange is authoritative).
+- If `get_user_trades` returns trades with no matching intent label AND the trade direction reduces position size:
+  - Classify as probable liquidation; log `ExchangeLiquidationDetected` with instrument, qty, price.
+
+AT-1285
+- Given: the exchange liquidates 2 contracts of a 10-contract position (simulated via REST snapshot showing position=8 while ledger shows position=10, no inflight intents).
+- When: the reconciliation cycle runs.
+- Then: ledger is adjusted to 8; `open_permission_blocked_latch=true`; `EXCHANGE_INITIATED_RECONCILE_REQUIRED` added; `RiskState==Degraded`; `ExchangeLiquidationDetected` logged.
+- Pass criteria: position corrected to exchange truth; latch set; OPEN blocked.
+- Fail criteria: ledger remains at 10, or OPEN intents allowed before reconciliation clears, or no log entry.
+
+AT-1286
+- Given: the exchange liquidates the entire position to 0 during a WS disconnect.
+- When: WS reconnects and reconciliation runs.
+- Then: ledger adjusted to 0; no hedge or close dispatched for the already-liquidated position; latch set.
+- Pass criteria: no duplicate close attempt for a position the exchange already closed.
+- Fail criteria: agent dispatches a close/hedge for a zero position.
+
+**3.6.2 Auto-Exercise & Assignment** <!-- CSP-066 -->
+<!-- Anchors: auto_exercise, assignment, expiry, options_settlement -->
+
+- Options at expiry may be auto-exercised (ITM) or expire worthless (OTM) by the exchange.
+- On expiry date, after settlement time, the agent MUST:
+  1. Query REST positions for the expired instrument.
+  2. If the instrument is no longer listed (§1.0 expiry handling), treat any remaining ledger position as settled.
+  3. Record settlement in WAL with source `EXCHANGE_AUTO_EXERCISE` or `EXCHANGE_EXPIRY_WORTHLESS`.
+  4. Adjust ledger to match exchange (exchange is authoritative).
+- If auto-exercise creates a new perp/future position (exercise of option into underlying):
+  - The new position MUST be detected via REST position reconciliation.
+  - Latch MUST be set (`EXCHANGE_INITIATED_RECONCILE_REQUIRED`) until the agent acknowledges the new exposure.
+  - PolicyGuard MUST include the new exposure in margin and inventory calculations before allowing OPEN.
+
+AT-1287
+- Given: an ITM option expires and the exchange auto-exercises it, creating a new perp position.
+- When: reconciliation detects the new position (not attributable to any intent).
+- Then: ledger updated with new position; source `EXCHANGE_AUTO_EXERCISE`; latch set; inventory calculations include new exposure.
+- Pass criteria: new exposure reflected in margin/inventory before any OPEN allowed.
+- Fail criteria: OPEN allowed while new exchange-initiated exposure is unreconciled.
+
+AT-1288
+- Given: an OTM option expires worthless.
+- When: reconciliation detects the instrument is delisted and ledger still shows a position.
+- Then: ledger position zeroed; source `EXCHANGE_EXPIRY_WORTHLESS`; no latch required (risk-reducing).
+- Pass criteria: position cleaned up; no spurious close dispatched.
+- Fail criteria: agent attempts to close an already-expired position.
+
+**3.6.3 Maintenance Cancels & Circuit Breakers** <!-- CSP-067 -->
+<!-- Anchors: maintenance_cancel, circuit_breaker, halt, venue_cancel -->
+
+- The exchange may cancel resting orders during maintenance windows, circuit breaker events, or risk limit changes.
+- The Zombie Sweeper (§3.5) already detects "ledger inflight but no exchange open order" (RM-008). This section adds:
+  - If multiple orders are cancelled simultaneously (>= `maintenance_cancel_threshold`, default 3):
+    - Log `VenueMaintenanceCancelDetected` with count and instruments.
+    - Set `open_permission_blocked_latch = true`; add `EXCHANGE_INITIATED_RECONCILE_REQUIRED`.
+    - Do NOT re-dispatch cancelled orders until reconciliation confirms venue is accepting orders (test with a small probe or wait for successful REST query).
+  - If a single order is cancelled by the exchange (not by the agent):
+    - TLSM transition to `ExchangeCancelled` (deterministic, no retry).
+    - Log `ExchangeOrderCancelled` with order_id, instrument, reason (if provided by venue).
+
+AT-1289
+- Given: the exchange cancels 5 resting orders simultaneously during a maintenance window.
+- When: the Sweeper detects all 5 as "inflight but no exchange open order."
+- Then: `VenueMaintenanceCancelDetected` logged; latch set; no automatic re-dispatch; `EXCHANGE_INITIATED_RECONCILE_REQUIRED` added.
+- Pass criteria: no re-dispatch until reconciliation clears; latch blocks OPEN.
+- Fail criteria: orders re-dispatched automatically, or latch not set.
+
+AT-1290
+- Given: the exchange cancels a single resting order (below maintenance_cancel_threshold).
+- When: the Sweeper detects it.
+- Then: TLSM transitions to `ExchangeCancelled`; logged; sequencer unblocked; no latch set (handled by normal RM-008 flow).
+- Pass criteria: TLSM terminal state correct; no phantom inflight.
+- Fail criteria: TLSM remains in Sent/Acked state.
+
+**3.6.4 Fail-Closed Default for Unknown Exchange Events** <!-- CSP-068 -->
+<!-- Anchors: unknown_exchange_event, fail_closed, unattributed_delta -->
+
+- Any position or order state change detected via REST that cannot be attributed to:
+  (a) an agent-dispatched intent, OR
+  (b) a known exchange event class (liquidation, auto-exercise, maintenance cancel)
+  MUST be treated as `EXCHANGE_UNKNOWN`.
+- `EXCHANGE_UNKNOWN` events MUST:
+  - Set latch (`EXCHANGE_INITIATED_RECONCILE_REQUIRED`).
+  - Set `RiskState::Degraded`.
+  - Log `UnknownExchangeEventDetected` with full REST snapshot diff.
+  - Adjust ledger to match exchange truth (exchange is authoritative).
+- Operator alert MUST be emitted for `EXCHANGE_UNKNOWN` events (these require human investigation).
+
+AT-1291
+- Given: REST shows a position change not attributable to any intent or known exchange event type.
+- When: reconciliation processes the delta.
+- Then: classified as `EXCHANGE_UNKNOWN`; latch set; Degraded; ledger adjusted to exchange truth; operator alert emitted.
+- Pass criteria: fail-closed response; exchange position is authoritative; alert emitted.
+- Fail criteria: delta ignored, or ledger diverges from exchange, or no alert.
+
+
 ## **4\. Quantitative Logic: The "Truth" Engine**
 Profile: CSP
 
@@ -4781,6 +4904,120 @@ AT-255
 - Pass criteria: factor converges to ~1.2; default applied when missing.
 - Fail criteria: factor diverges or missing factor does not default.
 
+### **4.6 Funding Rate Tracking & Margin Drift Detection** <!-- CSP-069 -->
+Profile: CSP
+<!-- Anchors: funding_rate, funding_accrual, margin_drift, perp_funding, margin_validation -->
+
+**Why this exists:** Perpetual futures accrue funding payments continuously. If the agent tracks PnL and margin without accounting for funding debits/credits, its margin calculation drifts from exchange reality. After hours of high funding rates, the agent may believe it has more margin available than it does — and size its next trade too large, risking liquidation.
+
+**4.6.1 Funding Rate Monitoring** <!-- CSP-070 -->
+<!-- Anchors: funding_rate, funding_poll, funding_cache -->
+
+**Requirement:** For every perpetual instrument in the active portfolio:
+- Poll funding rate via REST (`/public/get_funding_rate_value` or equivalent) every `funding_poll_interval_s` (default 60s).
+- Track `cumulative_funding_usd` per instrument since session start.
+- Track `funding_rate_cached_at_ts` (epoch ms, same convention as §4.2 fee cache).
+
+**Funding Cache Staleness (Fail-Closed):**
+- Soft stale (age > `funding_cache_soft_s`, default 300s): apply conservative funding estimate using worst-case funding rate from the last 8h window: `funding_rate_effective = max(abs(last_8h_rates)) * sign(position)`.
+- Hard stale (age > `funding_cache_hard_s`, default 900s): set `RiskState::Degraded`; PolicyGuard MUST force `TradingMode::ReduceOnly` until refresh succeeds.
+
+**Integration with margin calculations:**
+- `available_margin_adjusted = exchange_reported_margin - pending_funding_estimate`
+- `pending_funding_estimate = Σ(instrument_position * funding_rate * time_to_next_settlement)`
+- The adjusted margin MUST be used by §1.4.3 Margin Headroom Gate and §2.2.3.2 CapitalRiskAxis.
+
+AT-1292
+- Given: a perp position of 10 contracts with funding rate = -0.05% (agent pays).
+- When: 4 hours elapse with consistent funding rate and the agent computes available margin.
+- Then: `cumulative_funding_usd` reflects the accrued cost; `available_margin_adjusted` is reduced accordingly.
+- Pass criteria: margin calculation accounts for funding drag; margin headroom gate uses adjusted value.
+- Fail criteria: margin calculation ignores funding accrual.
+
+AT-1293
+- Given: funding rate cache age > `funding_cache_hard_s`.
+- When: PolicyGuard computes TradingMode.
+- Then: `RiskState==Degraded`; `TradingMode==ReduceOnly`; OPEN blocked.
+- Pass criteria: hard-stale funding data blocks new opens.
+- Fail criteria: OPEN allowed with stale funding data.
+
+AT-1294
+- Given: funding rate cache age > `funding_cache_soft_s` but <= `funding_cache_hard_s`.
+- When: margin calculations run.
+- Then: worst-case funding rate from last 8h window is used as conservative estimate.
+- Pass criteria: conservative funding estimate applied in soft-stale window.
+- Fail criteria: stale funding rate used without buffer.
+
+**4.6.2 Margin Drift Reconciliation** <!-- CSP-071 -->
+<!-- Anchors: margin_drift, margin_reconcile, margin_mismatch, equity_check -->
+
+**Requirement:** Periodically validate that the agent's computed margin matches exchange-reported margin.
+- Every `margin_reconcile_interval_s` (default 30s), query REST for account equity/margin.
+- Compute `margin_drift_pct = abs(agent_computed_margin - exchange_reported_margin) / exchange_reported_margin`.
+- If `margin_drift_pct > margin_drift_warn_pct` (default 2%):
+  - Log `MarginDriftWarning` with both values and drift percentage.
+  - Recalibrate agent margin to exchange truth (exchange is authoritative).
+- If `margin_drift_pct > margin_drift_critical_pct` (default 5%):
+  - Set `RiskState::Degraded`; add `MARGIN_DRIFT_RECONCILE_REQUIRED` to latch reason codes.
+  - Log `MarginDriftCritical`.
+  - PolicyGuard MUST force `TradingMode::ReduceOnly` until drift falls below `margin_drift_warn_pct`.
+
+**Sources of drift (non-exhaustive):**
+- Funding rate accrual (§4.6.1)
+- Fee discrepancies (maker vs taker, delivery fees)
+- Exchange-initiated changes (§3.6 — liquidation fees, settlement)
+- Mark-to-market divergence on open positions
+
+AT-1295
+- Given: agent computes available margin = $10,000; exchange reports $9,400 (6% drift, above critical threshold).
+- When: margin drift reconciliation runs.
+- Then: `MarginDriftCritical` logged; `RiskState==Degraded`; latch set with `MARGIN_DRIFT_RECONCILE_REQUIRED`; agent margin recalibrated to $9,400.
+- Pass criteria: Degraded + ReduceOnly enforced; agent uses exchange margin as truth.
+- Fail criteria: agent continues using $10,000 for sizing, or OPEN allowed.
+
+AT-1296
+- Given: agent margin drifts by 1.5% from exchange (below warn threshold).
+- When: margin drift reconciliation runs.
+- Then: no action taken; drift within tolerance.
+- Pass criteria: no state change; no log warning.
+- Fail criteria: false positive triggers Degraded.
+
+AT-1297
+- Given: margin drift was critical (>5%), Degraded was set, and agent recalibrates to exchange truth.
+- When: next reconciliation cycle shows drift < `margin_drift_warn_pct`.
+- Then: `MARGIN_DRIFT_RECONCILE_REQUIRED` cleared; RiskState may return to Healthy (if no other Degraded triggers active).
+- Pass criteria: latch clears when drift resolves.
+- Fail criteria: latch stuck after drift corrected.
+
+**4.6.3 Post-Fill Fee Validation** <!-- CSP-072 -->
+<!-- Anchors: fee_validation, actual_fee, fee_mismatch, post_fill -->
+
+**Requirement:** After each fill, compare actual fees charged (from fill report) against estimated fees (from §4.2 / §1.4.1 Net Edge Gate).
+- `fee_mismatch_pct = abs(actual_fee - estimated_fee) / max(estimated_fee, min_fee_floor)`
+- If `fee_mismatch_pct > fee_mismatch_warn_pct` (default 10%):
+  - Log `FeeMismatchWarning` with estimated vs actual, instrument, maker/taker.
+  - Update fee model immediately (do not wait for next poll cycle).
+- If `fee_mismatch_pct > fee_mismatch_critical_pct` (default 25%):
+  - Log `FeeMismatchCritical`.
+  - Trigger immediate fee cache refresh.
+  - If refresh confirms new fee tier: update and continue.
+  - If mismatch persists after refresh: set `RiskState::Degraded` until operator review.
+
+AT-1298
+- Given: Net Edge Gate estimated fee = $0.50; fill report shows actual fee = $0.70 (40% mismatch, above critical).
+- When: post-fill fee validation runs.
+- Then: `FeeMismatchCritical` logged; immediate fee cache refresh triggered.
+- Pass criteria: fee model refreshed; if mismatch persists, Degraded set.
+- Fail criteria: agent continues using stale fee estimates after confirmed mismatch.
+
+AT-1299
+- Given: estimated fee = $0.50; actual fee = $0.52 (4% mismatch, within tolerance).
+- When: post-fill fee validation runs.
+- Then: no action taken.
+- Pass criteria: no warning logged; no state change.
+- Fail criteria: false positive fee mismatch warning.
+
+
 ## **5\. Self-Improvement: The Closed-Loop Control**
 Profile: GOP
 
@@ -5214,7 +5451,7 @@ AT-1230
 - `trading_mode`, `risk_state`, `bunker_mode_active`
 - `opens_globally_permitted` (bool; canonical derived field for OPEN eligibility: `trading_mode == Active && open_permission_blocked_latch == false`)
 - `is_trading_allowed` (deprecated alias; if emitted, MUST equal `opens_globally_permitted`; MAY be emitted for one transition version and MUST be removed in the next contract version after v5.2)
-- `connectivity_degraded` (bool; true iff `bunker_mode_active == true` OR `open_permission_reason_codes` contains `RESTART_RECONCILE_REQUIRED`, `WS_BOOK_GAP_RECONCILE_REQUIRED`, `WS_TRADES_GAP_RECONCILE_REQUIRED`, `WS_DATA_STALE_RECONCILE_REQUIRED`, `INVENTORY_MISMATCH_RECONCILE_REQUIRED`, or `SESSION_TERMINATION_RECONCILE_REQUIRED`)
+- `connectivity_degraded` (bool; true iff `bunker_mode_active == true` OR `open_permission_reason_codes` contains `RESTART_RECONCILE_REQUIRED`, `WS_BOOK_GAP_RECONCILE_REQUIRED`, `WS_TRADES_GAP_RECONCILE_REQUIRED`, `WS_DATA_STALE_RECONCILE_REQUIRED`, `INVENTORY_MISMATCH_RECONCILE_REQUIRED`, `SESSION_TERMINATION_RECONCILE_REQUIRED`, `EXCHANGE_INITIATED_RECONCILE_REQUIRED`, or `MARGIN_DRIFT_RECONCILE_REQUIRED`)
 - `policy_age_sec`, `last_policy_update_ts` (monotonic‑epoch ms; MUST equal `python_policy_generated_ts_ms` from PolicyGuard inputs)
 - `runtime_binding_state` + `runtime_binding_expires_at` (legacy aliases `f1_cert_state` + `f1_cert_expires_at` MAY be emitted for one transition version)
 - `disk_used_pct` (ratio in [0,1]), `disk_used_last_update_ts_ms` (monotonic‑epoch ms; see §2.2.1.2)
