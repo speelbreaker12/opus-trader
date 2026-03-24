@@ -6943,10 +6943,10 @@ Acceptance test: AT-1240 (see P0-E section).
 | `funding_cache_soft_s` | `300` | sec | §4.6.1 |
 | `funding_cache_hard_s` | `900` | sec | §4.6.1 |
 | `margin_reconcile_interval_s` | `30` | sec | §4.6.2 |
-| `margin_drift_warn_pct` | `0.02` | ratio | §4.6.2 |
-| `margin_drift_critical_pct` | `0.05` | ratio | §4.6.2 |
-| `fee_mismatch_warn_pct` | `0.10` | ratio | §4.6.3 |
-| `fee_mismatch_critical_pct` | `0.25` | ratio | §4.6.3 |
+| `margin_drift_warn_pct` | `0.02` | pct | §4.6.2 |
+| `margin_drift_critical_pct` | `0.05` | pct | §4.6.2 |
+| `fee_mismatch_warn_pct` | `0.10` | pct | §4.6.3 |
+| `fee_mismatch_critical_pct` | `0.25` | pct | §4.6.3 |
 | `min_fee_floor` | `0.01` | USD | §4.6.3 |
 
 ---
