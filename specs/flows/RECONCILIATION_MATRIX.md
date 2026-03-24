@@ -11,10 +11,10 @@ Purpose
   (d) at least one AT-###.
 
 Normative anchors in CONTRACT.md
-- Open Permission Latch semantics (OPEN blocked; CLOSE/HEDGE/CANCEL allowed except risk-increasing) :contentReference[oaicite:0]{index=0}
-- Reconciliation success criteria (label match, position epsilon, no missing trades, all reconcile reasons cleared) :contentReference[oaicite:1]{index=1}
-- Allowed OpenPermissionReasonCode values (reconcile-only) :contentReference[oaicite:2]{index=2}
-- Reconciliation triggers include startup, timer cadence, WS gap, orphan fill :contentReference[oaicite:3]{index=3}
+- Open Permission Latch semantics (OPEN blocked; CLOSE/HEDGE/CANCEL allowed except risk-increasing) — §2.2.4
+- Reconciliation success criteria (label match, position epsilon, no missing trades, all reconcile reasons cleared) — §3.4
+- Allowed OpenPermissionReasonCode values (reconcile-only) — §2.2.4
+- Reconciliation triggers include startup, timer cadence, WS gap, orphan fill, exchange-initiated changes, margin drift — §2.2.4, §3.4, §3.6, §4.6
 
 Table legend
 - Gate action MUST be stated as state changes:
@@ -48,5 +48,5 @@ Table legend
 
 Notes
 - If you add a new reconcile trigger, you MUST add a new RM-### row and at least one AT.
-- Reason codes MUST be one of: RESTART_RECONCILE_REQUIRED, WS_BOOK_GAP_RECONCILE_REQUIRED, WS_TRADES_GAP_RECONCILE_REQUIRED, INVENTORY_MISMATCH_RECONCILE_REQUIRED, SESSION_TERMINATION_RECONCILE_REQUIRED, EXCHANGE_INITIATED_RECONCILE_REQUIRED, MARGIN_DRIFT_RECONCILE_REQUIRED. :contentReference[oaicite:4]{index=4}
-- Latch semantics: OPEN blocked; CLOSE/HEDGE/CANCEL allowed except risk-increasing cancel/replace rejected per §2.2.5. :contentReference[oaicite:5]{index=5}
+- Reason codes MUST be one of: `RESTART_RECONCILE_REQUIRED`, `WS_BOOK_GAP_RECONCILE_REQUIRED`, `WS_TRADES_GAP_RECONCILE_REQUIRED`, `WS_DATA_STALE_RECONCILE_REQUIRED`, `INVENTORY_MISMATCH_RECONCILE_REQUIRED`, `SESSION_TERMINATION_RECONCILE_REQUIRED`, `EXCHANGE_INITIATED_RECONCILE_REQUIRED`, `MARGIN_DRIFT_RECONCILE_REQUIRED`.
+- Latch semantics: OPEN blocked; CLOSE/HEDGE/CANCEL allowed except risk-increasing cancel/replace rejected per §2.2.5.

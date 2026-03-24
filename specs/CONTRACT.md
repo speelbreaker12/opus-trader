@@ -4919,7 +4919,7 @@ Profile: CSP
 - Track `funding_rate_cached_at_ts` (epoch ms, same convention as §4.2 fee cache).
 
 **Funding Cache Staleness (Fail-Closed):**
-- Soft stale (age > `funding_cache_soft_s`, default 300s): apply conservative funding estimate using worst-case funding rate from the last 8h window: `funding_rate_effective = max(abs(last_8h_rates)) * sign(position)`.
+- Soft stale (age > `funding_cache_soft_s`, default 300s): apply conservative funding estimate using the worst-case **cost** from the last 8h window. The formula computes the maximum possible funding cost to the position holder: `funding_rate_effective = -max(abs(last_8h_rates))` (always treated as a cost/debit, regardless of position direction). This is intentionally pessimistic — it assumes the agent always pays, never receives.
 - Hard stale (age > `funding_cache_hard_s`, default 900s): set `RiskState::Degraded`; PolicyGuard MUST force `TradingMode::ReduceOnly` until refresh succeeds.
 
 **Integration with margin calculations:**
@@ -5451,7 +5451,7 @@ AT-1230
 - `trading_mode`, `risk_state`, `bunker_mode_active`
 - `opens_globally_permitted` (bool; canonical derived field for OPEN eligibility: `trading_mode == Active && open_permission_blocked_latch == false`)
 - `is_trading_allowed` (deprecated alias; if emitted, MUST equal `opens_globally_permitted`; MAY be emitted for one transition version and MUST be removed in the next contract version after v5.2)
-- `connectivity_degraded` (bool; true iff `bunker_mode_active == true` OR `open_permission_reason_codes` contains `RESTART_RECONCILE_REQUIRED`, `WS_BOOK_GAP_RECONCILE_REQUIRED`, `WS_TRADES_GAP_RECONCILE_REQUIRED`, `WS_DATA_STALE_RECONCILE_REQUIRED`, `INVENTORY_MISMATCH_RECONCILE_REQUIRED`, `SESSION_TERMINATION_RECONCILE_REQUIRED`, `EXCHANGE_INITIATED_RECONCILE_REQUIRED`, or `MARGIN_DRIFT_RECONCILE_REQUIRED`)
+- `connectivity_degraded` (bool; true iff `bunker_mode_active == true` OR `open_permission_reason_codes` contains `RESTART_RECONCILE_REQUIRED`, `WS_BOOK_GAP_RECONCILE_REQUIRED`, `WS_TRADES_GAP_RECONCILE_REQUIRED`, `WS_DATA_STALE_RECONCILE_REQUIRED`, `INVENTORY_MISMATCH_RECONCILE_REQUIRED`, `SESSION_TERMINATION_RECONCILE_REQUIRED`, `EXCHANGE_INITIATED_RECONCILE_REQUIRED`, or `MARGIN_DRIFT_RECONCILE_REQUIRED`). **Note:** This field signals "reconciliation required" broadly, not only network/WS connectivity issues. `EXCHANGE_INITIATED_RECONCILE_REQUIRED` and `MARGIN_DRIFT_RECONCILE_REQUIRED` are exchange-action and margin-accuracy triggers respectively. Consider renaming to `reconciliation_required` in a future contract version.
 - `policy_age_sec`, `last_policy_update_ts` (monotonic‑epoch ms; MUST equal `python_policy_generated_ts_ms` from PolicyGuard inputs)
 - `runtime_binding_state` + `runtime_binding_expires_at` (legacy aliases `f1_cert_state` + `f1_cert_expires_at` MAY be emitted for one transition version)
 - `disk_used_pct` (ratio in [0,1]), `disk_used_last_update_ts_ms` (monotonic‑epoch ms; see §2.2.1.2)
@@ -5609,6 +5609,20 @@ AT-212
 
 AT-403
 - Given: `open_permission_reason_codes` contains `RESTART_RECONCILE_REQUIRED` or `INVENTORY_MISMATCH_RECONCILE_REQUIRED`.
+- When: `/status` is fetched.
+- Then: `connectivity_degraded == true`.
+- Pass criteria: `connectivity_degraded` is true.
+- Fail criteria: `connectivity_degraded` is false or missing.
+
+AT-1300
+- Given: `open_permission_reason_codes` contains `EXCHANGE_INITIATED_RECONCILE_REQUIRED`.
+- When: `/status` is fetched.
+- Then: `connectivity_degraded == true`.
+- Pass criteria: `connectivity_degraded` is true.
+- Fail criteria: `connectivity_degraded` is false or missing.
+
+AT-1301
+- Given: `open_permission_reason_codes` contains `MARGIN_DRIFT_RECONCILE_REQUIRED`.
 - When: `/status` is fetched.
 - Then: `connectivity_degraded == true`.
 - Pass criteria: `connectivity_degraded` is true.
@@ -6924,6 +6938,16 @@ Acceptance test: AT-1240 (see P0-E section).
 | `tick_l2_retention_hours` | `72` | hours | §7.2 |
 | `parquet_analytics_retention_days` | `30` | days | §7.2 |
 | `foundation_exit_eval_max_delay_s` | `5` | sec | P0-E status authority precedence |
+| `maintenance_cancel_threshold` | `3` | count | §3.6.3 |
+| `funding_poll_interval_s` | `60` | sec | §4.6.1 |
+| `funding_cache_soft_s` | `300` | sec | §4.6.1 |
+| `funding_cache_hard_s` | `900` | sec | §4.6.1 |
+| `margin_reconcile_interval_s` | `30` | sec | §4.6.2 |
+| `margin_drift_warn_pct` | `0.02` | ratio | §4.6.2 |
+| `margin_drift_critical_pct` | `0.05` | ratio | §4.6.2 |
+| `fee_mismatch_warn_pct` | `0.10` | ratio | §4.6.3 |
+| `fee_mismatch_critical_pct` | `0.25` | ratio | §4.6.3 |
+| `min_fee_floor` | `0.01` | USD | §4.6.3 |
 
 ---
 
