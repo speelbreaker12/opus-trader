@@ -3211,6 +3211,7 @@ AT-1269
 - `SESSION_TERMINATION_RECONCILE_REQUIRED`
 - `EXCHANGE_INITIATED_RECONCILE_REQUIRED`
 - `MARGIN_DRIFT_RECONCILE_REQUIRED`
+- `FUNDING_STALE_RECONCILE_REQUIRED`
 
 **Hard rule:** Runtime-binding and EvidenceChain failures MUST NOT appear in `open_permission_reason_codes` (they are cleared by cert/evidence recovery, not reconciliation).
 
@@ -3231,8 +3232,8 @@ AT-430
 
 AT-1242
 - Given: the system is running with `open_permission_blocked_latch==false` (latch clear, normal operation).
-- When: one of the following trigger events occurs: (a) WS book gap detected, (b) WS trades gap detected, (c) WS data becomes stale beyond threshold, (d) inventory mismatch detected between ledger and exchange, (e) exchange session termination received, (f) exchange-initiated position/order change detected, (g) critical margin drift detected.
-- Then: `open_permission_blocked_latch` MUST be set to `true` and `open_permission_reason_codes` MUST contain the corresponding reason code (`WS_BOOK_GAP_RECONCILE_REQUIRED`, `WS_TRADES_GAP_RECONCILE_REQUIRED`, `WS_DATA_STALE_RECONCILE_REQUIRED`, `INVENTORY_MISMATCH_RECONCILE_REQUIRED`, `SESSION_TERMINATION_RECONCILE_REQUIRED`, `EXCHANGE_INITIATED_RECONCILE_REQUIRED`, or `MARGIN_DRIFT_RECONCILE_REQUIRED` respectively); OPEN intents MUST be blocked.
+- When: one of the following trigger events occurs: (a) WS book gap detected, (b) WS trades gap detected, (c) WS data becomes stale beyond threshold, (d) inventory mismatch detected between ledger and exchange, (e) exchange session termination received, (f) exchange-initiated position/order change detected, (g) critical margin drift detected, (h) funding rate cache hard-stale.
+- Then: `open_permission_blocked_latch` MUST be set to `true` and `open_permission_reason_codes` MUST contain the corresponding reason code (`WS_BOOK_GAP_RECONCILE_REQUIRED`, `WS_TRADES_GAP_RECONCILE_REQUIRED`, `WS_DATA_STALE_RECONCILE_REQUIRED`, `INVENTORY_MISMATCH_RECONCILE_REQUIRED`, `SESSION_TERMINATION_RECONCILE_REQUIRED`, `EXCHANGE_INITIATED_RECONCILE_REQUIRED`, `MARGIN_DRIFT_RECONCILE_REQUIRED`, or `FUNDING_STALE_RECONCILE_REQUIRED` respectively); OPEN intents MUST be blocked.
 - Pass criteria: latch transitions to `true` with the correct reason code; OPEN dispatch count remains 0 while latch is set.
 - Fail criteria: latch remains `false` after trigger event, reason code is missing/incorrect, or OPEN dispatches while latch is set.
 
@@ -3260,7 +3261,7 @@ AT-011
 - Fail criteria: latch clears without reconciliation success, or opens proceed while latch remains true.
 
 AT-1271
-- Given: any state transition that sets `open_permission_blocked_latch` to `true` (startup, WS gap, WS trades gap, WS data stale, inventory mismatch, session termination, exchange-initiated change, margin drift).
+- Given: any state transition that sets `open_permission_blocked_latch` to `true` (startup, WS gap, WS trades gap, WS data stale, inventory mismatch, session termination, exchange-initiated change, margin drift, funding stale).
 - When: the latch transitions to `true`.
 - Then: `open_permission_reason_codes` MUST be non-empty and MUST contain at least one valid `OpenPermissionReasonCode` corresponding to the trigger.
 - And: conversely, any state where `open_permission_reason_codes == []` MUST have `open_permission_blocked_latch == false`.
@@ -5539,7 +5540,7 @@ AT-1230
 - `trading_mode`, `risk_state`, `bunker_mode_active`
 - `opens_globally_permitted` (bool; canonical derived field for OPEN eligibility: `trading_mode == Active && open_permission_blocked_latch == false`)
 - `is_trading_allowed` (deprecated alias; if emitted, MUST equal `opens_globally_permitted`; MAY be emitted for one transition version and MUST be removed in the next contract version after v5.2)
-- `connectivity_degraded` (bool; true iff `bunker_mode_active == true` OR `open_permission_reason_codes` contains `RESTART_RECONCILE_REQUIRED`, `WS_BOOK_GAP_RECONCILE_REQUIRED`, `WS_TRADES_GAP_RECONCILE_REQUIRED`, `WS_DATA_STALE_RECONCILE_REQUIRED`, `INVENTORY_MISMATCH_RECONCILE_REQUIRED`, `SESSION_TERMINATION_RECONCILE_REQUIRED`, `EXCHANGE_INITIATED_RECONCILE_REQUIRED`, or `MARGIN_DRIFT_RECONCILE_REQUIRED`). **Note:** This field signals "reconciliation required" broadly, not only network/WS connectivity issues. `EXCHANGE_INITIATED_RECONCILE_REQUIRED` and `MARGIN_DRIFT_RECONCILE_REQUIRED` are exchange-action and margin-accuracy triggers respectively. Consider renaming to `reconciliation_required` in a future contract version.
+- `connectivity_degraded` (bool; true iff `bunker_mode_active == true` OR `open_permission_reason_codes` contains `RESTART_RECONCILE_REQUIRED`, `WS_BOOK_GAP_RECONCILE_REQUIRED`, `WS_TRADES_GAP_RECONCILE_REQUIRED`, `WS_DATA_STALE_RECONCILE_REQUIRED`, `INVENTORY_MISMATCH_RECONCILE_REQUIRED`, `SESSION_TERMINATION_RECONCILE_REQUIRED`, `EXCHANGE_INITIATED_RECONCILE_REQUIRED`, `MARGIN_DRIFT_RECONCILE_REQUIRED`, or `FUNDING_STALE_RECONCILE_REQUIRED`). **Note:** This field signals "reconciliation required" broadly, not only network/WS connectivity issues. `EXCHANGE_INITIATED_RECONCILE_REQUIRED`, `MARGIN_DRIFT_RECONCILE_REQUIRED`, and `FUNDING_STALE_RECONCILE_REQUIRED` are exchange-action, margin-accuracy, and funding-data-freshness triggers respectively. Consider renaming to `reconciliation_required` in a future contract version.
 - `policy_age_sec`, `last_policy_update_ts` (monotonic‑epoch ms; MUST equal `python_policy_generated_ts_ms` from PolicyGuard inputs)
 - `runtime_binding_state` + `runtime_binding_expires_at` (legacy aliases `f1_cert_state` + `f1_cert_expires_at` MAY be emitted for one transition version)
 - `disk_used_pct` (ratio in [0,1]), `disk_used_last_update_ts_ms` (monotonic‑epoch ms; see §2.2.1.2)
