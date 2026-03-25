@@ -2665,6 +2665,8 @@ PolicyGuard MUST compute the axes as follows, using only the coherent input snap
   - Runtime binding cert invalid/missing/stale/FAIL (§2.2.1)
   - `cortex_override == ForceReduceOnly`
   - `fee_model_cache_age_s > fee_model_hard_stale_s` (§4.2)
+  - `funding_cache_age > funding_cache_hard_s` (§4.6.1)
+  - `margin_drift_pct >= margin_drift_critical_pct` (§4.6.2)
   - `policy_age_sec > max_policy_age_sec` (Appendix A: `max_policy_age_sec`)
   - Any critical PolicyGuard input missing/unparseable/stale per §2.2.1.2
   - Watchdog Kill unconfirmed (per §2.2.3.1.2)
@@ -3256,6 +3258,14 @@ AT-1306
 - And: latch clears only when the exchange-initiated cooldown expires AND full reconciliation succeeds.
 - Pass criteria: latch stays true; WS gap code removed but exchange-initiated code retained; OPEN dispatch count remains 0.
 - Fail criteria: latch clears while exchange-initiated cooldown is still active, or both codes removed simultaneously despite only one trigger resolving.
+
+AT-1312
+- Given: `open_permission_blocked_latch == true` with `open_permission_reason_codes` containing ONLY `EXCHANGE_INITIATED_RECONCILE_REQUIRED` (sole code); reconciliation success criteria (ledger match, positions match, no missing trades) are all satisfied.
+- When: reconciliation runs but `exchange_initiated_cooldown_s` has NOT yet elapsed since the exchange-initiated event.
+- Then: `open_permission_blocked_latch` MUST remain `true`; `EXCHANGE_INITIATED_RECONCILE_REQUIRED` retained; OPEN intents MUST remain blocked.
+- And: latch clears only when cooldown expires AND reconciliation re-confirms success.
+- Pass criteria: cooldown timer alone blocks latch-clear even when all other success criteria pass; OPEN dispatch count remains 0.
+- Fail criteria: latch clears before cooldown elapses, or sole-code path bypasses cooldown check.
 
 AT-011
 - Given: `open_permission_blocked_latch==true` for a WS gap reason (e.g., `WS_TRADES_GAP_RECONCILE_REQUIRED`).
@@ -4333,7 +4343,7 @@ Profile: CSP
   - Set `RiskState::Degraded`.
   - Adjust ledger-derived position to match exchange truth (exchange is authoritative).
   - **Latch MUST be set atomically with (or strictly before) the ledger adjustment** — no tick may observe an adjusted ledger without the latch already set (see F-8 atomicity requirement).
-- **Exchange-initiated cooldown (mandatory):** `EXCHANGE_INITIATED_RECONCILE_REQUIRED` MUST NOT be cleared by standard §2.2.4 reconciliation success criteria alone. An additional `exchange_initiated_cooldown_s` (default: 300s) MUST elapse after the ledger adjustment before the reason code becomes eligible for clearing. This prevents automatic re-entry into liquidated positions (RM-013). The cooldown timer starts when the ledger adjustment is applied; if a new exchange-initiated delta occurs during the cooldown, the timer resets.
+- **Exchange-initiated cooldown (mandatory):** `EXCHANGE_INITIATED_RECONCILE_REQUIRED` MUST NOT be cleared by standard §2.2.4 reconciliation success criteria alone. An additional `exchange_initiated_cooldown_s` (default: 300s) MUST elapse after the ledger adjustment before the reason code becomes eligible for clearing. This prevents automatic re-entry into liquidated positions (RM-013). The cooldown timer starts when the ledger adjustment is applied; if a new exchange-initiated delta occurs during the cooldown, the timer resets. **Cooldown cap:** the effective cooldown MUST NOT exceed `exchange_initiated_cooldown_max_s` (default: 1800s / 30min). If cascading resets would extend the cooldown beyond this cap, the timer clamps to `cooldown_max_s` from the *first* event's timestamp and logs `ExchangeInitiatedCooldownCapped`. This prevents indefinite trading halt from rapid cascading events while preserving the mandatory observation window.
 - If `get_user_trades` returns trades with no matching intent label AND the trade direction reduces position size:
   - Classify as probable liquidation; log `ExchangeLiquidationDetected` with instrument, qty, price.
 
@@ -4355,6 +4365,10 @@ AT-1286
 <!-- Anchors: auto_exercise, assignment, expiry, options_settlement -->
 
 - Options at expiry may be auto-exercised (ITM) or expire worthless (OTM) by the exchange.
+- **Fail-closed classification:** The agent MUST NOT rely solely on its own ITM/OTM classification to determine the settlement path. The exchange REST position query is authoritative:
+  - If exchange shows a new/modified position → treat as auto-exercise (regardless of agent's moneyness estimate).
+  - If exchange shows position removed/zero → treat as expired worthless (regardless of agent's moneyness estimate).
+  - This prevents misclassification where the agent believes an option is OTM (no action needed) but the exchange auto-exercises it (creating untracked exposure).
 - On expiry date, after settlement time, the agent MUST:
   1. Query REST positions for the expired instrument.
   2. If the instrument is no longer listed (§1.0 expiry handling), treat any remaining ledger position as settled.
@@ -4384,7 +4398,7 @@ AT-1288
 
 - The exchange may cancel resting orders during maintenance windows, circuit breaker events, or risk limit changes.
 - The Zombie Sweeper (§3.5) already detects "ledger inflight but no exchange open order" (RM-008). This section adds:
-  - If multiple orders are cancelled simultaneously (>= `maintenance_cancel_threshold`, default 3):
+  - If multiple orders are cancelled simultaneously (>= `maintenance_cancel_threshold`, default 3) within a single reconciliation cycle (i.e., detected in the same REST snapshot diff):
     - Log `VenueMaintenanceCancelDetected` with count and instruments.
     - Set `open_permission_blocked_latch = true`; add `EXCHANGE_INITIATED_RECONCILE_REQUIRED`.
     - Do NOT re-dispatch cancelled orders until reconciliation confirms venue is accepting orders (test with a small probe or wait for successful REST query).
@@ -4426,6 +4440,13 @@ AT-1291
 - Then: classified as `EXCHANGE_UNKNOWN`; latch set; Degraded; ledger adjusted to exchange truth; operator alert emitted.
 - Pass criteria: fail-closed response; exchange position is authoritative; alert emitted.
 - Fail criteria: delta ignored, or ledger diverges from exchange, or no alert.
+
+AT-1313
+- Given: an exchange-initiated position change is detected (any §3.6 path: liquidation, auto-exercise, unknown).
+- When: the handler sets the latch and adjusts the ledger.
+- Then: the `open_permission_blocked_latch` MUST be observable as `true` in any tick that observes the adjusted ledger. No interleaved tick may see `latch == false` with an already-adjusted ledger.
+- Pass criteria: in a trace of (latch_value, ledger_version) pairs, every ledger_version >= adjusted_version has latch == true. Log ordering shows latch-set event strictly before (or same tick as) ledger-adjust event.
+- Fail criteria: any tick observes adjusted ledger with latch == false (ledger-before-latch ordering violation).
 
 AT-1302
 - Given: a reconciliation cycle detects no position delta (exchange positions match ledger exactly).
@@ -4988,6 +5009,7 @@ Profile: CSP
 **Funding Cache Staleness (Fail-Closed):**
 - Soft stale (age > `funding_cache_soft_s`, default 300s): apply conservative funding estimate using the worst-case **cost** from the last 8h window. The formula uses absolute position size to guarantee the estimate is always a debit (never a credit), regardless of position direction:
   - `funding_rate_worst = max(abs(last_8h_rates))`
+  - If `funding_rate_worst == 0` (all observed rates are exactly zero): `pending_funding_estimate = 0`. This is correct — zero funding rates impose no cost. No warning needed.
   - `pending_funding_estimate = Σ(abs(instrument_position) * funding_rate_worst * time_to_next_settlement)`
   - This is intentionally pessimistic — it assumes the agent always pays at the worst observed rate, never receives. The result is always non-negative and always subtracted from margin.
 - Hard stale (age > `funding_cache_hard_s`, default 900s): set `RiskState::Degraded`; set `open_permission_blocked_latch = true`; add `FUNDING_STALE_RECONCILE_REQUIRED` to `open_permission_reason_codes`; PolicyGuard MUST force `TradingMode::ReduceOnly` until funding rate cache is refreshed (age < `funding_cache_soft_s`).
@@ -5014,9 +5036,10 @@ AT-1293
 AT-1294
 - Given: funding rate cache age > `funding_cache_soft_s` but <= `funding_cache_hard_s`.
 - When: margin calculations run.
-- Then: worst-case funding rate from last 8h window is used as conservative estimate.
-- Pass criteria: conservative funding estimate applied in soft-stale window.
-- Fail criteria: stale funding rate used without buffer.
+- Then: worst-case funding rate from last 8h window is used as conservative estimate; `pending_funding_estimate` is non-negative regardless of position direction.
+- And: specifically, with a short position of -10 contracts and last-8h rates = [+0.03%, +0.01%, -0.02%]: `funding_rate_worst = max(abs(rates)) = 0.0003`; `pending_funding_estimate = abs(-10) * 0.0003 * time_to_settlement` (positive debit, not negative credit).
+- Pass criteria: conservative funding estimate applied in soft-stale window; short position with positive rate produces a debit (not credit); formula uses abs(position).
+- Fail criteria: stale funding rate used without buffer, or signed formula yields credit for short+positive-rate scenario.
 
 AT-1309
 - Given: `funding_rate_cached_at_ts` is stored and read back (cf. AT-1106 for fee cache).
@@ -5038,9 +5061,9 @@ AT-1309
 - If `margin_drift_pct >= margin_drift_critical_pct` (default 5%):
   - Set `RiskState::Degraded`; add `MARGIN_DRIFT_RECONCILE_REQUIRED` to latch reason codes. Latch MUST be set atomically with (or strictly before) the margin recalibration — same atomicity requirement as §3.6.1.
   - Log `MarginDriftCritical`.
-  - PolicyGuard MUST force `TradingMode::ReduceOnly` until drift falls below `margin_drift_warn_pct`.
+  - PolicyGuard MUST force `TradingMode::ReduceOnly` until drift falls below `margin_drift_warn_pct` AND at least `margin_drift_min_enforcement_s` (default: 60s) has elapsed since `MARGIN_DRIFT_RECONCILE_REQUIRED` was set. This debounce prevents instant recalibration→0% drift→clear cycles from making the Degraded state ineffective for persistent drift sources (e.g., recurring funding accrual or fee tier changes).
 
-**Recalibration side-effects:** When margin is recalibrated to exchange truth (warn or critical), `cumulative_funding_usd` per instrument MUST be reset to zero. Rationale: the exchange-reported margin already reflects all accrued funding; continuing to subtract a stale cumulative total would double-count funding drag. If the recalibration source is margin drift, log `FundingAccrualReset` with the pre-reset cumulative value for audit.
+**Recalibration side-effects:** When margin is recalibrated to exchange truth (warn or critical), `cumulative_funding_usd` per instrument MUST be reset to zero. Rationale: the exchange-reported margin already reflects all accrued funding; continuing to subtract a stale cumulative total would double-count funding drag. If the recalibration source is margin drift, log `FundingAccrualReset` with the pre-reset cumulative value for audit. **Post-reset conservative estimate:** Immediately after reset, if the funding rate cache is in soft-stale or hard-stale state, the conservative funding estimate (§4.6.1 soft-stale formula) MUST be recomputed and applied from the reset timestamp. This prevents a window of ~60s (one `funding_poll_interval_s`) where the agent operates with zero funding estimate despite ongoing funding accrual.
 
 **Sources of drift (non-exhaustive):**
 - Funding rate accrual (§4.6.1)
@@ -5073,7 +5096,7 @@ AT-1297
 <!-- Anchors: fee_validation, actual_fee, fee_mismatch, post_fill -->
 
 **Requirement:** After each fill, compare actual fees charged (from fill report) against estimated fees (from §4.2 / §1.4.1 Net Edge Gate).
-- `fee_mismatch_pct = abs(actual_fee - estimated_fee) / max(estimated_fee, min_fee_floor)`
+- `fee_mismatch_pct = abs(actual_fee - estimated_fee) / max(estimated_fee, min_fee_floor)` (all values in USD; `min_fee_floor` prevents division-by-near-zero when estimated fee is tiny)
 - If `fee_mismatch_pct > fee_mismatch_warn_pct` (default 10%):
   - Log `FeeMismatchWarning` with estimated vs actual, instrument, maker/taker.
   - Update fee model immediately (do not wait for next poll cycle).
@@ -5115,6 +5138,8 @@ The following counter metrics MUST be emitted for §4.6 safety paths (in additio
 | `fee_mismatch_critical_total` | Fee mismatch exceeds `fee_mismatch_critical_pct` | §4.6.3 |
 | `exchange_initiated_delta_total` | Any exchange-initiated delta classified (§3.6) | §3.6.1 |
 | `exchange_initiated_cooldown_active` | Gauge: 1 while cooldown timer is running | §3.6.1 |
+| `exchange_initiated_cooldown_capped_total` | Cooldown timer clamped to max due to cascading resets | §3.6.1 |
+| `margin_drift_zero_denominator_total` | `exchange_reported_margin <= 0` triggered fail-closed guard | §4.6.2 |
 
 These counters are required for runtime alerting and post-session audit. Missing counters are acceptable during development but MUST be present before Phase 2 deployable claims.
 
@@ -7048,12 +7073,14 @@ Acceptance test: AT-1240 (see P0-E section).
 | `foundation_exit_eval_max_delay_s` | `5` | sec | P0-E status authority precedence |
 | `maintenance_cancel_threshold` | `3` | count | §3.6.3 |
 | `exchange_initiated_cooldown_s` | `300` | sec | §3.6.1 |
+| `exchange_initiated_cooldown_max_s` | `1800` | sec | §3.6.1 |
 | `funding_poll_interval_s` | `60` | sec | §4.6.1 |
 | `funding_cache_soft_s` | `300` | sec | §4.6.1 |
 | `funding_cache_hard_s` | `900` | sec | §4.6.1 |
 | `margin_reconcile_interval_s` | `30` | sec | §4.6.2 |
 | `margin_drift_warn_pct` | `0.02` | pct | §4.6.2 |
 | `margin_drift_critical_pct` | `0.05` | pct | §4.6.2 |
+| `margin_drift_min_enforcement_s` | `60` | sec | §4.6.2 |
 | `fee_mismatch_warn_pct` | `0.10` | pct | §4.6.3 |
 | `fee_mismatch_critical_pct` | `0.25` | pct | §4.6.3 |
 | `min_fee_floor` | `0.01` | USD | §4.6.3 |
@@ -7367,6 +7394,8 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-17 | CCL-2026-03-17-01 | §1.3 Liquidity Gate; §1.4 Pricer; §2.2.1.2 Critical Inputs; §2.2.2 EvidenceGuard; §2.2.3.2 MarketIntegrityAxis; §2.2.3.4 Rename; §2.2.4 OPL; §3.1 Emergency Close; Appendix A; Appendix B RejectReasonCode; CSP table; CONTRACT_CHANGE_LEDGER | hardening | Autoresearch Phase 2+3: 16 accepted machine-generated proposals — margin headroom NaN/missing fail-closed, account_summary staleness gate, cortex_override missing → ForceReduceOnly, inventory_skew_sell_floor formula, bunker_mode_last_update_ts_ms critical input, session_termination rename ATs, hedge qty bound, monotonic retry, SHALL→MUST tightening, CSP-063 dedup, AT renumber 1243→1253. | Close contract gaps identified by automated gap detection across execution pipeline and PolicyGuard fixtures. | AT-1251, AT-1252, AT-1253, AT-1254, AT-1255, AT-1256, AT-1257, AT-1258, AT-1259, AT-1260, AT-1261, AT-1262, AT-1263, AT-1264 | autoresearch/phase3-contract-patch |
 | 2026-03-19 | CCL-2026-03-19-01 | §1.3 Liquidity Gate; §2.2.2 EvidenceGuard; §2.2.3 TradingMode; §2.2.4 Open Permission Latch; §3.1 Emergency Close; Appendix CONTRACT_CHANGE_LEDGER | hardening | Autoresearch Phase 4: add replace-order stale-L2 fallback/no-fallback ATs, slippage equality boundary AT, negative reconciliation-criteria ATs, latch invariant/cross-ref/defaults, hedge failure/partial-fill ATs, EvidenceGuard counter/CSP-bypass ATs, cortex/margin/risk_state axis isolation ATs, AT-918 reason code, cause enum, SHALL→MUST, EG cooldown default. | Close contract gaps from Phase 4 automated+manual gap detection across 5 CONTRACT.md sections. | AT-222, AT-918, AT-1265, AT-1266, AT-1267, AT-1268, AT-1269, AT-1270, AT-1271, AT-1272, AT-1273, AT-1274, AT-1275, AT-1276, AT-1277, AT-1278, AT-1279, AT-1280, AT-1281 | project/contract-autoresearch |
 | 2026-03-20 | CCL-2026-03-20-01 | §1.3 Liquidity Gate; §2.2.2 EvidenceGuard; §2.2.3 TradingMode; §3.1 Emergency Close; Appendix CONTRACT_CHANGE_LEDGER | hardening | Apply the accepted hardened Phase 2 patch batch: align the Liquidity Gate stale-L2 algorithm step with replace-order fallback semantics, add a non-zero EvidenceGuard cooldown AT, clarify watchdog/disk Kill corroboration and winning-tier reason purity, and add an explicit bounded emergency-close retry schedule AT. | Carry forward the reviewed Phase 2 contract-only deltas on a contract-scoped branch without widening the autoresearch backend PR, while keeping AT numbering and ledger growth deterministic. | AT-422, AT-235, AT-1282, AT-1283, AT-1284 | project/contract-phase2-accepted-patch-batch |
+| 2026-03-24 | CCL-2026-03-24-01 | §3.6 Exchange-Initiated Events (new); §3.6.1 Liquidation Detection (new); §3.6.2 Auto-Exercise (new); §3.6.3 Maintenance Cancels (new); §3.6.4 Unknown Events (new); §4.6.1 Funding Rate (new); §4.6.2 Margin Drift (new); §4.6.3 Fee Validation (new); §4.6.4 Observability (new); §2.2.4 OPL reason codes; RECONCILIATION_MATRIX; OPL YAML; Appendix A | feature | Add exchange-initiated event handling (§3.6) and quantitative safety monitoring (§4.6): liquidation/auto-exercise/maintenance-cancel detection with latch+reason-code wiring, funding rate monitoring with soft/hard stale thresholds, margin drift reconciliation, post-fill fee validation, and observability counters. | Cover previously unhandled exchange-side events (liquidations, auto-exercises, mass cancels) and add quantitative monitoring for funding drag, margin drift, and fee mismatches — all fail-closed with ReduceOnly enforcement. | AT-1285, AT-1286, AT-1287, AT-1288, AT-1289, AT-1290, AT-1291, AT-1292, AT-1293, AT-1294, AT-1295, AT-1296, AT-1297, AT-1298, AT-1299, AT-1300, AT-1301 | claude/partial-fills-race-conditions-ux3zb |
 | 2026-03-25 | CCL-2026-03-25-01 | §2.2.4 OPL reconciliation criteria; §3.6.1 Liquidation Detection; §3.6.3 Maintenance Cancels; §3.6.4 Unknown Events; §4.6.1 Funding Rate; §4.6.2 Margin Drift; Appendix A; OPL YAML; Appendix CONTRACT_CHANGE_LEDGER | hardening | Fix 10 review findings: F-1 funding formula sign error (abs(position) * worst_rate), F-2 exchange-initiated cooldown gate (exchange_initiated_cooldown_s), F-3 ExchangeCancelled→Canceled+source tag, F-4 classification-blind AT coverage (AT-1302–1305), F-5 reconciliation parenthetical expansion, F-6 OPL YAML trigger update, F-7 partial-resolution AT (AT-1306), F-8 latch-before-ledger atomicity, F-9 AT-1293 reason-code assertion, F-10 boundary-value ATs (AT-1307–1308). | Close review-stack findings: prevent optimistic funding formula, premature latch-clear after exchange events, classification-blind implementations, and untested threshold boundaries. | AT-1288, AT-1290, AT-1293, AT-1302, AT-1303, AT-1304, AT-1305, AT-1306, AT-1307, AT-1308 | claude/partial-fills-race-conditions-ux3zb |
 | 2026-03-25 | CCL-2026-03-25-02 | §4.6.1 Funding Rate; §4.6.2 Margin Drift; §4.6.4 Observability (new); Appendix CONTRACT_CHANGE_LEDGER | hardening | Nice-to-have review findings: F-15 cumulative_funding_usd reset on recalibration (prevent double-count), F-16 funding cache timestamp format AT (AT-1309, mirrors AT-1106), F-19 observability counters table (11 metrics for §3.6/§4.6 safety paths), F-20 PR body AT count corrected (15→25). | Improve observability and prevent subtle funding double-counting after margin recalibration. | AT-1309 | claude/partial-fills-race-conditions-ux3zb |
 | 2026-03-25 | CCL-2026-03-25-03 | §2.2.4 OPL reconciliation criteria (reason code categories); §4.6.1 Funding Rate (latch instruction + clear criteria); §4.6.2 Margin Drift (>= boundary, div-by-zero guard); §7.0 /status (AT-1310); OPL YAML; RECONCILIATION_MATRIX | hardening | Fix 6 critical review-stack findings: (1) AT-1308 boundary operator > → >= for fail-closed, (2) margin_drift_pct div-by-zero fail-closed guard + AT-1311, (3) §4.6.1 explicit latch-set instruction for hard-stale funding, (4) AT-1310 connectivity_degraded for FUNDING_STALE, (5) §2.2.4 reconciliation-resolvable vs externally-resolvable code categories, (6) FUNDING_STALE clear criteria aligned to funding_cache_soft_s. Also: wire FUNDING_STALE_RECONCILE_REQUIRED (N-1), fix RM-014 ExchangeCancelled text (N-2). | Eliminate 6 safety gaps: boundary operator contradiction, IEEE 754 NaN fail-open, missing latch mandate, untested connectivity_degraded path, ambiguous reconciliation semantics, and inconsistent clear criteria. | AT-1310, AT-1311 | claude/partial-fills-race-conditions-ux3zb |
+| 2026-03-25 | CCL-2026-03-25-04 | §2.2.3 SystemIntegrityAxis; §3.6.1 Cooldown cap; §3.6.2 Expiry classification; §3.6.3 Maintenance cancel window; §4.6.1 Funding zero-rate + post-reset estimate; §4.6.2 Margin drift debounce; §4.6.3 Fee floor denomination; §2.2.4 AT-1312 sole-cooldown; AT-1313 atomicity; AT-1294 numeric scenario; Appendix A; OPL YAML; Appendix CONTRACT_CHANGE_LEDGER | hardening | Fix remaining review-stack findings: (I-1) sole-cooldown AT-1312, (I-2) CCL-2026-03-24-01 backfill, (I-3) signed funding AT-1294 numeric scenario, (I-4) latch-before-ledger AT-1313, (I-5) OTM expiry fail-closed classification, (I-6) cooldown max cap exchange_initiated_cooldown_max_s, (I-7) margin drift min-enforcement debounce, (I-8) cumulative_funding_usd post-reset conservative estimate, (I-9) SystemIntegrityAxis funding/margin predicates, (A-1/2) OPL-001 full reason code names + §3.6/§4.6 refs, (A-6) min_fee_floor USD denomination, (A-7) maintenance cancel "simultaneously" definition, (A-8) funding zero-rate floor explicit handling. | Close 9 Important + 4 Advisory findings: prevent sole-cooldown bypass, prove atomicity, bound cascading cooldowns, debounce instant drift clear, eliminate post-reset zero-funding window, and clarify ambiguous definitions. | AT-1312, AT-1313 | claude/partial-fills-race-conditions-ux3zb |
