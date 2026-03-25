@@ -3157,7 +3157,7 @@ Profile: CSP
 - Ledger inflight intents (non-terminal) match exchange open orders by label (all matched within label disambiguation rules per §1.1.2).
 - Exchange positions match ledger cumulative fills within `position_reconcile_epsilon` (default: instrument's `min_amount` or `1e-6` if undefined).
 - No missing trades over the last `reconcile_trade_lookback_sec` (default: 300s) as determined by REST `/get_user_trades` query. If the REST query fails (network error, timeout, HTTP error, or unparseable response), reconciliation MUST fail closed — the latch MUST remain set and OPEN intents MUST remain blocked.
-- All reconcile-class reason codes cleared (no unresolved WS gaps, inventory mismatches, or session termination flags).
+- All reconcile-class reason codes cleared (no unresolved WS gaps, WS data staleness, inventory mismatches, session termination flags, exchange-initiated events, or margin drift codes). Note: `EXCHANGE_INITIATED_RECONCILE_REQUIRED` has additional cooldown requirements per §3.6.1.
 
 **Reconciliation stall observability (deterministic, no override-clear):**
 - If reconciliation remains blocked and `open_permission_blocked_latch` stays true for longer than `reconcile_stall_max_delay_s` (default: 30s), runtime MUST emit structured log `RECONCILE_STALL` and increment counter metric `reconcile_stall_total`.
@@ -3243,6 +3243,14 @@ AT-1270
 - And: latch clears only when ALL reason codes are resolved and full reconciliation succeeds.
 - Pass criteria: latch stays true with only the remaining reason code; OPEN dispatch count remains 0.
 - Fail criteria: latch clears while any reason code remains, or reason_codes list is incorrect after partial resolution.
+
+AT-1306
+- Given: `open_permission_blocked_latch == true` with `open_permission_reason_codes` containing both `EXCHANGE_INITIATED_RECONCILE_REQUIRED` and `WS_BOOK_GAP_RECONCILE_REQUIRED`.
+- When: the WS book gap resolves (reconciliation for that criterion succeeds) but `exchange_initiated_cooldown_s` has not yet elapsed.
+- Then: `open_permission_blocked_latch` MUST remain `true`; `open_permission_reason_codes` MUST contain `EXCHANGE_INITIATED_RECONCILE_REQUIRED` and MUST NOT contain `WS_BOOK_GAP_RECONCILE_REQUIRED`; OPEN intents MUST remain blocked.
+- And: latch clears only when the exchange-initiated cooldown expires AND full reconciliation succeeds.
+- Pass criteria: latch stays true; WS gap code removed but exchange-initiated code retained; OPEN dispatch count remains 0.
+- Fail criteria: latch clears while exchange-initiated cooldown is still active, or both codes removed simultaneously despite only one trigger resolving.
 
 AT-011
 - Given: `open_permission_blocked_latch==true` for a WS gap reason (e.g., `WS_TRADES_GAP_RECONCILE_REQUIRED`).
@@ -4319,6 +4327,8 @@ Profile: CSP
   - Set `open_permission_blocked_latch = true`; add `EXCHANGE_INITIATED_RECONCILE_REQUIRED`.
   - Set `RiskState::Degraded`.
   - Adjust ledger-derived position to match exchange truth (exchange is authoritative).
+  - **Latch MUST be set atomically with (or strictly before) the ledger adjustment** — no tick may observe an adjusted ledger without the latch already set (see F-8 atomicity requirement).
+- **Exchange-initiated cooldown (mandatory):** `EXCHANGE_INITIATED_RECONCILE_REQUIRED` MUST NOT be cleared by standard §2.2.4 reconciliation success criteria alone. An additional `exchange_initiated_cooldown_s` (default: 300s) MUST elapse after the ledger adjustment before the reason code becomes eligible for clearing. This prevents automatic re-entry into liquidated positions (RM-013). The cooldown timer starts when the ledger adjustment is applied; if a new exchange-initiated delta occurs during the cooldown, the timer resets.
 - If `get_user_trades` returns trades with no matching intent label AND the trade direction reduces position size:
   - Classify as probable liquidation; log `ExchangeLiquidationDetected` with instrument, qty, price.
 
@@ -4360,9 +4370,9 @@ AT-1287
 AT-1288
 - Given: an OTM option expires worthless.
 - When: reconciliation detects the instrument is delisted and ledger still shows a position.
-- Then: ledger position zeroed; source `EXCHANGE_EXPIRY_WORTHLESS`; no latch required (risk-reducing).
-- Pass criteria: position cleaned up; no spurious close dispatched.
-- Fail criteria: agent attempts to close an already-expired position.
+- Then: ledger position zeroed; source `EXCHANGE_EXPIRY_WORTHLESS`; no latch required (risk-reducing); `open_permission_blocked_latch` remains false; no `EXCHANGE_INITIATED_RECONCILE_REQUIRED` added.
+- Pass criteria: position cleaned up; no spurious close dispatched; latch remains false.
+- Fail criteria: agent attempts to close an already-expired position, or latch set to true for a risk-reducing event.
 
 **3.6.3 Maintenance Cancels & Circuit Breakers** <!-- CSP-067 -->
 <!-- Anchors: maintenance_cancel, circuit_breaker, halt, venue_cancel -->
@@ -4374,7 +4384,7 @@ AT-1288
     - Set `open_permission_blocked_latch = true`; add `EXCHANGE_INITIATED_RECONCILE_REQUIRED`.
     - Do NOT re-dispatch cancelled orders until reconciliation confirms venue is accepting orders (test with a small probe or wait for successful REST query).
   - If a single order is cancelled by the exchange (not by the agent):
-    - TLSM transition to `ExchangeCancelled` (deterministic, no retry).
+    - TLSM transition to `Canceled` with source tag `EXCHANGE_CANCELLED` (deterministic, no retry). Note: this is NOT a new TLSM state — §2.1 terminal states remain {Filled, Canceled, Failed}. The source tag distinguishes agent-initiated cancels from exchange-initiated cancels for diagnostics and WAL attribution.
     - Log `ExchangeOrderCancelled` with order_id, instrument, reason (if provided by venue).
 
 AT-1289
@@ -4387,8 +4397,8 @@ AT-1289
 AT-1290
 - Given: the exchange cancels a single resting order (below maintenance_cancel_threshold).
 - When: the Sweeper detects it.
-- Then: TLSM transitions to `ExchangeCancelled`; logged; sequencer unblocked; no latch set (handled by normal RM-008 flow).
-- Pass criteria: TLSM terminal state correct; no phantom inflight.
+- Then: TLSM transitions to `Canceled` with source tag `EXCHANGE_CANCELLED`; logged; sequencer unblocked; no latch set (handled by normal RM-008 flow); latch remains false; no `EXCHANGE_INITIATED_RECONCILE_REQUIRED` reason code added.
+- Pass criteria: TLSM terminal state is `Canceled` (not a new state); source tag is `EXCHANGE_CANCELLED`; no phantom inflight.
 - Fail criteria: TLSM remains in Sent/Acked state.
 
 **3.6.4 Fail-Closed Default for Unknown Exchange Events** <!-- CSP-068 -->
@@ -4402,7 +4412,7 @@ AT-1290
   - Set latch (`EXCHANGE_INITIATED_RECONCILE_REQUIRED`).
   - Set `RiskState::Degraded`.
   - Log `UnknownExchangeEventDetected` with full REST snapshot diff.
-  - Adjust ledger to match exchange truth (exchange is authoritative).
+  - Adjust ledger to match exchange truth (exchange is authoritative). Latch MUST be set atomically with (or strictly before) the ledger adjustment — same atomicity requirement as §3.6.1.
 - Operator alert MUST be emitted for `EXCHANGE_UNKNOWN` events (these require human investigation).
 
 AT-1291
@@ -4411,6 +4421,51 @@ AT-1291
 - Then: classified as `EXCHANGE_UNKNOWN`; latch set; Degraded; ledger adjusted to exchange truth; operator alert emitted.
 - Pass criteria: fail-closed response; exchange position is authoritative; alert emitted.
 - Fail criteria: delta ignored, or ledger diverges from exchange, or no alert.
+
+AT-1302
+- Given: a reconciliation cycle detects no position delta (exchange positions match ledger exactly).
+- When: classification logic runs.
+- Then: no `EXCHANGE_INITIATED_RECONCILE_REQUIRED` reason code is added; latch is unchanged; no `ExchangeInitiatedDelta` logged.
+- Pass criteria: no false-positive exchange-initiated classification when positions are aligned.
+- Fail criteria: spurious EXCHANGE_INITIATED code added, or latch set without a delta.
+
+AT-1303
+- Given: the exchange liquidates a position (§3.6.1) AND a separate instrument has an auto-exercised option creating a new perp position (§3.6.2).
+- When: reconciliation classifies both deltas in the same cycle.
+- Then: the liquidation delta is tagged `EXCHANGE_LIQUIDATION`; the auto-exercise delta is tagged `EXCHANGE_AUTO_EXERCISE`; both produce distinct WAL source tags; both are individually represented in `open_permission_reason_codes`.
+- Pass criteria: distinct source tags per event class; both visible in diagnostics/WAL.
+- Fail criteria: both classified as `EXCHANGE_UNKNOWN`, or only one source tag recorded, or source tags conflated.
+
+AT-1304
+- Given: an OTM option expires worthless (§3.6.2, AT-1288 scenario — risk-reducing, no latch required).
+- When: reconciliation detects the position zeroed by the exchange.
+- Then: ledger position zeroed; source `EXCHANGE_EXPIRY_WORTHLESS`; `open_permission_blocked_latch` remains false (risk-reducing event).
+- Pass criteria: latch remains false after risk-reducing expiry; no `EXCHANGE_INITIATED_RECONCILE_REQUIRED` added.
+- Fail criteria: latch set to true after a risk-reducing worthless expiry.
+
+AT-1305
+- Given: the exchange cancels a single resting order below `maintenance_cancel_threshold` (AT-1290 scenario).
+- When: the Sweeper detects the cancelled order.
+- Then: TLSM transitions to `Canceled` with source `EXCHANGE_CANCELLED`; latch remains false; no `EXCHANGE_INITIATED_RECONCILE_REQUIRED` added.
+- Pass criteria: latch remains false; no exchange-initiated reason code; TLSM source tag is `EXCHANGE_CANCELLED` (not `EXCHANGE_UNKNOWN`).
+- Fail criteria: latch set to true, or event classified as `EXCHANGE_UNKNOWN`, or `EXCHANGE_INITIATED_RECONCILE_REQUIRED` added.
+
+AT-1307
+- Given: `maintenance_cancel_threshold` = 3 (default). The exchange cancels exactly 3 resting orders simultaneously.
+- When: the Sweeper detects all 3 as "inflight but no exchange open order."
+- Then: `VenueMaintenanceCancelDetected` logged; latch set; `EXCHANGE_INITIATED_RECONCILE_REQUIRED` added (threshold met at exactly 3).
+- And: if only 2 are cancelled, the maintenance-cancel path MUST NOT trigger (below threshold); each is handled individually per AT-1290.
+- Pass criteria: threshold boundary is `>=`, not `>`; exactly 3 triggers maintenance path; exactly 2 does not.
+- Fail criteria: off-by-one — either 3 does not trigger (threshold is `>` instead of `>=`), or 2 triggers (threshold is `<=`).
+
+AT-1308
+- Given: `margin_drift_warn_pct` = 0.02 (default 2%); `margin_drift_critical_pct` = 0.05 (default 5%).
+- When: margin drift is computed as exactly 2.0% (boundary).
+- Then: `MarginDriftWarning` logged; recalibration applied; no `MARGIN_DRIFT_RECONCILE_REQUIRED` (warn, not critical).
+- And: when drift is exactly 5.0% (critical boundary): `RiskState::Degraded`; `MARGIN_DRIFT_RECONCILE_REQUIRED` added; `TradingMode::ReduceOnly`.
+- And: when drift is 1.99%: no warning, no recalibration.
+- Pass criteria: warn threshold is `>` (2% exactly triggers warn); critical threshold is `>` (5% exactly triggers critical); boundaries are deterministic.
+- Fail criteria: off-by-one at either boundary — 2% not triggering warn, or 5% not triggering critical, or 1.99% triggering warn.
 
 
 ## **4\. Quantitative Logic: The "Truth" Engine**
@@ -4919,12 +4974,15 @@ Profile: CSP
 - Track `funding_rate_cached_at_ts` (epoch ms, same convention as §4.2 fee cache).
 
 **Funding Cache Staleness (Fail-Closed):**
-- Soft stale (age > `funding_cache_soft_s`, default 300s): apply conservative funding estimate using the worst-case **cost** from the last 8h window. The formula computes the maximum possible funding cost to the position holder: `funding_rate_effective = -max(abs(last_8h_rates))` (always treated as a cost/debit, regardless of position direction). This is intentionally pessimistic — it assumes the agent always pays, never receives.
+- Soft stale (age > `funding_cache_soft_s`, default 300s): apply conservative funding estimate using the worst-case **cost** from the last 8h window. The formula uses absolute position size to guarantee the estimate is always a debit (never a credit), regardless of position direction:
+  - `funding_rate_worst = max(abs(last_8h_rates))`
+  - `pending_funding_estimate = Σ(abs(instrument_position) * funding_rate_worst * time_to_next_settlement)`
+  - This is intentionally pessimistic — it assumes the agent always pays at the worst observed rate, never receives. The result is always non-negative and always subtracted from margin.
 - Hard stale (age > `funding_cache_hard_s`, default 900s): set `RiskState::Degraded`; PolicyGuard MUST force `TradingMode::ReduceOnly` until refresh succeeds.
 
 **Integration with margin calculations:**
 - `available_margin_adjusted = exchange_reported_margin - pending_funding_estimate`
-- `pending_funding_estimate = Σ(instrument_position * funding_rate * time_to_next_settlement)`
+- `pending_funding_estimate` MUST be non-negative (fail-closed: if computation yields a negative value, treat as zero and log `FundingEstimateSignError`).
 - The adjusted margin MUST be used by §1.4.3 Margin Headroom Gate and §2.2.3.2 CapitalRiskAxis.
 
 AT-1292
@@ -4937,9 +4995,9 @@ AT-1292
 AT-1293
 - Given: funding rate cache age > `funding_cache_hard_s`.
 - When: PolicyGuard computes TradingMode.
-- Then: `RiskState==Degraded`; `TradingMode==ReduceOnly`; OPEN blocked.
-- Pass criteria: hard-stale funding data blocks new opens.
-- Fail criteria: OPEN allowed with stale funding data.
+- Then: `RiskState==Degraded`; `TradingMode==ReduceOnly`; OPEN blocked; `FUNDING_STALE_RECONCILE_REQUIRED` present in `open_permission_reason_codes`; `open_permission_blocked_latch == true`.
+- Pass criteria: hard-stale funding data blocks new opens; latch set with correct reason code.
+- Fail criteria: OPEN allowed with stale funding data, or latch not set, or reason code missing.
 
 AT-1294
 - Given: funding rate cache age > `funding_cache_soft_s` but <= `funding_cache_hard_s`.
@@ -4958,7 +5016,7 @@ AT-1294
   - Log `MarginDriftWarning` with both values and drift percentage.
   - Recalibrate agent margin to exchange truth (exchange is authoritative).
 - If `margin_drift_pct > margin_drift_critical_pct` (default 5%):
-  - Set `RiskState::Degraded`; add `MARGIN_DRIFT_RECONCILE_REQUIRED` to latch reason codes.
+  - Set `RiskState::Degraded`; add `MARGIN_DRIFT_RECONCILE_REQUIRED` to latch reason codes. Latch MUST be set atomically with (or strictly before) the margin recalibration — same atomicity requirement as §3.6.1.
   - Log `MarginDriftCritical`.
   - PolicyGuard MUST force `TradingMode::ReduceOnly` until drift falls below `margin_drift_warn_pct`.
 
@@ -6939,6 +6997,7 @@ Acceptance test: AT-1240 (see P0-E section).
 | `parquet_analytics_retention_days` | `30` | days | §7.2 |
 | `foundation_exit_eval_max_delay_s` | `5` | sec | P0-E status authority precedence |
 | `maintenance_cancel_threshold` | `3` | count | §3.6.3 |
+| `exchange_initiated_cooldown_s` | `300` | sec | §3.6.1 |
 | `funding_poll_interval_s` | `60` | sec | §4.6.1 |
 | `funding_cache_soft_s` | `300` | sec | §4.6.1 |
 | `funding_cache_hard_s` | `900` | sec | §4.6.1 |
@@ -7258,3 +7317,4 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-17 | CCL-2026-03-17-01 | §1.3 Liquidity Gate; §1.4 Pricer; §2.2.1.2 Critical Inputs; §2.2.2 EvidenceGuard; §2.2.3.2 MarketIntegrityAxis; §2.2.3.4 Rename; §2.2.4 OPL; §3.1 Emergency Close; Appendix A; Appendix B RejectReasonCode; CSP table; CONTRACT_CHANGE_LEDGER | hardening | Autoresearch Phase 2+3: 16 accepted machine-generated proposals — margin headroom NaN/missing fail-closed, account_summary staleness gate, cortex_override missing → ForceReduceOnly, inventory_skew_sell_floor formula, bunker_mode_last_update_ts_ms critical input, session_termination rename ATs, hedge qty bound, monotonic retry, SHALL→MUST tightening, CSP-063 dedup, AT renumber 1243→1253. | Close contract gaps identified by automated gap detection across execution pipeline and PolicyGuard fixtures. | AT-1251, AT-1252, AT-1253, AT-1254, AT-1255, AT-1256, AT-1257, AT-1258, AT-1259, AT-1260, AT-1261, AT-1262, AT-1263, AT-1264 | autoresearch/phase3-contract-patch |
 | 2026-03-19 | CCL-2026-03-19-01 | §1.3 Liquidity Gate; §2.2.2 EvidenceGuard; §2.2.3 TradingMode; §2.2.4 Open Permission Latch; §3.1 Emergency Close; Appendix CONTRACT_CHANGE_LEDGER | hardening | Autoresearch Phase 4: add replace-order stale-L2 fallback/no-fallback ATs, slippage equality boundary AT, negative reconciliation-criteria ATs, latch invariant/cross-ref/defaults, hedge failure/partial-fill ATs, EvidenceGuard counter/CSP-bypass ATs, cortex/margin/risk_state axis isolation ATs, AT-918 reason code, cause enum, SHALL→MUST, EG cooldown default. | Close contract gaps from Phase 4 automated+manual gap detection across 5 CONTRACT.md sections. | AT-222, AT-918, AT-1265, AT-1266, AT-1267, AT-1268, AT-1269, AT-1270, AT-1271, AT-1272, AT-1273, AT-1274, AT-1275, AT-1276, AT-1277, AT-1278, AT-1279, AT-1280, AT-1281 | project/contract-autoresearch |
 | 2026-03-20 | CCL-2026-03-20-01 | §1.3 Liquidity Gate; §2.2.2 EvidenceGuard; §2.2.3 TradingMode; §3.1 Emergency Close; Appendix CONTRACT_CHANGE_LEDGER | hardening | Apply the accepted hardened Phase 2 patch batch: align the Liquidity Gate stale-L2 algorithm step with replace-order fallback semantics, add a non-zero EvidenceGuard cooldown AT, clarify watchdog/disk Kill corroboration and winning-tier reason purity, and add an explicit bounded emergency-close retry schedule AT. | Carry forward the reviewed Phase 2 contract-only deltas on a contract-scoped branch without widening the autoresearch backend PR, while keeping AT numbering and ledger growth deterministic. | AT-422, AT-235, AT-1282, AT-1283, AT-1284 | project/contract-phase2-accepted-patch-batch |
+| 2026-03-25 | CCL-2026-03-25-01 | §2.2.4 OPL reconciliation criteria; §3.6.1 Liquidation Detection; §3.6.3 Maintenance Cancels; §3.6.4 Unknown Events; §4.6.1 Funding Rate; §4.6.2 Margin Drift; Appendix A; OPL YAML; Appendix CONTRACT_CHANGE_LEDGER | hardening | Fix 10 review findings: F-1 funding formula sign error (abs(position) * worst_rate), F-2 exchange-initiated cooldown gate (exchange_initiated_cooldown_s), F-3 ExchangeCancelled→Canceled+source tag, F-4 classification-blind AT coverage (AT-1302–1305), F-5 reconciliation parenthetical expansion, F-6 OPL YAML trigger update, F-7 partial-resolution AT (AT-1306), F-8 latch-before-ledger atomicity, F-9 AT-1293 reason-code assertion, F-10 boundary-value ATs (AT-1307–1308). | Close review-stack findings: prevent optimistic funding formula, premature latch-clear after exchange events, classification-blind implementations, and untested threshold boundaries. | AT-1288, AT-1290, AT-1293, AT-1302, AT-1303, AT-1304, AT-1305, AT-1306, AT-1307, AT-1308 | claude/partial-fills-race-conditions-ux3zb |
