@@ -3157,7 +3157,11 @@ Profile: CSP
 - Ledger inflight intents (non-terminal) match exchange open orders by label (all matched within label disambiguation rules per §1.1.2).
 - Exchange positions match ledger cumulative fills within `position_reconcile_epsilon` (default: instrument's `min_amount` or `1e-6` if undefined).
 - No missing trades over the last `reconcile_trade_lookback_sec` (default: 300s) as determined by REST `/get_user_trades` query. If the REST query fails (network error, timeout, HTTP error, or unparseable response), reconciliation MUST fail closed — the latch MUST remain set and OPEN intents MUST remain blocked.
-- All reconcile-class reason codes cleared (no unresolved WS gaps, WS data staleness, inventory mismatches, session termination flags, exchange-initiated events, or margin drift codes). Note: `EXCHANGE_INITIATED_RECONCILE_REQUIRED` has additional cooldown requirements per §3.6.1.
+- All reconcile-class reason codes cleared (no unresolved WS gaps, WS data staleness, inventory mismatches, session termination flags, exchange-initiated events, margin drift codes, or funding stale codes).
+
+**Reason code resolution categories:**
+- *Reconciliation-resolvable* (`RESTART_RECONCILE_REQUIRED`, `WS_BOOK_GAP_RECONCILE_REQUIRED`, `WS_TRADES_GAP_RECONCILE_REQUIRED`, `WS_DATA_STALE_RECONCILE_REQUIRED`, `INVENTORY_MISMATCH_RECONCILE_REQUIRED`, `SESSION_TERMINATION_RECONCILE_REQUIRED`): Cleared when the periodic reconciliation pass confirms success criteria above.
+- *Externally-resolvable* (`EXCHANGE_INITIATED_RECONCILE_REQUIRED`, `MARGIN_DRIFT_RECONCILE_REQUIRED`, `FUNDING_STALE_RECONCILE_REQUIRED`): Cleared only when an external condition is met — cooldown timer elapsed (§3.6.1), margin drift below warn threshold (§4.6.2), or funding cache refreshed below soft-stale threshold (§4.6.1), respectively — AND reconciliation success criteria are satisfied. Reconciliation alone cannot clear these codes.
 
 **Reconciliation stall observability (deterministic, no override-clear):**
 - If reconciliation remains blocked and `open_permission_blocked_latch` stays true for longer than `reconcile_stall_max_delay_s` (default: 30s), runtime MUST emit structured log `RECONCILE_STALL` and increment counter metric `reconcile_stall_total`.
@@ -4465,8 +4469,15 @@ AT-1308
 - Then: `MarginDriftWarning` logged; recalibration applied; no `MARGIN_DRIFT_RECONCILE_REQUIRED` (warn, not critical).
 - And: when drift is exactly 5.0% (critical boundary): `RiskState::Degraded`; `MARGIN_DRIFT_RECONCILE_REQUIRED` added; `TradingMode::ReduceOnly`.
 - And: when drift is 1.99%: no warning, no recalibration.
-- Pass criteria: warn threshold is `>` (2% exactly triggers warn); critical threshold is `>` (5% exactly triggers critical); boundaries are deterministic.
+- Pass criteria: warn threshold is `>=` (2% exactly triggers warn); critical threshold is `>=` (5% exactly triggers critical); boundaries are deterministic.
 - Fail criteria: off-by-one at either boundary — 2% not triggering warn, or 5% not triggering critical, or 1.99% triggering warn.
+
+AT-1311
+- Given: `exchange_reported_margin` = 0 (or negative).
+- When: margin drift computation runs.
+- Then: fail-closed guard triggers — `RiskState::Degraded`; `MARGIN_DRIFT_RECONCILE_REQUIRED` added; `TradingMode::ReduceOnly`; `MarginDriftZeroDenominator` logged. Division is never attempted.
+- Pass criteria: zero/negative denominator triggers critical drift unconditionally; no NaN/Inf produced.
+- Fail criteria: division by zero occurs, or system remains in Active/Healthy with zero exchange margin.
 
 
 ## **4\. Quantitative Logic: The "Truth" Engine**
@@ -4979,7 +4990,7 @@ Profile: CSP
   - `funding_rate_worst = max(abs(last_8h_rates))`
   - `pending_funding_estimate = Σ(abs(instrument_position) * funding_rate_worst * time_to_next_settlement)`
   - This is intentionally pessimistic — it assumes the agent always pays at the worst observed rate, never receives. The result is always non-negative and always subtracted from margin.
-- Hard stale (age > `funding_cache_hard_s`, default 900s): set `RiskState::Degraded`; PolicyGuard MUST force `TradingMode::ReduceOnly` until refresh succeeds.
+- Hard stale (age > `funding_cache_hard_s`, default 900s): set `RiskState::Degraded`; set `open_permission_blocked_latch = true`; add `FUNDING_STALE_RECONCILE_REQUIRED` to `open_permission_reason_codes`; PolicyGuard MUST force `TradingMode::ReduceOnly` until funding rate cache is refreshed (age < `funding_cache_soft_s`).
 
 **Integration with margin calculations:**
 - `available_margin_adjusted = exchange_reported_margin - pending_funding_estimate`
@@ -5020,10 +5031,11 @@ AT-1309
 **Requirement:** Periodically validate that the agent's computed margin matches exchange-reported margin.
 - Every `margin_reconcile_interval_s` (default 30s), query REST for account equity/margin.
 - Compute `margin_drift_pct = abs(agent_computed_margin - exchange_reported_margin) / exchange_reported_margin`.
-- If `margin_drift_pct > margin_drift_warn_pct` (default 2%):
+- **Fail-closed guard:** If `exchange_reported_margin <= 0`, treat as critical drift unconditionally — set `RiskState::Degraded`, add `MARGIN_DRIFT_RECONCILE_REQUIRED`, force `TradingMode::ReduceOnly`, log `MarginDriftZeroDenominator`. This prevents NaN/Inf from IEEE 754 division bypassing the threshold checks.
+- If `margin_drift_pct >= margin_drift_warn_pct` (default 2%):
   - Log `MarginDriftWarning` with both values and drift percentage.
   - Recalibrate agent margin to exchange truth (exchange is authoritative).
-- If `margin_drift_pct > margin_drift_critical_pct` (default 5%):
+- If `margin_drift_pct >= margin_drift_critical_pct` (default 5%):
   - Set `RiskState::Degraded`; add `MARGIN_DRIFT_RECONCILE_REQUIRED` to latch reason codes. Latch MUST be set atomically with (or strictly before) the margin recalibration — same atomicity requirement as §3.6.1.
   - Log `MarginDriftCritical`.
   - PolicyGuard MUST force `TradingMode::ReduceOnly` until drift falls below `margin_drift_warn_pct`.
@@ -5712,6 +5724,13 @@ AT-1300
 
 AT-1301
 - Given: `open_permission_reason_codes` contains `MARGIN_DRIFT_RECONCILE_REQUIRED`.
+- When: `/status` is fetched.
+- Then: `connectivity_degraded == true`.
+- Pass criteria: `connectivity_degraded` is true.
+- Fail criteria: `connectivity_degraded` is false or missing.
+
+AT-1310
+- Given: `open_permission_reason_codes` contains `FUNDING_STALE_RECONCILE_REQUIRED`.
 - When: `/status` is fetched.
 - Then: `connectivity_degraded == true`.
 - Pass criteria: `connectivity_degraded` is true.
@@ -7350,3 +7369,4 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-20 | CCL-2026-03-20-01 | §1.3 Liquidity Gate; §2.2.2 EvidenceGuard; §2.2.3 TradingMode; §3.1 Emergency Close; Appendix CONTRACT_CHANGE_LEDGER | hardening | Apply the accepted hardened Phase 2 patch batch: align the Liquidity Gate stale-L2 algorithm step with replace-order fallback semantics, add a non-zero EvidenceGuard cooldown AT, clarify watchdog/disk Kill corroboration and winning-tier reason purity, and add an explicit bounded emergency-close retry schedule AT. | Carry forward the reviewed Phase 2 contract-only deltas on a contract-scoped branch without widening the autoresearch backend PR, while keeping AT numbering and ledger growth deterministic. | AT-422, AT-235, AT-1282, AT-1283, AT-1284 | project/contract-phase2-accepted-patch-batch |
 | 2026-03-25 | CCL-2026-03-25-01 | §2.2.4 OPL reconciliation criteria; §3.6.1 Liquidation Detection; §3.6.3 Maintenance Cancels; §3.6.4 Unknown Events; §4.6.1 Funding Rate; §4.6.2 Margin Drift; Appendix A; OPL YAML; Appendix CONTRACT_CHANGE_LEDGER | hardening | Fix 10 review findings: F-1 funding formula sign error (abs(position) * worst_rate), F-2 exchange-initiated cooldown gate (exchange_initiated_cooldown_s), F-3 ExchangeCancelled→Canceled+source tag, F-4 classification-blind AT coverage (AT-1302–1305), F-5 reconciliation parenthetical expansion, F-6 OPL YAML trigger update, F-7 partial-resolution AT (AT-1306), F-8 latch-before-ledger atomicity, F-9 AT-1293 reason-code assertion, F-10 boundary-value ATs (AT-1307–1308). | Close review-stack findings: prevent optimistic funding formula, premature latch-clear after exchange events, classification-blind implementations, and untested threshold boundaries. | AT-1288, AT-1290, AT-1293, AT-1302, AT-1303, AT-1304, AT-1305, AT-1306, AT-1307, AT-1308 | claude/partial-fills-race-conditions-ux3zb |
 | 2026-03-25 | CCL-2026-03-25-02 | §4.6.1 Funding Rate; §4.6.2 Margin Drift; §4.6.4 Observability (new); Appendix CONTRACT_CHANGE_LEDGER | hardening | Nice-to-have review findings: F-15 cumulative_funding_usd reset on recalibration (prevent double-count), F-16 funding cache timestamp format AT (AT-1309, mirrors AT-1106), F-19 observability counters table (11 metrics for §3.6/§4.6 safety paths), F-20 PR body AT count corrected (15→25). | Improve observability and prevent subtle funding double-counting after margin recalibration. | AT-1309 | claude/partial-fills-race-conditions-ux3zb |
+| 2026-03-25 | CCL-2026-03-25-03 | §2.2.4 OPL reconciliation criteria (reason code categories); §4.6.1 Funding Rate (latch instruction + clear criteria); §4.6.2 Margin Drift (>= boundary, div-by-zero guard); §7.0 /status (AT-1310); OPL YAML; RECONCILIATION_MATRIX | hardening | Fix 6 critical review-stack findings: (1) AT-1308 boundary operator > → >= for fail-closed, (2) margin_drift_pct div-by-zero fail-closed guard + AT-1311, (3) §4.6.1 explicit latch-set instruction for hard-stale funding, (4) AT-1310 connectivity_degraded for FUNDING_STALE, (5) §2.2.4 reconciliation-resolvable vs externally-resolvable code categories, (6) FUNDING_STALE clear criteria aligned to funding_cache_soft_s. Also: wire FUNDING_STALE_RECONCILE_REQUIRED (N-1), fix RM-014 ExchangeCancelled text (N-2). | Eliminate 6 safety gaps: boundary operator contradiction, IEEE 754 NaN fail-open, missing latch mandate, untested connectivity_degraded path, ambiguous reconciliation semantics, and inconsistent clear criteria. | AT-1310, AT-1311 | claude/partial-fills-race-conditions-ux3zb |
