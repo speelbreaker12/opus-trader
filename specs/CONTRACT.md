@@ -5006,6 +5006,13 @@ AT-1294
 - Pass criteria: conservative funding estimate applied in soft-stale window.
 - Fail criteria: stale funding rate used without buffer.
 
+AT-1309
+- Given: `funding_rate_cached_at_ts` is stored and read back (cf. AT-1106 for fee cache).
+- When: the timestamp format is inspected.
+- Then: `funding_rate_cached_at_ts` MUST be epoch milliseconds (wall-clock, not monotonic); staleness MUST be computed as `now_epoch_ms - funding_rate_cached_at_ts` and MUST survive process restarts without underflow or reset.
+- Pass criteria: after a simulated restart, funding cache age is computed correctly from the epoch-ms timestamp; no monotonic-clock reset causes the age to appear artificially fresh.
+- Fail criteria: `funding_rate_cached_at_ts` uses monotonic ms, or age underflows/resets after restart.
+
 **4.6.2 Margin Drift Reconciliation** <!-- CSP-071 -->
 <!-- Anchors: margin_drift, margin_reconcile, margin_mismatch, equity_check -->
 
@@ -5019,6 +5026,8 @@ AT-1294
   - Set `RiskState::Degraded`; add `MARGIN_DRIFT_RECONCILE_REQUIRED` to latch reason codes. Latch MUST be set atomically with (or strictly before) the margin recalibration — same atomicity requirement as §3.6.1.
   - Log `MarginDriftCritical`.
   - PolicyGuard MUST force `TradingMode::ReduceOnly` until drift falls below `margin_drift_warn_pct`.
+
+**Recalibration side-effects:** When margin is recalibrated to exchange truth (warn or critical), `cumulative_funding_usd` per instrument MUST be reset to zero. Rationale: the exchange-reported margin already reflects all accrued funding; continuing to subtract a stale cumulative total would double-count funding drag. If the recalibration source is margin drift, log `FundingAccrualReset` with the pre-reset cumulative value for audit.
 
 **Sources of drift (non-exhaustive):**
 - Funding rate accrual (§4.6.1)
@@ -5074,6 +5083,27 @@ AT-1299
 - Then: no action taken.
 - Pass criteria: no warning logged; no state change.
 - Fail criteria: false positive fee mismatch warning.
+
+**4.6.4 Observability Counters (§4.6 Safety Paths)** <!-- CSP-073 -->
+<!-- Anchors: funding_metrics, margin_drift_metrics, fee_mismatch_metrics -->
+
+The following counter metrics MUST be emitted for §4.6 safety paths (in addition to structured logs):
+
+| Metric | Incremented when | Section |
+|--------|-----------------|---------|
+| `funding_cache_soft_stale_total` | Funding cache enters soft-stale window | §4.6.1 |
+| `funding_cache_hard_stale_total` | Funding cache enters hard-stale window | §4.6.1 |
+| `funding_estimate_sign_error_total` | `pending_funding_estimate` computation yields negative | §4.6.1 |
+| `funding_accrual_reset_total` | `cumulative_funding_usd` reset during recalibration | §4.6.2 |
+| `margin_drift_warn_total` | Drift exceeds `margin_drift_warn_pct` | §4.6.2 |
+| `margin_drift_critical_total` | Drift exceeds `margin_drift_critical_pct` | §4.6.2 |
+| `margin_drift_recalibration_total` | Agent margin recalibrated to exchange truth | §4.6.2 |
+| `fee_mismatch_warn_total` | Fee mismatch exceeds `fee_mismatch_warn_pct` | §4.6.3 |
+| `fee_mismatch_critical_total` | Fee mismatch exceeds `fee_mismatch_critical_pct` | §4.6.3 |
+| `exchange_initiated_delta_total` | Any exchange-initiated delta classified (§3.6) | §3.6.1 |
+| `exchange_initiated_cooldown_active` | Gauge: 1 while cooldown timer is running | §3.6.1 |
+
+These counters are required for runtime alerting and post-session audit. Missing counters are acceptable during development but MUST be present before Phase 2 deployable claims.
 
 
 ## **5\. Self-Improvement: The Closed-Loop Control**
@@ -7318,3 +7348,4 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-19 | CCL-2026-03-19-01 | §1.3 Liquidity Gate; §2.2.2 EvidenceGuard; §2.2.3 TradingMode; §2.2.4 Open Permission Latch; §3.1 Emergency Close; Appendix CONTRACT_CHANGE_LEDGER | hardening | Autoresearch Phase 4: add replace-order stale-L2 fallback/no-fallback ATs, slippage equality boundary AT, negative reconciliation-criteria ATs, latch invariant/cross-ref/defaults, hedge failure/partial-fill ATs, EvidenceGuard counter/CSP-bypass ATs, cortex/margin/risk_state axis isolation ATs, AT-918 reason code, cause enum, SHALL→MUST, EG cooldown default. | Close contract gaps from Phase 4 automated+manual gap detection across 5 CONTRACT.md sections. | AT-222, AT-918, AT-1265, AT-1266, AT-1267, AT-1268, AT-1269, AT-1270, AT-1271, AT-1272, AT-1273, AT-1274, AT-1275, AT-1276, AT-1277, AT-1278, AT-1279, AT-1280, AT-1281 | project/contract-autoresearch |
 | 2026-03-20 | CCL-2026-03-20-01 | §1.3 Liquidity Gate; §2.2.2 EvidenceGuard; §2.2.3 TradingMode; §3.1 Emergency Close; Appendix CONTRACT_CHANGE_LEDGER | hardening | Apply the accepted hardened Phase 2 patch batch: align the Liquidity Gate stale-L2 algorithm step with replace-order fallback semantics, add a non-zero EvidenceGuard cooldown AT, clarify watchdog/disk Kill corroboration and winning-tier reason purity, and add an explicit bounded emergency-close retry schedule AT. | Carry forward the reviewed Phase 2 contract-only deltas on a contract-scoped branch without widening the autoresearch backend PR, while keeping AT numbering and ledger growth deterministic. | AT-422, AT-235, AT-1282, AT-1283, AT-1284 | project/contract-phase2-accepted-patch-batch |
 | 2026-03-25 | CCL-2026-03-25-01 | §2.2.4 OPL reconciliation criteria; §3.6.1 Liquidation Detection; §3.6.3 Maintenance Cancels; §3.6.4 Unknown Events; §4.6.1 Funding Rate; §4.6.2 Margin Drift; Appendix A; OPL YAML; Appendix CONTRACT_CHANGE_LEDGER | hardening | Fix 10 review findings: F-1 funding formula sign error (abs(position) * worst_rate), F-2 exchange-initiated cooldown gate (exchange_initiated_cooldown_s), F-3 ExchangeCancelled→Canceled+source tag, F-4 classification-blind AT coverage (AT-1302–1305), F-5 reconciliation parenthetical expansion, F-6 OPL YAML trigger update, F-7 partial-resolution AT (AT-1306), F-8 latch-before-ledger atomicity, F-9 AT-1293 reason-code assertion, F-10 boundary-value ATs (AT-1307–1308). | Close review-stack findings: prevent optimistic funding formula, premature latch-clear after exchange events, classification-blind implementations, and untested threshold boundaries. | AT-1288, AT-1290, AT-1293, AT-1302, AT-1303, AT-1304, AT-1305, AT-1306, AT-1307, AT-1308 | claude/partial-fills-race-conditions-ux3zb |
+| 2026-03-25 | CCL-2026-03-25-02 | §4.6.1 Funding Rate; §4.6.2 Margin Drift; §4.6.4 Observability (new); Appendix CONTRACT_CHANGE_LEDGER | hardening | Nice-to-have review findings: F-15 cumulative_funding_usd reset on recalibration (prevent double-count), F-16 funding cache timestamp format AT (AT-1309, mirrors AT-1106), F-19 observability counters table (11 metrics for §3.6/§4.6 safety paths), F-20 PR body AT count corrected (15→25). | Improve observability and prevent subtle funding double-counting after margin recalibration. | AT-1309 | claude/partial-fills-race-conditions-ux3zb |
