@@ -26,10 +26,16 @@ transitions:
 - id: OPL-001
   from: OpenAllowed
   to: OpenBlocked
-  guard: Startup OR WS_BOOK_GAP OR WS_TRADES_GAP OR INVENTORY_MISMATCH OR SESSION_TERMINATION.
+  guard: RESTART_RECONCILE_REQUIRED OR WS_BOOK_GAP_RECONCILE_REQUIRED
+    OR WS_TRADES_GAP_RECONCILE_REQUIRED OR WS_DATA_STALE_RECONCILE_REQUIRED
+    OR INVENTORY_MISMATCH_RECONCILE_REQUIRED OR SESSION_TERMINATION_RECONCILE_REQUIRED
+    OR EXCHANGE_INITIATED_RECONCILE_REQUIRED OR MARGIN_DRIFT_RECONCILE_REQUIRED
+    OR FUNDING_STALE_RECONCILE_REQUIRED.
   refs:
   - §2.2.4
   - §3.4
+  - §3.6
+  - §4.6
   event: TR-LATCH_BLOCK_TRIGGER
   effects:
   - ACT-SET_LATCH_BLOCKED
@@ -63,6 +69,10 @@ acceptance_tests:
 - AT-027
 - AT-408
 - AT-409
+- AT-1242
+- AT-1271
+- AT-1306
+- AT-1312
 invariants:
 - open_permission_requires_reconcile MUST equal open_permission_blocked_latch (v5.1).
 - If latch is false, reason_codes must be [] and requires_reconcile=false.
